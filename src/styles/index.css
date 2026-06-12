@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: #0A0A0C;
+    color: #E6E8EB;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0A0A0C;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1A1A1E;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2A2A32;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #7a7c85;
+  }
+}
+
+@layer components {
+  .cyber-border {
+    border: 1px solid rgba(0, 232, 113, 0.08);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  .cyber-border:hover {
+    border-color: rgba(0, 232, 113, 0.25);
+    box-shadow: 0 0 20px rgba(0, 232, 113, 0.05);
+  }
+  .cyber-border-strong {
+    border: 1px solid rgba(0, 232, 113, 0.15);
+    box-shadow: 0 0 30px rgba(0, 232, 113, 0.08);
+  }
+  .cyber-glow {
+    box-shadow: 0 0 15px rgba(0, 232, 113, 0.15);
+  }
+}

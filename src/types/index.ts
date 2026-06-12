@@ -53,6 +53,9 @@ export interface AppSettings {
 export interface CrawlEvent {
   type: 'progress' | 'log' | 'pageComplete' | 'jobStatusChanged' | 'error';
   jobId: string;
-  data: any;
-  timestamp: string;
+  message?: string;
+  level?: string;
+  progress?: CrawlProgress;
+  page?: PageResult;
+  status?: 'queued' | 'running' | 'paused' | 'completed' | 'failed';
 }

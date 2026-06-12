@@ -6,7 +6,7 @@ use crate::settings::config::CrawlConfig;
 pub struct PageResult {
     pub url: String,
     pub title: String,
-    pub content: Option<String>,
+    pub content: String,
     pub links: Vec<String>,
     pub assets: Vec<String>,
     pub status: u16,
@@ -43,6 +43,6 @@ pub struct CrawlJob {
     pub results: Vec<PageResult>,
     pub progress: CrawlProgress,
     pub error: Option<String>,
-    pub start_time: Option<i64>,
-    pub end_time: Option<i64>,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
 }

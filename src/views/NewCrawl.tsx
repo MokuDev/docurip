@@ -49,30 +49,17 @@ export function NewCrawlView() {
         if (ev.jobId !== activeJob.id) return;
 
         if (ev.type === 'log') {
-          setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} ${ev.data.message || ev.data}`]);
+          setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} ${ev.message || ''}`]);
         } else if (ev.type === 'progress') {
           setActiveJob((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  progress: {
-                    ...prev.progress,
-                    ...ev.data,
-                  },
-                }
-              : prev
+            prev && ev.progress ? { ...prev, progress: ev.progress } : prev
           );
         } else if (ev.type === 'pageComplete') {
           setActiveJob((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  results: [...prev.results, ev.data],
-                }
-              : prev
+            prev && ev.page ? { ...prev, results: [...prev.results, ev.page] } : prev
           );
         } else if (ev.type === 'jobStatusChanged') {
-          setActiveJob((prev) => (prev ? { ...prev, status: ev.data.status } : prev));
+          setActiveJob((prev) => (prev && ev.status ? { ...prev, status: ev.status } : prev));
         }
       });
     };
@@ -106,11 +93,12 @@ export function NewCrawlView() {
           maxDepth: config.maxDepth,
           pageLimit: config.pageLimit,
           downloadAssets: config.downloadAssets,
-          headlessStrategy: config.headlessStrategy,
-          contentSelectors: config.contentSelectors.filter(Boolean),
-          excludePatterns: config.excludePatterns.filter(Boolean),
-          respectRobotsTxt: config.respectRobotsTxt,
-        },
+              headlessStrategy: config.headlessStrategy,
+              contentSelectors: config.contentSelectors.filter(Boolean),
+              excludePatterns: config.excludePatterns.filter(Boolean),
+              respectRobotsTxt: config.respectRobotsTxt,
+              outputDir: config.outputDir,
+            },
       });
 
       const job: CrawlJob = await invoke('get_job', { jobId });

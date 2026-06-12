@@ -41,6 +41,18 @@ impl HttpFetcher {
         Ok(text)
     }
 
+    pub async fn fetch_with_status(&self, url: &str) -> anyhow::Result<(u16, String)> {
+        let resp = self
+            .client
+            .get(url)
+            .header("User-Agent", &self.user_agent)
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        let text = resp.text().await?;
+        Ok((status, text))
+    }
+
     pub async fn fetch_bytes(&self, url: &str) -> anyhow::Result<Vec<u8>> {
         let resp = self
             .client

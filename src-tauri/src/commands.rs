@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::RwLock;
 
-use crate::crawler::job::{CrawlJob, JobStatus};
+use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
 use crate::crawler::orchestrator::{spawn_crawl, CrawlHandle};
 use crate::events::bus::EventBus;
 use crate::settings::config::{AppSettings, CrawlConfig};
@@ -24,7 +24,15 @@ pub async fn start_crawl(
         status: JobStatus::Queued,
         config: config.clone(),
         results: Vec::new(),
-        progress: 0.0,
+        progress: CrawlProgress {
+            pages_crawled: 0,
+            page_limit: config.page_limit as usize,
+            current_url: String::new(),
+            depth: 0,
+            max_depth: config.max_depth as u32,
+            start_time: None,
+        },
+        error: None,
         start_time: None,
         end_time: None,
     };

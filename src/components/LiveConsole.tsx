@@ -38,16 +38,16 @@ export function LiveConsole({ onClose }: { onClose: () => void }) {
 
         const message =
           ev.type === 'progress'
-            ? `Crawling ${ev.data.currentUrl || '...'} (depth ${ev.data.depth}/${ev.data.maxDepth})`
+            ? `Crawling ${ev.progress?.currentUrl || '...'} (depth ${ev.progress?.depth ?? 0}/${ev.progress?.maxDepth ?? 0})`
             : ev.type === 'pageComplete'
-              ? `Completed: ${ev.data.url} (${ev.data.title || 'no title'})`
+              ? `Completed: ${ev.page?.url} (${ev.page?.title || 'no title'})`
               : ev.type === 'error'
-                ? `Error: ${ev.data || 'Unknown error'}`
+                ? `Error: ${ev.message || 'Unknown error'}`
                 : ev.type === 'log'
-                  ? ev.data.message || String(ev.data)
+                  ? ev.message || ''
                   : ev.type === 'jobStatusChanged'
-                    ? `Job status: ${ev.data.status}`
-                    : String(ev.data);
+                    ? `Job status: ${ev.status || ''}`
+                    : 'Unknown event';
 
         const entry: LogEntry = {
           id: logIdCounter.current++,

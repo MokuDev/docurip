@@ -1,6 +1,6 @@
 # docurip — Release & Update Workflow
 
-Schritt-für-Schritt-Anleitung für die erste Veröffentlichung und alle nachfolgenden Updates.
+Schritt-für-Schritt-Anleitung für Releases und Updates.
 
 ## Repositories
 
@@ -29,30 +29,27 @@ Signierungs-Schlüssel existiert unter:
 ~/.tauri/docurip.key     (leeres Passwort)
 ```
 
-Öffentlicher Key ist bereits in `src-tauri/tauri.conf.json` hinterlegt.
+Das Release-Script lädt den Key automatisch — kein manuelles Setzen von Env-Variablen nötig.
 
 ---
 
-## Erstes Release (v0.2.0)
+## Release erstellen
 
-### 1. Version prüfen
+### 1. Version bumpen (3 Dateien + App.tsx)
 
-Alle drei Dateien müssen identische Version haben:
+| Datei | Feld | Beispiel |
+|-------|------|----------|
+| `package.json` | `"version"` | `"0.3.0"` |
+| `src-tauri/tauri.conf.json` | `"version"` | `"0.3.0"` |
+| `src-tauri/Cargo.toml` | `version` | `"0.3.0"` |
+| `src/App.tsx` | Footer `vX.Y.Z` | `v0.3.0` |
 
-```
-package.json              → "version": "0.2.0"
-src-tauri/tauri.conf.json → "version": "0.2.0"
-src-tauri/Cargo.toml      → version = "0.2.0"
-```
-
-### 2. Signierungs-Key setzen
+### 2. Committen
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\docurip.key" -Raw
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+git add -A
+git commit -m "chore: bump version to 0.3.0"
 ```
-
-> **Wichtig:** Ohne diese Variable wird kein `.sig`-File erzeugt und der Updater funktioniert nicht.
 
 ### 3. Build + Publish
 
@@ -61,10 +58,12 @@ npm run release:publish
 ```
 
 Das Script macht automatisch:
-1. Version-Konsistenz-Check (3 Dateien)
-2. `npm run tauri build` (produziert NSIS-Installer + `.sig`-Signatur)
-3. Generiert `latest.json` aus der `.sig`-Datei
-4. Erstellt GitHub Release in **`MokuDev/docurip`** mit Installer + `latest.json`
+1. Signing-Key aus `~/.tauri/docurip.key` laden (falls nicht als Env-Var gesetzt)
+2. Version-Konsistenz-Check (3 Dateien)
+3. `npm run tauri build` (produziert NSIS-Installer)
+4. Signiert den Installer via `npx tauri signer sign` (erzeugt `.sig`-Datei)
+5. Generiert `latest.json` aus der `.sig`-Datei
+6. Erstellt GitHub Release in **`MokuDev/docurip`** mit Installer + `latest.json`
 
 ### 4. Release verifizieren
 
@@ -73,46 +72,13 @@ Das Script macht automatisch:
 - [ ] Installer-Datei (.exe) als Asset vorhanden
 - [ ] Endpoint erreichbar: `https://github.com/MokuDev/docurip/releases/latest/download/latest.json`
 
----
-
-## Normales Update (z.B. v0.3.0)
-
-### 1. Version bumpen (3 Dateien)
-
-| Datei | Feld | Beispiel |
-|-------|------|----------|
-| `package.json` | `"version"` | `"0.3.0"` |
-| `src-tauri/tauri.conf.json` | `"version"` | `"0.3.0"` |
-| `src-tauri/Cargo.toml` | `version` | `"0.3.0"` |
-
-### 2. Committen
-
-```powershell
-git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
-git commit -m "chore: bump version to 0.3.0"
-```
-
-### 3. Signierungs-Key setzen
-
-```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\docurip.key" -Raw
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
-```
-
-### 4. Build + Publish
-
-```powershell
-npm run release:publish
-```
-
-Fertig. Installer + `latest.json` landen automatisch im public Release-Repo. Nutzer bekommen beim nächsten App-Start den Update-Banner.
+Fertig. Nutzer bekommen beim nächsten App-Start den Update-Banner.
 
 ---
 
 ## Nur lokaler Build (ohne Publish)
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\docurip.key" -Raw
 npm run release
 ```
 
@@ -145,7 +111,9 @@ Alle drei Dateien müssen exakt gleiche Version haben. Prüfe `package.json`, `t
 
 ### Keine `.sig` Datei nach Build
 
-`TAURI_SIGNING_PRIVATE_KEY` nicht gesetzt. Build wiederholen mit gesetzter Env-Variable.
+Das Script signiert automatisch nach dem Build. Falls es trotzdem fehlt:
+- Prüfe ob `~/.tauri/docurip.key` existiert (348 Bytes)
+- Manuell signieren: `npx tauri signer sign <pfad-zur-exe>`
 
 ### Updater zeigt kein Update an
 
@@ -161,4 +129,4 @@ Alle drei Dateien müssen exakt gleiche Version haben. Prüfe `package.json`, `t
 
 ### NSIS-Installer wird nicht gefunden
 
-Das Script sucht nach `*.exe` in `src-tauri/target/release/bundle/nsis/`. Wenn das Verzeichnis leer ist, hat der Build fehlgeschlagen — Build-Logs prüfen.
+Das Script sucht nach `*_x64-setup.exe` in `src-tauri/target/release/bundle/nsis/` (neueste zuerst). Wenn das Verzeichnis leer ist, hat der Build fehlgeschlagen — Build-Logs prüfen.

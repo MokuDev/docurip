@@ -70,6 +70,7 @@ pub fn merge_md_files(src_dir: &Path, dst_file: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "headless")]
 fn md_to_html(md_content: &str) -> String {
     use pulldown_cmark::{html, Options, Parser};
     let mut options = Options::empty();
@@ -102,15 +103,21 @@ th {{ background: #f5f5f5; }}
 pub fn export_pdf_files(src_dir: &Path, dst_dir: &Path) -> anyhow::Result<()> {
     use headless_chrome::{Browser, LaunchOptions};
 
+    let mut files = walk_dir(src_dir)?
+        .into_iter()
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("md"))
+        .collect::<Vec<_>>();
+
+    if files.is_empty() {
+        return Ok(());
+    }
+
+    files.sort();
+
     let browser = Browser::new(LaunchOptions {
         headless: true,
         ..Default::default()
     })?;
-
-    let files = walk_dir(src_dir)?
-        .into_iter()
-        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("md"))
-        .collect::<Vec<_>>();
 
     let tmp_dir = tempfile::TempDir::new()?;
 
@@ -135,6 +142,7 @@ pub fn export_pdf_files(src_dir: &Path, dst_dir: &Path) -> anyhow::Result<()> {
         tab.wait_until_navigated()?;
         let pdf_bytes = tab.print_to_pdf(None)?;
         std::fs::write(&dst_path, pdf_bytes)?;
+        drop(tab);
     }
 
     Ok(())

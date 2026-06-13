@@ -31,6 +31,24 @@ function Get-VersionFromToml($path) {
 
 Write-Host "=== docurip release ===" -ForegroundColor Cyan
 
+# Step 0: Ensure signing key is available
+$keyPath = Join-Path $env:USERPROFILE ".tauri\docurip.key"
+if (Test-Path $keyPath) {
+    if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+        $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content $keyPath -Raw
+        Write-Host "  Loaded signing key from $keyPath" -ForegroundColor Green
+    } else {
+        Write-Host "  Signing key already set via env var" -ForegroundColor Green
+    }
+    if (-not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+    }
+} else {
+    Write-Host "`nWARNING: Signing key not found at $keyPath" -ForegroundColor Yellow
+    Write-Host "  Build will proceed but .sig file will NOT be generated." -ForegroundColor Yellow
+    Write-Host "  Auto-updater will not work without signed releases." -ForegroundColor Yellow
+}
+
 # Step 1: Validate version consistency
 Write-Host "`n[1/5] Validating version consistency..." -ForegroundColor Yellow
 
@@ -59,11 +77,29 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Step 2b: Sign the installer (env var may not survive npm subprocess chain)
+Write-Host "  Signing installer..." -ForegroundColor Yellow
+$nsisDir = "src-tauri/target/release/bundle/nsis"
+$newExe = Get-ChildItem -Path $nsisDir -Filter "*_x64-setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($newExe -and $env:TAURI_SIGNING_PRIVATE_KEY) {
+    $sigPath = "$($newExe.FullName).sig"
+    if (-not (Test-Path $sigPath)) {
+        npx tauri signer sign $newExe.FullName
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "`nERROR: Signing failed!" -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "  Signed: $($newExe.Name).sig" -ForegroundColor Green
+    } else {
+        Write-Host "  Signature already exists" -ForegroundColor Green
+    }
+}
+
 # Step 3: Find output
 Write-Host "`n[3/5] Locating installer..." -ForegroundColor Yellow
 
 $nsisDir = "src-tauri/target/release/bundle/nsis"
-$setupExe = Get-ChildItem -Path $nsisDir -Filter "*.exe" | Select-Object -First 1
+$setupExe = Get-ChildItem -Path $nsisDir -Filter "*_x64-setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 
 if (-not $setupExe) {
     Write-Host "`nERROR: No .exe found in $nsisDir" -ForegroundColor Red
@@ -72,6 +108,12 @@ if (-not $setupExe) {
 
 Write-Host "  Installer: $($setupExe.FullName)" -ForegroundColor Green
 Write-Host "  Size:      $([math]::Round($setupExe.Length / 1MB, 2)) MB"
+
+if ($setupExe.Name -notmatch $version) {
+    Write-Host "`nWARNING: Installer filename does not contain version $version" -ForegroundColor Yellow
+    Write-Host "  Expected: docurip_${version}_x64-setup.exe" -ForegroundColor Yellow
+    Write-Host "  Found:    $($setupExe.Name)" -ForegroundColor Yellow
+}
 
 # Step 4: Publish (optional)
 if ($Publish) {

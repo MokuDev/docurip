@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use tokio::time::{sleep, Duration};
 use url::Url;
 use regex::RegexSet;
@@ -23,6 +23,55 @@ pub struct CrawlHandle {
     pub should_stop: Arc<AtomicBool>,
     pub event_bus: EventBus,
 }
+
+#[derive(Clone)]
+struct FetchContext {
+    handle: CrawlHandle,
+    fetcher: HttpFetcher,
+    headless_fetcher: Option<Arc<tokio::sync::Mutex<HeadlessFetcher>>>,
+    headless_strategy: String,
+    settings: AppSettings,
+}
+
+impl FetchContext {
+    async fn fetch_page(&self, url: &str) -> anyhow::Result<(u16, String)> {
+        let job_id = self.handle.job.read().await.id.clone();
+        match self.headless_strategy.as_str() {
+            "always" => {
+                if let Some(ref h) = self.headless_fetcher {
+                    match h.lock().await.fetch(url).await {
+                        Ok(html) => return Ok((200, html)),
+                        Err(e) => {
+                            let _ = self.handle.event_bus.emit(CrawlEvent::Log {
+                                job_id,
+                                level: "WARN".into(),
+                                message: format!("Headless fetch failed for {}: {}", url, e),
+                            });
+                        }
+                    }
+                }
+                self.fetcher.fetch_with_status(url).await
+            }
+            "auto" => match self.fetcher.fetch_with_status(url).await {
+                Ok((status, html)) => {
+                    if status >= 200 && status < 300 && !html.trim().is_empty() {
+                        Ok((status, html))
+                    } else if let Some(ref h) = self.headless_fetcher {
+                        h.lock().await.fetch(url).await.map(|h| (200, h))
+                    } else {
+                        Ok((status, html))
+                    }
+                }
+                Err(_) if self.headless_fetcher.is_some() => {
+                    self.headless_fetcher.as_ref().unwrap().lock().await.fetch(url).await.map(|h| (200, h))
+                }
+                Err(e) => Err(e),
+            },
+            _ => self.fetcher.fetch_with_status(url).await,
+        }
+    }
+}
+
 pub struct Orchestrator {
     handle: CrawlHandle,
     base_url: Url,
@@ -138,43 +187,6 @@ impl Orchestrator {
         });
     }
 
-    async fn fetch_page(&self, url: &str) -> anyhow::Result<(u16, String)> {
-        let job_id = self.handle.job.read().await.id.clone();
-        match self.config.headless_strategy.as_str() {
-            "always" => {
-                if let Some(ref h) = self.headless_fetcher {
-                    match h.fetch(url).await {
-                        Ok(html) => return Ok((200, html)),
-                        Err(e) => {
-                            let _ = self.handle.event_bus.emit(CrawlEvent::Log {
-                                job_id,
-                                level: "WARN".into(),
-                                message: format!("Headless fetch failed for {}: {}", url, e),
-                            });
-                        }
-                    }
-                }
-                self.fetcher.fetch_with_status(url).await
-            }
-            "auto" => match self.fetcher.fetch_with_status(url).await {
-                Ok((status, html)) => {
-                    if status >= 200 && status < 300 && !html.trim().is_empty() {
-                        Ok((status, html))
-                    } else if let Some(ref h) = self.headless_fetcher {
-                        h.fetch(url).await.map(|h| (200, h))
-                    } else {
-                        Ok((status, html))
-                    }
-                }
-                Err(_) if self.headless_fetcher.is_some() => {
-                    self.headless_fetcher.as_ref().unwrap().fetch(url).await.map(|h| (200, h))
-                }
-                Err(e) => Err(e),
-            },
-            _ => self.fetcher.fetch_with_status(url).await,
-        }
-    }
-
     async fn run(&mut self, start_url: &str) -> anyhow::Result<()> {
         let mut queue: VecDeque<(String, u32)> = VecDeque::new();
         let mut visited: HashSet<String> = HashSet::new();
@@ -199,8 +211,30 @@ impl Orchestrator {
 
         let mut processed = 0usize;
 
-        while let Some((url, depth)) = queue.pop_front() {
+        let semaphore = Arc::new(Semaphore::new(self.settings.concurrency as usize));
+        let mut pending = tokio::task::JoinSet::new();
+
+        let fetch_ctx = FetchContext {
+            handle: self.handle.clone(),
+            fetcher: self.fetcher.clone(),
+            headless_fetcher: self.headless_fetcher.take().map(|h| Arc::new(tokio::sync::Mutex::new(h))),
+            headless_strategy: self.config.headless_strategy.clone(),
+            settings: self.settings.clone(),
+        };
+
+        loop {
+            while let Some(res) = pending.try_join_next() {
+                let (result, url, depth) = match res {
+                    Ok(Ok((url, depth, status_code, html))) => (Ok((status_code, html)), url, depth),
+                    Ok(Err(e)) => (Err(e), String::new(), 0),
+                    Err(join_err) => (Err(anyhow::anyhow!("Task panicked: {}", join_err)), String::new(), 0),
+                };
+                let _ = self.handle_task_result(result, &url, depth, max_depth, &mut processed, page_limit, &mut queue, &mut visited).await;
+            }
+
             if self.handle.should_stop.load(Ordering::Relaxed) {
+                pending.abort_all();
+                while let Some(_) = pending.join_next().await {}
                 {
                     let mut job = self.handle.job.write().await;
                     job.status = JobStatus::Paused;
@@ -223,136 +257,60 @@ impl Orchestrator {
                 break;
             }
 
-            if processed >= page_limit {
+            while pending.len() < self.settings.concurrency as usize {
+                // Soft limit: we stop spawning new tasks once processed >= page_limit,
+                // but in-flight tasks may complete, so final count can slightly exceed the limit.
+                if processed >= page_limit {
+                    break;
+                }
+                if let Some((url, depth)) = queue.pop_front() {
+                    if depth > max_depth {
+                        continue;
+                    }
+                    let sem = semaphore.clone();
+                    let ctx = fetch_ctx.clone();
+                    pending.spawn(async move {
+                        if ctx.settings.request_delay > 0 {
+                            sleep(Duration::from_millis(ctx.settings.request_delay as u64)).await;
+                        }
+                        let _permit = sem.acquire_owned().await.map_err(|e| anyhow::anyhow!("Semaphore error: {}", e))?;
+                        match ctx.fetch_page(&url).await {
+                            Ok((status, html)) => Ok((url, depth, status, html)),
+                            Err(e) => Err(anyhow::anyhow!("Fetch error for {}: {}", url, e)),
+                        }
+                    });
+                } else {
+                    break;
+                }
+            }
+
+            if queue.is_empty() && pending.is_empty() {
                 break;
             }
 
-            if depth > max_depth {
-                continue;
-            }
-
-            let job_id = self.handle.job.read().await.id.clone();
-            let (status_code, html) = match self.fetch_page(&url).await {
-                Ok(result) => result,
-                Err(e) => {
-                    let err_msg = format!("Fetch error for {}: {}", url, e);
-                    if processed == 0 {
-                        let mut job = self.handle.job.write().await;
-                        job.error = Some(err_msg.clone());
+            if !pending.is_empty() {
+                match pending.join_next().await {
+                    Some(res) => {
+                        let (result, url, depth) = match res {
+                            Ok(Ok((url, depth, status_code, html))) => (Ok((status_code, html)), url, depth),
+                            Ok(Err(e)) => (Err(e), String::new(), 0),
+                            Err(join_err) => (Err(anyhow::anyhow!("Task panicked: {}", join_err)), String::new(), 0),
+                        };
+                        let _ = self.handle_task_result(result, &url, depth, max_depth, &mut processed, page_limit, &mut queue, &mut visited).await;
                     }
-                    self.handle.event_bus.emit(CrawlEvent::Error {
-                        job_id,
-                        message: err_msg,
-                    });
-                    continue;
+                    None => {}
                 }
-            };
-
-            let title = self.parser.extract_title(&html).unwrap_or_default();
-            let links = self.parser.extract_links(&html, &self.base_url);
-            let assets = self.parser.extract_assets(&html, &self.base_url);
-
-            let mut html_for_md = if !self.config.content_selectors.is_empty() {
-                self.parser
-                    .extract_content(&html, &self.config.content_selectors)
-                    .unwrap_or(html.clone())
             } else {
-                html.clone()
-            };
-            let mut asset_map = HashMap::new();
-            if self.config.download_assets {
-                let asset_downloader =
-                    AssetDownloader::new(self.fetcher.clone(), self.writer.clone());
-                for asset_url in &assets {
-                    match asset_downloader.download(asset_url).await {
-                        Ok(rel_path) => {
-                            asset_map.insert(asset_url.clone(), rel_path);
-                        }
-                        Err(e) => {
-                            let job_id = self.handle.job.read().await.id.clone();
-                            self.handle.event_bus.emit(CrawlEvent::Log {
-                                job_id,
-                                level: "WARN".into(),
-                                message: format!("Asset download failed for {}: {}", asset_url, e),
-                            });
-                        }
-                    }
-                }
+                break;
             }
+        }
 
-            if !asset_map.is_empty() {
-                html_for_md = self.parser.rewrite_asset_urls(&html_for_md, &self.base_url, &asset_map);
-            }
-
-            let markdown = self.converter.convert(&html_for_md);
-
-            if let Err(e) = self.writer.write_page(&url, &markdown).await {
-                let job_id = self.handle.job.read().await.id.clone();
-                self.handle.event_bus.emit(CrawlEvent::Error {
-                    job_id,
-                    message: format!("Write error for {}: {}", url, e),
-                });
-            }
-
-            let page_result = PageResult {
-                url: url.clone(),
-                title: title.clone(),
-                content: markdown,
-                links: links.clone(),
-                assets: assets.clone(),
-                status: status_code,
-            };
-
-            {
-                let mut job = self.handle.job.write().await;
-                job.results.push(page_result.clone());
-                processed += 1;
-                let start_time = job.start_time.clone();
-                let progress = CrawlProgress {
-                    pages_crawled: processed,
-                    page_limit,
-                    current_url: url.clone(),
-                    depth,
-                    max_depth,
-                    start_time,
-                };
-                job.progress = progress.clone();
-                let job_id = job.id.clone();
-                drop(job);
-                self.handle.event_bus.emit(CrawlEvent::PageComplete {
-                    job_id: job_id.clone(),
-                    page: page_result,
-                });
-                self.handle.event_bus.emit(CrawlEvent::Progress {
-                    job_id,
-                    progress,
-                });
-            }
-
-            if let Some(ref app_state) = self.app_state {
-                let job = self.handle.job.read().await.clone();
-                let _ = app_state.persist_job(&job).await;
-            }
-
-            if depth < max_depth {
-                for link in links {
-                    if !visited.contains(&link) {
-                        if !is_valid_url(&link) {
-                            continue;
-                        }
-                        if let Some(ref set) = self.exclude_set {
-                            if set.is_match(&link) {
-                                continue;
-                            }
-                        }
-                        visited.insert(link.clone());
-                        queue.push_back((link, depth + 1));
-                    }
-                }
-            }
-
-            if self.settings.request_delay > 0 {
-                sleep(Duration::from_millis(self.settings.request_delay as u64)).await;
+        if let Some(h_arc) = fetch_ctx.headless_fetcher {
+            if let Ok(mutex) = Arc::try_unwrap(h_arc) {
+                let mut h = mutex.into_inner();
+                let _ = tokio::task::spawn_blocking(move || {
+                    h.close();
+                }).await;
             }
         }
 
@@ -394,5 +352,161 @@ impl Orchestrator {
         }
 
         Ok(())
+    }
+
+    async fn handle_task_result(
+        &mut self,
+        result: anyhow::Result<(u16, String)>,
+        url: &str,
+        depth: u32,
+        max_depth: u32,
+        processed: &mut usize,
+        page_limit: usize,
+        queue: &mut VecDeque<(String, u32)>,
+        visited: &mut HashSet<String>,
+    ) -> anyhow::Result<bool> {
+        match result {
+            Ok((status_code, html)) => {
+                self.process_fetched_page(
+                    url.to_string(),
+                    depth,
+                    status_code,
+                    html,
+                    processed,
+                    page_limit,
+                    max_depth,
+                    visited,
+                    queue,
+                ).await;
+                Ok(true)
+            }
+            Err(e) => {
+                let job_id = self.handle.job.read().await.id.clone();
+                let err_msg = format!("{}", e);
+                if *processed == 0 {
+                    let mut job = self.handle.job.write().await;
+                    job.error = Some(err_msg.clone());
+                }
+                self.handle.event_bus.emit(CrawlEvent::Error {
+                    job_id,
+                    message: err_msg,
+                });
+                Ok(false)
+            }
+        }
+    }
+
+    async fn process_fetched_page(
+        &mut self,
+        url: String,
+        depth: u32,
+        status_code: u16,
+        html: String,
+        processed: &mut usize,
+        page_limit: usize,
+        max_depth: u32,
+        visited: &mut HashSet<String>,
+        queue: &mut VecDeque<(String, u32)>,
+    ) {
+        let title = self.parser.extract_title(&html).unwrap_or_default();
+        let links = self.parser.extract_links(&html, &self.base_url);
+        let assets = self.parser.extract_assets(&html, &self.base_url);
+
+        let mut html_for_md = if !self.config.content_selectors.is_empty() {
+            self.parser
+                .extract_content(&html, &self.config.content_selectors)
+                .unwrap_or(html.clone())
+        } else {
+            html.clone()
+        };
+
+        let mut asset_map = HashMap::new();
+        if self.config.download_assets {
+            let asset_downloader =
+                AssetDownloader::new(self.fetcher.clone(), self.writer.clone());
+            for asset_url in &assets {
+                match asset_downloader.download(asset_url).await {
+                    Ok(rel_path) => {
+                        asset_map.insert(asset_url.clone(), rel_path);
+                    }
+                    Err(e) => {
+                        let job_id = self.handle.job.read().await.id.clone();
+                        self.handle.event_bus.emit(CrawlEvent::Log {
+                            job_id,
+                            level: "WARN".into(),
+                            message: format!("Asset download failed for {}: {}", asset_url, e),
+                        });
+                    }
+                }
+            }
+        }
+
+        if !asset_map.is_empty() {
+            html_for_md = self.parser.rewrite_asset_urls(&html_for_md, &self.base_url, &asset_map);
+        }
+
+        let markdown = self.converter.convert(&html_for_md);
+
+        if let Err(e) = self.writer.write_page(&url, &markdown).await {
+            let job_id = self.handle.job.read().await.id.clone();
+            self.handle.event_bus.emit(CrawlEvent::Error {
+                job_id,
+                message: format!("Write error for {}: {}", url, e),
+            });
+        }
+
+        let page_result = PageResult {
+            url: url.clone(),
+            title: title.clone(),
+            content: markdown,
+            links: links.clone(),
+            assets: assets.clone(),
+            status: status_code,
+        };
+
+        {
+            let mut job = self.handle.job.write().await;
+            job.results.push(page_result.clone());
+            *processed += 1;
+            let start_time = job.start_time.clone();
+            let progress = CrawlProgress {
+                pages_crawled: *processed,
+                page_limit,
+                current_url: url.clone(),
+                depth,
+                max_depth,
+                start_time,
+            };
+            job.progress = progress.clone();
+            let job_id = job.id.clone();
+            drop(job);
+            self.handle.event_bus.emit(CrawlEvent::PageComplete {
+                job_id: job_id.clone(),
+                page: page_result,
+            });
+            self.handle.event_bus.emit(CrawlEvent::Progress {
+                job_id,
+                progress,
+            });
+        }
+
+        if let Some(ref app_state) = self.app_state {
+            let job = self.handle.job.read().await.clone();
+            let _ = app_state.persist_job(&job).await;
+        }
+
+        if depth < max_depth {
+            for link in links {
+                if !visited.contains(&link) && is_valid_url(&link) {
+                    if let Some(ref set) = self.exclude_set {
+                        if set.is_match(&link) {
+                            continue;
+                        }
+                    }
+                    visited.insert(link.clone());
+                    queue.push_back((link, depth + 1));
+                }
+            }
+        }
     }
 }

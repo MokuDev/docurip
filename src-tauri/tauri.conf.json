@@ -20,7 +20,15 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self'",
+        "img-src": "'self' blob: data: http: https:",
+        "script-src": "'self' 'unsafe-inline'",
+        "style-src": "'self' 'unsafe-inline'",
+        "connect-src": "'self' http: https:",
+        "font-src": "'self'",
+        "media-src": "'self' blob: data: http: https:"
+      }
     }
   },
   "bundle": {

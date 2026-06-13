@@ -1,10 +1,10 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 use tokio::sync::RwLock;
 
 use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
-use crate::crawler::orchestrator::{spawn_crawl, CrawlHandle};
+use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
 use crate::settings::config::{AppSettings, CrawlConfig};
 use crate::state::{AppState, JobHandle};
@@ -39,7 +39,7 @@ pub async fn start_crawl(
 
     let job_arc = Arc::new(RwLock::new(job));
     let should_stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let event_bus = EventBus::with_app(app);
+    let event_bus = EventBus::with_app(app.clone());
 
     let handle = CrawlHandle {
         job: job_arc.clone(),
@@ -58,7 +58,8 @@ pub async fn start_crawl(
         jobs.insert(job_id.clone(), job_handle);
     }
 
-    spawn_crawl(url, config, handle);
+    let settings = get_settings(app).await.map_err(|e| e)?;
+    Orchestrator::spawn(url, config, settings, handle);
 
     Ok(job_id)
 }
@@ -96,23 +97,24 @@ pub async fn list_jobs(state: State<'_, AppState>) -> Result<Vec<CrawlJob>, Stri
 
 #[tauri::command]
 pub async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
-    let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let path = config_dir.join("settings.json");
-    if let Ok(data) = tokio::fs::read_to_string(&path).await {
-        if let Ok(settings) = serde_json::from_str::<AppSettings>(&data) {
-            return Ok(settings);
-        }
-    }
-    Ok(AppSettings::default())
+    use tauri_plugin_store::StoreExt;
+    let store = app.store("settings.json").map_err(|e| e.to_string())?;
+    let settings = store
+        .get("settings")
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+    Ok(settings)
 }
 
 #[tauri::command]
 pub async fn update_settings(settings: AppSettings, app: AppHandle) -> Result<(), String> {
-    let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    tokio::fs::create_dir_all(&config_dir).await.map_err(|e| e.to_string())?;
-    let path = config_dir.join("settings.json");
-    let data = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    tokio::fs::write(&path, data).await.map_err(|e| e.to_string())?;
+    use tauri_plugin_store::StoreExt;
+    let store = app.store("settings.json").map_err(|e| e.to_string())?;
+    store.set(
+        "settings",
+        serde_json::to_value(&settings).map_err(|e| e.to_string())?,
+    );
+    store.save().map_err(|e| e.to_string())?;
     Ok(())
 }
 

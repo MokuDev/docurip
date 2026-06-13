@@ -1,11 +1,51 @@
-pub struct HeadlessFetcher;
+#[cfg(feature = "headless")]
+mod inner {
+    use headless_chrome::{Browser, LaunchOptions};
 
-impl HeadlessFetcher {
-    pub fn new() -> anyhow::Result<Self> {
-        anyhow::bail!("headless feature not enabled in this build")
+    pub struct HeadlessFetcher {
+        browser: Browser,
     }
 
-    pub async fn fetch(&self, _url: &str) -> anyhow::Result<String> {
-        anyhow::bail!("headless feature not enabled in this build")
+    impl HeadlessFetcher {
+        pub fn new() -> anyhow::Result<Self> {
+            let browser = Browser::new(LaunchOptions::default())?;
+            Ok(Self { browser })
+        }
+
+        pub async fn fetch(&self, url: &str) -> anyhow::Result<String> {
+            let tab = self.browser.new_tab()?;
+            let url = url.to_string();
+            let html = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
+                tab.navigate_to(&url)?;
+                tab.wait_until_navigated()?;
+                let content = tab.get_content()?;
+                Ok(content)
+            })
+            .await??;
+            Ok(html)
+        }
+
+        pub fn close(&mut self) {
+            let _ = self.browser.close();
+        }
     }
 }
+
+#[cfg(not(feature = "headless"))]
+mod inner {
+    pub struct HeadlessFetcher;
+
+    impl HeadlessFetcher {
+        pub fn new() -> anyhow::Result<Self> {
+            anyhow::bail!("headless feature not enabled in this build")
+        }
+
+        pub async fn fetch(&self, _url: &str) -> anyhow::Result<String> {
+            anyhow::bail!("headless feature not enabled in this build")
+        }
+
+        pub fn close(&mut self) {}
+    }
+}
+
+pub use inner::HeadlessFetcher;

@@ -341,6 +341,78 @@
       optionsSection.style.display = 'block';
       updateCommands(newVersion);
     }
+
+    async function bumpVersions() {
+      const newVersion = document.getElementById('newVersion').value.trim();
+      if (!isValidSemver(newVersion)) {
+        showStatus('Ungültige Version!', 'error');
+        return;
+      }
+
+      try {
+        for (const target of TARGET_FILES) {
+          const fileHandle = await directoryHandle.getFileHandle(target.path, { writable: true });
+          const writable = await fileHandle.createWritable();
+          const newContent = fileContents[target.path].replace(target.pattern, (match, p1) => {
+            return match.replace(p1, newVersion);
+          });
+          await writable.write(newContent);
+          await writable.close();
+        }
+
+        showStatus('Version erfolgreich auf ' + newVersion + ' gebumpet!', 'success');
+        await loadFiles();
+      } catch (err) {
+        showStatus('Fehler beim Schreiben: ' + err.message, 'error');
+      }
+    }
+
+    function updateCommands(newVersion) {
+      const doCommit = document.getElementById('gitCommitCheck').checked;
+      const doRelease = document.getElementById('buildReleaseCheck').checked;
+      const commandOutput = document.getElementById('commandOutput');
+
+      if (!doCommit && !doRelease) {
+        commandOutput.style.display = 'none';
+        return;
+      }
+
+      let commands = [];
+      if (doCommit) {
+        commands.push('git add -A');
+        commands.push('git commit -m "chore: bump version to ' + newVersion + '"');
+      }
+      if (doRelease) {
+        if (doCommit) {
+          commands.push('');
+        }
+        commands.push('npm run release');
+        if (doCommit) {
+          commands.push('# oder für GitHub-Publish:');
+          commands.push('npm run release:publish');
+        }
+      }
+
+      document.getElementById('commandBlock').textContent = commands.join('\n');
+      commandOutput.style.display = 'block';
+    }
+
+    document.getElementById('gitCommitCheck').addEventListener('change', () => {
+      const newVersion = document.getElementById('newVersion').value.trim();
+      if (isValidSemver(newVersion)) updateCommands(newVersion);
+    });
+
+    document.getElementById('buildReleaseCheck').addEventListener('change', () => {
+      const newVersion = document.getElementById('newVersion').value.trim();
+      if (isValidSemver(newVersion)) updateCommands(newVersion);
+    });
+
+    document.getElementById('copyCommandsBtn').addEventListener('click', () => {
+      const text = document.getElementById('commandBlock').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        showStatus('Commands in Zwischenablage kopiert!', 'success');
+      });
+    });
   </script>
 </body>
 </html>

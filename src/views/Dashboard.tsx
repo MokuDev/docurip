@@ -55,9 +55,19 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
   const loadStats = async () => {
     try {
       const s: DashboardStats = await invoke('get_dashboard_stats');
-      setStats(s);
+      setStats({
+        pagesSaved: s?.pagesSaved ?? 0,
+        totalSizeBytes: s?.totalSizeBytes ?? 0,
+        crawlVelocity: s?.crawlVelocity ?? 0,
+        failRate: s?.failRate ?? 0,
+      });
     } catch {
-      // ignore
+      setStats({
+        pagesSaved: 0,
+        totalSizeBytes: 0,
+        crawlVelocity: 0,
+        failRate: 0,
+      });
     }
   };
 
@@ -97,12 +107,12 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
         <StatCard
           icon={<Lightning size={20} className="text-amber" />}
           label="Crawl Velocity"
-          value={`${stats.crawlVelocity.toFixed(1)} pages/min`}
+          value={`${(stats.crawlVelocity ?? 0).toFixed(1)} pages/min`}
         />
         <StatCard
           icon={<Warning size={20} className="text-crimson" />}
           label="Fail Rate"
-          value={`${stats.failRate.toFixed(1)}%`}
+          value={`${(stats.failRate ?? 0).toFixed(1)}%`}
         />
       </div>
 

@@ -25,29 +25,32 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     const setup = async () => {
-      unlisten = await listen<CrawlEvent>('crawl-event', (event) => {
-        const ev = event.payload;
-        if (ev.type === 'error') {
-          const message = ev.message || 'Unknown error';
-          setError(message);
-          pushToast('error', message);
-        }
-        setState((prev) => {
-          const nextEvents = [...prev.events, ev].slice(-500);
-          const nextActive = new Set(prev.activeJobIds);
-          if (ev.type === 'jobStatusChanged') {
-            if (ev.status === 'running' || ev.status === 'queued') {
-              nextActive.add(ev.jobId);
-            } else {
-              nextActive.delete(ev.jobId);
-            }
-          } else {
-            // Any other event implies the job is active
-            nextActive.add(ev.jobId);
+      try {
+        unlisten = await listen<CrawlEvent>('crawl-event', (event) => {
+          const ev = event.payload;
+          if (ev.type === 'error') {
+            const message = ev.message || 'Unknown error';
+            setError(message);
+            pushToast('error', message);
           }
-          return { ...prev, events: nextEvents, activeJobIds: nextActive };
+          setState((prev) => {
+            const nextEvents = [...prev.events, ev].slice(-500);
+            const nextActive = new Set(prev.activeJobIds);
+            if (ev.type === 'jobStatusChanged') {
+              if (ev.status === 'running' || ev.status === 'queued') {
+                nextActive.add(ev.jobId);
+              } else {
+                nextActive.delete(ev.jobId);
+              }
+            } else {
+              nextActive.add(ev.jobId);
+            }
+            return { ...prev, events: nextEvents, activeJobIds: nextActive };
+          });
         });
-      });
+      } catch (err) {
+        console.warn('Tauri event listener not available (running in browser?):', err);
+      }
     };
     setup();
     return () => unlisten?.();

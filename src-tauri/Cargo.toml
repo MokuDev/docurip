@@ -32,9 +32,9 @@ zip = { version = "2.1", default-features = false, features = ["deflate"] }
 sysinfo = "0.31"
 
 [dev-dependencies]
-wiremock = "0.6"
-tokio-test = "0.4"
 tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util"] }
+wiremock = "0.6"
 
 [features]
 headless = ["headless_chrome"]

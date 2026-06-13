@@ -13,7 +13,9 @@ import {
   X,
   Eye,
   Download,
+  FileArrowUp,
 } from '@phosphor-icons/react';
+import { ResultBrowser } from './ResultBrowser';
 import type { CrawlJob } from '../types';
 
 export function HistoryView() {
@@ -22,6 +24,7 @@ export function HistoryView() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<CrawlJob | null>(null);
+  const [browserJob, setBrowserJob] = useState<CrawlJob | null>(null);
 
   useEffect(() => {
     loadJobs();
@@ -168,6 +171,15 @@ export function HistoryView() {
                   </div>
 
                   <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-fast">
+                    {job.status === 'completed' && job.results.length > 0 && (
+                      <button
+                        onClick={() => setBrowserJob(job)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-accentGreen/10 text-accentGreen hover:bg-accentGreen/20 transition-all"
+                      >
+                        <FileArrowUp size={14} />
+                        Browse Results
+                      </button>
+                    )}
                     <button
                       onClick={() => setSelectedJob(job)}
                       className="p-1.5 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"
@@ -343,6 +355,16 @@ export function HistoryView() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Result Browser Overlay */}
+      <AnimatePresence>
+        {browserJob && (
+          <ResultBrowser
+            job={browserJob}
+            onClose={() => setBrowserJob(null)}
+          />
         )}
       </AnimatePresence>
     </div>

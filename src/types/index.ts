@@ -59,3 +59,10 @@ export interface CrawlEvent {
   page?: PageResult;
   status?: 'queued' | 'running' | 'paused' | 'completed' | 'failed';
 }
+
+export interface SearchMatch {
+  url: string;
+  title: string;
+  preview: string;
+  relevance: number;
+}

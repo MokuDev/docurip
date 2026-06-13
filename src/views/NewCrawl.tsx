@@ -48,7 +48,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     }
   }, [prefillUrl]);
 
-  const { events } = useCrawlEvents();
+  const { events, error, clearError } = useCrawlEvents();
 
   // React to global events for the active job
   useEffect(() => {
@@ -82,6 +82,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   };
 
   const handleStart = async () => {
+    clearError();
     if (!validateUrl(config.url)) {
       setUrlError('Please enter a valid URL (e.g., https://example.com)');
       return;
@@ -338,6 +339,12 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
 
       {/* Right: Live Monitor */}
       <div className="flex-1 flex flex-col bg-[#050a0f]">
+        {error && (
+          <div className="bg-crimson/10 border-l-4 border-crimson text-crimson px-4 py-3 m-4 mb-0 rounded flex justify-between items-center">
+            <span className="text-sm">{error}</span>
+            <button onClick={clearError} className="font-bold text-crimson hover:text-ghost ml-2">&times;</button>
+          </div>
+        )}
         <div className="h-14 flex items-center px-5 border-b border-abyssal/50">
           <h2 className="text-ghost font-semibold text-base flex items-center">
             <FileText weight="fill" size={18} className="text-accentGreen mr-2" />

@@ -8,6 +8,24 @@ use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
 use crate::settings::config::{AppSettings, CrawlConfig};
 use crate::state::{AppState, JobHandle};
+use url::Url;
+
+fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
+    let parsed = Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("URL scheme must be http or https".to_string());
+    }
+    if config.max_depth < 1 {
+        return Err("max_depth must be at least 1".to_string());
+    }
+    if config.page_limit < 1 {
+        return Err("page_limit must be at least 1".to_string());
+    }
+    if config.headless_strategy.is_empty() {
+        return Err("headless_strategy must not be empty".to_string());
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn start_crawl(
@@ -16,6 +34,7 @@ pub async fn start_crawl(
     state: State<'_, Arc<AppState>>,
     app: AppHandle,
 ) -> Result<String, String> {
+    validate_crawl_input(&url, &config)?;
     let job_id = uuid::Uuid::new_v4().to_string();
 
     let job = CrawlJob {

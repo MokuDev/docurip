@@ -24,6 +24,7 @@ export function SettingsView() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadSettings();
@@ -41,9 +42,24 @@ export function SettingsView() {
     }
   };
 
+  const validate = (s: AppSettings) => {
+    const e: Record<string, string> = {};
+    if (Number.isNaN(s.defaultMaxDepth) || s.defaultMaxDepth < 1) e.defaultMaxDepth = 'Must be at least 1';
+    if (Number.isNaN(s.defaultPageLimit) || s.defaultPageLimit < 1) e.defaultPageLimit = 'Must be at least 1';
+    if (Number.isNaN(s.concurrency) || s.concurrency < 1) e.concurrency = 'Must be at least 1';
+    if (Number.isNaN(s.requestDelay) || s.requestDelay < 0) e.requestDelay = 'Must be 0 or greater';
+    if (Number.isNaN(s.timeout) || s.timeout < 1000) e.timeout = 'Must be at least 1000 ms';
+    return e;
+  };
+
   const handleSave = async () => {
     setSaved(false);
     setError('');
+    const validationErrors = validate(settings);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
     try {
       await invoke('update_settings', { settings });
       setSaved(true);
@@ -57,6 +73,7 @@ export function SettingsView() {
     setSettings(DEFAULT_SETTINGS);
     setSaved(false);
     setError('');
+    setErrors({});
   };
 
   if (loading) {
@@ -145,14 +162,16 @@ export function SettingsView() {
                 min={1}
                 max={10}
                 value={settings.defaultMaxDepth}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    defaultMaxDepth: parseInt(e.target.value) || 1,
-                  })
-                }
-                className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
+                onChange={(e) => {
+                  const val = e.target.value === '' ? NaN : Number(e.target.value);
+                  setSettings({ ...settings, defaultMaxDepth: val });
+                  setErrors((prev) => ({ ...prev, defaultMaxDepth: '' }));
+                }}
+                aria-invalid={!!errors.defaultMaxDepth}
+                aria-describedby={errors.defaultMaxDepth ? 'defaultMaxDepth-error' : undefined}
+                className={`w-full bg-surface/50 border rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all ${errors.defaultMaxDepth ? 'border-crimson' : 'border-abyssal'}`}
               />
+              {errors.defaultMaxDepth && <p id="defaultMaxDepth-error" className="text-crimson text-xs mt-1">{errors.defaultMaxDepth}</p>}
             </div>
             <div>
               <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
@@ -163,14 +182,16 @@ export function SettingsView() {
                 min={1}
                 max={10000}
                 value={settings.defaultPageLimit}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    defaultPageLimit: parseInt(e.target.value) || 1,
-                  })
-                }
-                className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
+                onChange={(e) => {
+                  const val = e.target.value === '' ? NaN : Number(e.target.value);
+                  setSettings({ ...settings, defaultPageLimit: val });
+                  setErrors((prev) => ({ ...prev, defaultPageLimit: '' }));
+                }}
+                aria-invalid={!!errors.defaultPageLimit}
+                aria-describedby={errors.defaultPageLimit ? 'defaultPageLimit-error' : undefined}
+                className={`w-full bg-surface/50 border rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all ${errors.defaultPageLimit ? 'border-crimson' : 'border-abyssal'}`}
               />
+              {errors.defaultPageLimit && <p id="defaultPageLimit-error" className="text-crimson text-xs mt-1">{errors.defaultPageLimit}</p>}
             </div>
             <div>
               <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
@@ -181,14 +202,16 @@ export function SettingsView() {
                 min={1}
                 max={20}
                 value={settings.concurrency}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    concurrency: parseInt(e.target.value) || 1,
-                  })
-                }
-                className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
+                onChange={(e) => {
+                  const val = e.target.value === '' ? NaN : Number(e.target.value);
+                  setSettings({ ...settings, concurrency: val });
+                  setErrors((prev) => ({ ...prev, concurrency: '' }));
+                }}
+                aria-invalid={!!errors.concurrency}
+                aria-describedby={errors.concurrency ? 'concurrency-error' : undefined}
+                className={`w-full bg-surface/50 border rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all ${errors.concurrency ? 'border-crimson' : 'border-abyssal'}`}
               />
+              {errors.concurrency && <p id="concurrency-error" className="text-crimson text-xs mt-1">{errors.concurrency}</p>}
             </div>
             <div>
               <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
@@ -199,14 +222,16 @@ export function SettingsView() {
                 min={0}
                 max={30000}
                 value={settings.requestDelay}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    requestDelay: parseInt(e.target.value) || 0,
-                  })
-                }
-                className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
+                onChange={(e) => {
+                  const val = e.target.value === '' ? NaN : Number(e.target.value);
+                  setSettings({ ...settings, requestDelay: val });
+                  setErrors((prev) => ({ ...prev, requestDelay: '' }));
+                }}
+                aria-invalid={!!errors.requestDelay}
+                aria-describedby={errors.requestDelay ? 'requestDelay-error' : undefined}
+                className={`w-full bg-surface/50 border rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all ${errors.requestDelay ? 'border-crimson' : 'border-abyssal'}`}
               />
+              {errors.requestDelay && <p id="requestDelay-error" className="text-crimson text-xs mt-1">{errors.requestDelay}</p>}
             </div>
           </div>
         </Section>
@@ -223,14 +248,16 @@ export function SettingsView() {
                 min={1000}
                 max={120000}
                 value={settings.timeout}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    timeout: parseInt(e.target.value) || 30000,
-                  })
-                }
-                className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
+                onChange={(e) => {
+                  const val = e.target.value === '' ? NaN : Number(e.target.value);
+                  setSettings({ ...settings, timeout: val });
+                  setErrors((prev) => ({ ...prev, timeout: '' }));
+                }}
+                aria-invalid={!!errors.timeout}
+                aria-describedby={errors.timeout ? 'timeout-error' : undefined}
+                className={`w-full bg-surface/50 border rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all ${errors.timeout ? 'border-crimson' : 'border-abyssal'}`}
               />
+              {errors.timeout && <p id="timeout-error" className="text-crimson text-xs mt-1">{errors.timeout}</p>}
             </div>
             <div>
               <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">

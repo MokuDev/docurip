@@ -128,11 +128,19 @@ export function HistoryView() {
           </div>
         ) : filteredJobs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-charcoal">
-            <Clock size={48} className="mb-4 opacity-20" />
-            <p>No crawls found</p>
-            <p className="text-xs mt-1 opacity-50">
-              {search || filter !== 'all' ? 'Try adjusting your filters' : 'Start a new crawl to see history'}
-            </p>
+            {!search && filter === 'all' ? (
+              <>
+                <FileText size={48} className="mb-4 opacity-20" />
+                <p className="text-ghost font-medium">No crawls yet</p>
+                <p className="text-xs mt-1 opacity-50">Start a new crawl to see history here</p>
+              </>
+            ) : (
+              <>
+                <Clock size={48} className="mb-4 opacity-20" />
+                <p className="text-ghost font-medium">No crawls found</p>
+                <p className="text-xs mt-1 opacity-50">Try adjusting your filters</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-3">

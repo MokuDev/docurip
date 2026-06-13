@@ -8,42 +8,46 @@ import {
   CheckCircle,
   Warning,
   ArrowRight,
+  HardDrive,
+  Lightning,
 } from '@phosphor-icons/react';
-import type { CrawlJob } from '../types';
+import type { CrawlJob, DashboardStats } from '../types';
 
 export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) => void }) {
   const [recentJobs, setRecentJobs] = useState<CrawlJob[]>([]);
   const [quickUrl, setQuickUrl] = useState('');
-  const [stats, setStats] = useState({
-    totalCrawls: 0,
-    totalPages: 0,
-    activeCrawls: 0,
-    successRate: 0,
+  const [stats, setStats] = useState<DashboardStats>({
+    pagesSaved: 0,
+    totalSizeBytes: 0,
+    crawlVelocity: 0,
+    failRate: 0,
   });
 
   useEffect(() => {
-    loadStats();
-    const interval = setInterval(loadStats, 3000);
-    return () => clearInterval(interval);
+    loadRecentJobs();
+    const jobsInterval = setInterval(loadRecentJobs, 3000);
+    return () => clearInterval(jobsInterval);
   }, []);
+
+  useEffect(() => {
+    loadStats();
+    const statsInterval = setInterval(loadStats, 3000);
+    return () => clearInterval(statsInterval);
+  }, []);
+
+  const loadRecentJobs = async () => {
+    try {
+      const jobs: CrawlJob[] = await invoke('list_jobs');
+      setRecentJobs((jobs || []).slice(-5).reverse());
+    } catch {
+      // ignore
+    }
+  };
 
   const loadStats = async () => {
     try {
-      const jobs: CrawlJob[] = await invoke('list_jobs');
-      const j = jobs || [];
-      const completed = j.filter((x) => x.status === 'completed');
-      const pages = j.reduce((sum, x) => sum + (x.results?.length || 0), 0);
-
-      setRecentJobs(j.slice(-5).reverse());
-      setStats({
-        totalCrawls: j.length,
-        totalPages: pages,
-        activeCrawls: j.filter((x) => x.status === 'running').length,
-        successRate:
-          completed.length > 0
-            ? Math.round((completed.length / j.length) * 100)
-            : 0,
-      });
+      const s: DashboardStats = await invoke('get_dashboard_stats');
+      setStats(s);
     } catch {
       // ignore
     }
@@ -64,24 +68,24 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
       {/* Stats Grid */}
       <div className="grid grid-cols-4 gap-4 mb-8">
         <StatCard
-          icon={<Globe size={20} className="text-accentGreen" />}
-          label="Total Crawls"
-          value={stats.totalCrawls}
-        />
-        <StatCard
           icon={<FileText size={20} className="text-cyberBlue" />}
-          label="Pages Extracted"
-          value={stats.totalPages}
+          label="Pages Saved"
+          value={stats.pagesSaved}
         />
         <StatCard
-          icon={<Play size={20} className="text-amber" />}
-          label="Active"
-          value={stats.activeCrawls}
+          icon={<HardDrive size={20} className="text-accentGreen" />}
+          label="Total Size"
+          value={formatBytes(stats.totalSizeBytes)}
         />
         <StatCard
-          icon={<CheckCircle size={20} className="text-brightGreen" />}
-          label="Success Rate"
-          value={`${stats.successRate}%`}
+          icon={<Lightning size={20} className="text-amber" />}
+          label="Crawl Velocity"
+          value={`${stats.crawlVelocity.toFixed(1)} pages/min`}
+        />
+        <StatCard
+          icon={<Warning size={20} className="text-crimson" />}
+          label="Fail Rate"
+          value={`${stats.failRate.toFixed(1)}%`}
         />
       </div>
 
@@ -169,6 +173,15 @@ const StatCard = ({
     <div className="text-2xl font-mono font-bold text-ghost">{value}</div>
   </div>
 );
+
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+  const v = bytes / Math.pow(k, i);
+  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${sizes[i]}`;
+}
 
 const StatusIcon = ({ status }: { status: string }) => {
   switch (status) {

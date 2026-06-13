@@ -66,3 +66,10 @@ export interface SearchMatch {
   preview: string;
   relevance: number;
 }
+
+export interface DashboardStats {
+  pagesSaved: number;
+  totalSizeBytes: number;
+  crawlVelocity: number;
+  failRate: number;
+}

@@ -1,6 +1,8 @@
 use std::fs::File;
+use std::path::Path;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use zip::write::FileOptions;
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -168,6 +170,168 @@ pub async fn list_jobs(state: State<'_, Arc<AppState>>) -> Result<Vec<CrawlJob>,
     }
 
     Ok(result)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DashboardStats {
+    pub pages_saved: u32,
+    pub total_size_bytes: u64,
+    pub crawl_velocity: f32,
+    pub fail_rate: f32,
+}
+
+const STATS_CACHE_TTL: Duration = Duration::from_secs(30);
+const SIZE_SCAN_FILE_CAP: usize = 1000;
+const SIZE_SCAN_TIME_CAP: Duration = Duration::from_secs(5);
+
+static STATS_CACHE: OnceLock<Mutex<Option<(Instant, DashboardStats)>>> = OnceLock::new();
+
+fn stats_cache() -> &'static Mutex<Option<(Instant, DashboardStats)>> {
+    STATS_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn dir_size_capped(path: &Path) -> u64 {
+    let start = Instant::now();
+    let mut stack: Vec<std::path::PathBuf> = vec![path.to_path_buf()];
+    let mut total: u64 = 0;
+    let mut count: usize = 0;
+
+    while let Some(p) = stack.pop() {
+        if start.elapsed() > SIZE_SCAN_TIME_CAP {
+            break;
+        }
+        let entries = match std::fs::read_dir(&p) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            if count >= SIZE_SCAN_FILE_CAP {
+                return total;
+            }
+            let ep = entry.path();
+            let meta = match entry.metadata() {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            if meta.is_file() {
+                total = total.saturating_add(meta.len());
+                count += 1;
+            } else if meta.is_dir() {
+                stack.push(ep);
+            }
+        }
+    }
+    total
+}
+
+fn parse_rfc3339(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+fn collect_all_jobs(state: &AppState) -> Vec<CrawlJob> {
+    let mut result = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    if let Ok(active) = state.active_jobs.try_read() {
+        for (_, handle) in active.iter() {
+            if let Ok(job) = handle.job.try_read() {
+                seen.insert(job.id.clone());
+                result.push(job.clone());
+            }
+        }
+    }
+
+    if let Ok(persisted) = state.persisted_jobs.try_read() {
+        for (_, job) in persisted.iter() {
+            if !seen.contains(&job.id) {
+                result.push(job.clone());
+            }
+        }
+    }
+
+    result
+}
+
+fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
+    let jobs = collect_all_jobs(state);
+    let total = jobs.len();
+    let failed = jobs.iter().filter(|j| j.status == JobStatus::Failed).count();
+
+    let pages_saved: u32 = jobs.iter().map(|j| j.results.len() as u32).sum();
+
+    let mut total_size_bytes: u64 = 0;
+    let mut latest_completed: Option<&CrawlJob> = None;
+    for job in &jobs {
+        if job.status != JobStatus::Completed {
+            continue;
+        }
+        let out = Path::new(&job.config.output_dir);
+        if out.exists() {
+            total_size_bytes = total_size_bytes.saturating_add(dir_size_capped(out));
+        }
+        let is_newer = match &latest_completed {
+            Some(prev) => match (&prev.end_time, &job.end_time) {
+                (Some(p), Some(j)) => j.as_str() > p.as_str(),
+                _ => false,
+            },
+            None => true,
+        };
+        if is_newer {
+            latest_completed = Some(job);
+        }
+    }
+
+    let crawl_velocity: f32 = match latest_completed {
+        Some(j) => {
+            let pages = j.results.len() as f32;
+            if pages <= 0.0 {
+                0.0
+            } else {
+                let (start, end) = match (&j.start_time, &j.end_time) {
+                    (Some(s), Some(e)) => (parse_rfc3339(s), parse_rfc3339(e)),
+                    _ => (None, None),
+                };
+                match (start, end) {
+                    (Some(s), Some(e)) => {
+                        let secs = (e - s).num_seconds().max(1) as f32;
+                        pages / (secs / 60.0)
+                    }
+                    _ => 0.0,
+                }
+            }
+        }
+        None => 0.0,
+    };
+
+    let fail_rate: f32 = if total == 0 {
+        0.0
+    } else {
+        (failed as f32 / total as f32) * 100.0
+    };
+
+    DashboardStats {
+        pages_saved,
+        total_size_bytes,
+        crawl_velocity,
+        fail_rate,
+    }
+}
+
+#[tauri::command]
+pub async fn get_dashboard_stats(state: State<'_, Arc<AppState>>) -> Result<DashboardStats, String> {
+    if let Some((ts, cached)) = stats_cache().lock().map(|g| g.clone()).unwrap_or(None) {
+        if ts.elapsed() < STATS_CACHE_TTL {
+            return Ok(cached);
+        }
+    }
+
+    let stats = compute_dashboard_stats(state.inner().as_ref());
+    if let Ok(mut g) = stats_cache().lock() {
+        *g = Some((Instant::now(), stats.clone()));
+    }
+    Ok(stats)
 }
 
 #[tauri::command]

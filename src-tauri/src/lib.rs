@@ -33,6 +33,7 @@ pub fn run() {
             commands::resume_crawl,
             commands::get_job,
             commands::list_jobs,
+            commands::get_dashboard_stats,
             commands::delete_job,
             commands::get_settings,
             commands::update_settings,

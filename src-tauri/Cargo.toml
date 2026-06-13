@@ -33,6 +33,7 @@ zip = { version = "2.1", default-features = false, features = ["deflate"] }
 sysinfo = "0.31"
 pulldown-cmark = "0.12"
 tempfile = "3"
+tauri-plugin-process = "2.3.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util"] }

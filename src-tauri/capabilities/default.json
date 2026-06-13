@@ -12,6 +12,7 @@
     "fs:allow-write-file",
     "fs:allow-read-dir",
     "fs:allow-mkdir",
-    "updater:default"
+    "updater:default",
+    "process:default"
   ]
 }

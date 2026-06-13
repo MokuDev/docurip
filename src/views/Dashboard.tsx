@@ -10,8 +10,9 @@ import {
   ArrowRight,
   HardDrive,
   Lightning,
+  Archive,
 } from '@phosphor-icons/react';
-import type { CrawlJob, DashboardStats } from '../types';
+import type { CrawlJob, DashboardStats, RecentExport } from '../types';
 
 export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) => void }) {
   const [recentJobs, setRecentJobs] = useState<CrawlJob[]>([]);
@@ -22,6 +23,7 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
     crawlVelocity: 0,
     failRate: 0,
   });
+  const [recentExports, setRecentExports] = useState<RecentExport[]>([]);
 
   useEffect(() => {
     loadRecentJobs();
@@ -33,6 +35,12 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
     loadStats();
     const statsInterval = setInterval(loadStats, 3000);
     return () => clearInterval(statsInterval);
+  }, []);
+
+  useEffect(() => {
+    loadRecentExports();
+    const exportsInterval = setInterval(loadRecentExports, 5000);
+    return () => clearInterval(exportsInterval);
   }, []);
 
   const loadRecentJobs = async () => {
@@ -48,6 +56,15 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
     try {
       const s: DashboardStats = await invoke('get_dashboard_stats');
       setStats(s);
+    } catch {
+      // ignore
+    }
+  };
+
+  const loadRecentExports = async () => {
+    try {
+      const list: RecentExport[] = await invoke('list_exports', { limit: 5 });
+      setRecentExports(list || []);
     } catch {
       // ignore
     }
@@ -147,6 +164,48 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
                   </div>
                 </div>
                 <StatusBadge status={job.status} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Exports */}
+      <div className="mt-8">
+        <h2 className="text-ghost font-semibold mb-4 text-sm uppercase tracking-wider">
+          Recent Exports
+        </h2>
+        {recentExports.length === 0 ? (
+          <div className="bg-surface/20 border border-abyssal/30 rounded-lg p-8 text-center">
+            <Download size={32} className="text-charcoal/20 mx-auto mb-3" />
+            <p className="text-charcoal text-sm">No exports yet</p>
+            <p className="text-charcoal/50 text-xs mt-1">
+              Export a completed job from History to see it here.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recentExports.map((exp) => (
+              <div
+                key={exp.jobId}
+                className="flex items-center justify-between bg-surface/20 border border-abyssal/30 rounded-md px-4 py-3"
+                title={exp.path}
+              >
+                <div className="flex items-center space-x-3 min-w-0">
+                  <Archive size={16} className="text-accentGreen" />
+                  <div className="min-w-0">
+                    <p className="text-sm text-ghost truncate font-mono">
+                      {exp.jobId}.zip
+                    </p>
+                    <p className="text-[10px] text-charcoal">
+                      {formatBytes(exp.sizeBytes)}
+                      {exp.createdAt && ` · ${new Date(exp.createdAt).toLocaleString()}`}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded bg-accentGreen/10 text-accentGreen">
+                  zip
+                </span>
               </div>
             ))}
           </div>

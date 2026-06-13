@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod crawler;
 pub mod export;
+pub mod exports;
 pub mod fetcher;
 pub mod parser;
 pub mod converter;
@@ -41,6 +42,7 @@ pub fn run() {
             commands::export_job,
             commands::search_job_results,
             commands::export_job_zip,
+            commands::list_exports,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,12 +5,13 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use zip::write::FileOptions;
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::sync::RwLock;
 
 use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
 use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
+use crate::exports::{self, RecentExport};
 use crate::settings::config::{AppSettings, CrawlConfig};
 use crate::state::{AppState, JobHandle};
 use url::Url;
@@ -515,4 +516,14 @@ pub async fn export_job_zip(
 
     zip.finish().map_err(|e| e.to_string())?;
     Ok(zip_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn list_exports(
+    app: AppHandle,
+    limit: Option<usize>,
+) -> Result<Vec<RecentExport>, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let n = limit.unwrap_or(5);
+    Ok(exports::list_recent_exports(&dir, n))
 }

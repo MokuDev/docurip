@@ -73,3 +73,10 @@ export interface DashboardStats {
   crawlVelocity: number;
   failRate: number;
 }
+
+export interface RecentExport {
+  path: string;
+  jobId: string;
+  createdAt: string;
+  sizeBytes: number;
+}

@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{Notify, RwLock};
+use uuid::Uuid;
 
 use crate::crawler::job::CrawlJob;
 use crate::events::bus::EventBus;
@@ -15,11 +17,12 @@ pub struct JobHandle {
     pub event_bus: EventBus,
 }
 
-#[derive(Default)]
 pub struct AppState {
     pub active_jobs: RwLock<HashMap<String, JobHandle>>,
     pub persisted_jobs: RwLock<HashMap<String, CrawlJob>>,
     pub persist_dir: PathBuf,
+    pub session_id: String,
+    pub start_time: Instant,
 }
 
 impl AppState {
@@ -32,7 +35,13 @@ impl AppState {
             active_jobs: RwLock::new(HashMap::new()),
             persisted_jobs: RwLock::new(persisted_jobs),
             persist_dir,
+            session_id: Uuid::new_v4().to_string(),
+            start_time: Instant::now(),
         })
+    }
+
+    pub fn uptime_secs(&self) -> u64 {
+        self.start_time.elapsed().as_secs()
     }
 
     pub fn save_job_to_disk(dir: &Path, job: &CrawlJob) -> anyhow::Result<()> {

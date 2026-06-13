@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use zip::write::FileOptions;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::RwLock;
 
@@ -14,6 +14,7 @@ use crate::events::bus::EventBus;
 use crate::exports::{self, RecentExport};
 use crate::settings::config::{AppSettings, CrawlConfig};
 use crate::state::{AppState, JobHandle};
+use crate::system::SystemStats;
 use url::Url;
 
 fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
@@ -526,4 +527,27 @@ pub async fn list_exports(
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let n = limit.unwrap_or(5);
     Ok(exports::list_recent_exports(&dir, n))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionInfo {
+    pub id: String,
+    pub uptime_secs: u64,
+}
+
+#[tauri::command]
+pub async fn get_system_stats() -> Result<SystemStats, String> {
+    Ok(crate::system::collect())
+}
+
+#[tauri::command]
+pub async fn get_session_info(
+    state: State<'_, Arc<AppState>>,
+) -> Result<SessionInfo, String> {
+    let s = state.inner().clone();
+    Ok(SessionInfo {
+        id: s.session_id.clone(),
+        uptime_secs: s.uptime_secs(),
+    })
 }

@@ -10,6 +10,7 @@ pub mod asset_dl;
 pub mod events;
 pub mod settings;
 pub mod state;
+pub mod system;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -43,6 +44,8 @@ pub fn run() {
             commands::search_job_results,
             commands::export_job_zip,
             commands::list_exports,
+            commands::get_system_stats,
+            commands::get_session_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

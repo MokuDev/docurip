@@ -80,3 +80,14 @@ export interface RecentExport {
   createdAt: string;
   sizeBytes: number;
 }
+
+export interface SystemStats {
+  cpuPercent: number;
+  memUsedMb: number;
+  memTotalMb: number;
+}
+
+export interface SessionInfo {
+  id: string;
+  uptimeSecs: number;
+}

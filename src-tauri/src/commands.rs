@@ -61,17 +61,23 @@ pub async fn start_crawl(
 
     let job_arc = Arc::new(RwLock::new(job));
     let should_stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let should_pause = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let resume_notify = Arc::new(tokio::sync::Notify::new());
     let event_bus = EventBus::with_app(app.clone());
 
     let handle = CrawlHandle {
         job: job_arc.clone(),
         should_stop: should_stop.clone(),
+        should_pause: should_pause.clone(),
+        resume_notify: resume_notify.clone(),
         event_bus: event_bus.clone(),
     };
 
     let job_handle = JobHandle {
         job: job_arc.clone(),
         should_stop,
+        should_pause,
+        resume_notify,
         event_bus,
     };
 
@@ -96,6 +102,29 @@ pub async fn stop_crawl(job_id: String, state: State<'_, Arc<AppState>>) -> Resu
         let job = handle.job.read().await.clone();
         drop(jobs); // read lock freigeben
         state.persist_job(&job).await.map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Job not found".into())
+    }
+}
+
+#[tauri::command]
+pub async fn pause_crawl(job_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    let jobs = state.active_jobs.read().await;
+    if let Some(handle) = jobs.get(&job_id) {
+        handle.should_pause.store(true, Ordering::Relaxed);
+        Ok(())
+    } else {
+        Err("Job not found".into())
+    }
+}
+
+#[tauri::command]
+pub async fn resume_crawl(job_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    let jobs = state.active_jobs.read().await;
+    if let Some(handle) = jobs.get(&job_id) {
+        handle.should_pause.store(false, Ordering::Relaxed);
+        handle.resume_notify.notify_one();
         Ok(())
     } else {
         Err("Job not found".into())

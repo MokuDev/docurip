@@ -9,7 +9,8 @@ import {
   FileText,
   Download,
   CheckCircle,
-  SpinnerGap
+  SpinnerGap,
+  Pause,
 } from '@phosphor-icons/react';
 import type { CrawlJob, CrawlConfig } from '../types';
 
@@ -116,22 +117,32 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     }
   };
 
-  const handleStop = async () => {
-    if (!activeJob) return;
-    try {
-      await invoke('stop_crawl', { jobId: activeJob.id });
-      setLogs((prev) => [...prev, `Stopped crawl: ${activeJob.id}`]);
-    } catch (err) {
-      setLogs((prev) => [...prev, `Error stopping crawl: ${String(err)}`]);
-    }
-  };
-
   const handleCancel = async () => {
     if (!activeJob) return;
     try {
       await invoke('stop_crawl', { jobId: activeJob.id });
     } catch (err) {
       console.error('Failed to cancel crawl', err);
+    }
+  };
+
+  const handlePause = async () => {
+    if (!activeJob) return;
+    try {
+      await invoke('pause_crawl', { jobId: activeJob.id });
+      setLogs((prev) => [...prev, `Paused crawl: ${activeJob.id}`]);
+    } catch (err) {
+      setLogs((prev) => [...prev, `Error pausing crawl: ${String(err)}`]);
+    }
+  };
+
+  const handleResume = async () => {
+    if (!activeJob) return;
+    try {
+      await invoke('resume_crawl', { jobId: activeJob.id });
+      setLogs((prev) => [...prev, `Resumed crawl: ${activeJob.id}`]);
+    } catch (err) {
+      setLogs((prev) => [...prev, `Error resuming crawl: ${String(err)}`]);
     }
   };
 
@@ -312,17 +323,27 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
             <>
               {activeJob.status === 'running' && (
                 <button
-                  onClick={handleStop}
-                  className="flex-1 bg-crimson/80 hover:bg-crimson text-ghost font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast"
+                  onClick={handlePause}
+                  className="flex-1 bg-amber/80 hover:bg-amber text-deepVoid font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast"
                 >
-                  <Stop weight="fill" size={18} />
-                  <span>Stop</span>
+                  <Pause weight="fill" size={18} />
+                  <span>Pause</span>
+                </button>
+              )}
+              {activeJob.status === 'paused' && (
+                <button
+                  onClick={handleResume}
+                  className="flex-1 bg-accentGreen/80 hover:bg-accentGreen text-deepVoid font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast"
+                >
+                  <Play weight="fill" size={18} />
+                  <span>Resume</span>
                 </button>
               )}
               <button
                 onClick={handleCancel}
-                className="px-4 py-2.5 bg-surface hover:bg-abyssal text-secondary hover:text-ghost border border-abyssal rounded-md flex items-center space-x-2 transition-all duration-fast"
+                className="px-4 py-2.5 bg-crimson/80 hover:bg-crimson text-ghost font-semibold rounded-md flex items-center space-x-2 transition-all duration-fast"
               >
+                <Stop weight="fill" size={16} />
                 <span>Cancel</span>
               </button>
               <button

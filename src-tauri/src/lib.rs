@@ -29,6 +29,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::start_crawl,
             commands::stop_crawl,
+            commands::pause_crawl,
+            commands::resume_crawl,
             commands::get_job,
             commands::list_jobs,
             commands::delete_job,

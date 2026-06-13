@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock};
 
 use crate::crawler::job::CrawlJob;
 use crate::events::bus::EventBus;
@@ -10,6 +10,8 @@ use crate::events::bus::EventBus;
 pub struct JobHandle {
     pub job: Arc<RwLock<CrawlJob>>,
     pub should_stop: Arc<AtomicBool>,
+    pub should_pause: Arc<AtomicBool>,
+    pub resume_notify: Arc<Notify>,
     pub event_bus: EventBus,
 }
 

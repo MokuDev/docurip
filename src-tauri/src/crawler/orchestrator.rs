@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::{RwLock, Semaphore};
+use tokio::sync::{Notify, RwLock, Semaphore};
 use tokio::time::{sleep, Duration};
 use url::Url;
 use regex::RegexSet;
@@ -21,6 +21,8 @@ use crate::writer::fs::FsWriter;
 pub struct CrawlHandle {
     pub job: Arc<RwLock<CrawlJob>>,
     pub should_stop: Arc<AtomicBool>,
+    pub should_pause: Arc<AtomicBool>,
+    pub resume_notify: Arc<Notify>,
     pub event_bus: EventBus,
 }
 
@@ -229,6 +231,43 @@ impl Orchestrator {
                 let _ = self.handle_task_result(result, &url, depth, max_depth, &mut processed, page_limit, &mut queue, &mut visited).await;
             }
 
+            if self.handle.should_pause.load(Ordering::Relaxed) {
+                {
+                    let mut job = self.handle.job.write().await;
+                    if job.status != JobStatus::Paused {
+                        job.status = JobStatus::Paused;
+                        let job_id = job.id.clone();
+                        drop(job);
+                        self.handle.event_bus.emit(CrawlEvent::JobStatusChanged {
+                            job_id: job_id.clone(),
+                            status: JobStatus::Paused,
+                        });
+                        self.handle.event_bus.emit(CrawlEvent::Log {
+                            job_id,
+                            level: "INFO".into(),
+                            message: "Crawl paused by user".into(),
+                        });
+                    }
+                }
+                if let Some(ref app_state) = self.app_state {
+                    let job = self.handle.job.read().await.clone();
+                    let _ = app_state.persist_job(&job).await;
+                }
+                pending.abort_all();
+                while let Some(_) = pending.join_next().await {}
+                self.handle.resume_notify.notified().await;
+                {
+                    let mut job = self.handle.job.write().await;
+                    job.status = JobStatus::Running;
+                    let job_id = job.id.clone();
+                    drop(job);
+                    self.handle.event_bus.emit(CrawlEvent::JobStatusChanged {
+                        job_id,
+                        status: JobStatus::Running,
+                    });
+                }
+            }
+
             if self.handle.should_stop.load(Ordering::Relaxed) {
                 pending.abort_all();
                 while let Some(_) = pending.join_next().await {}
@@ -425,12 +464,33 @@ impl Orchestrator {
                         asset_map.insert(asset_url.clone(), rel_path);
                     }
                     Err(e) => {
+                        let err_msg = format!("Asset download failed for {}: {}", asset_url, e);
                         let job_id = self.handle.job.read().await.id.clone();
                         self.handle.event_bus.emit(CrawlEvent::Log {
-                            job_id,
+                            job_id: job_id.clone(),
                             level: "WARN".into(),
-                            message: format!("Asset download failed for {}: {}", asset_url, e),
+                            message: err_msg.clone(),
                         });
+                        if is_disk_error(&err_msg) {
+                            {
+                                let mut job = self.handle.job.write().await;
+                                job.status = JobStatus::Paused;
+                                job.error = Some(err_msg.clone());
+                            }
+                            self.handle.should_pause.store(true, Ordering::Relaxed);
+                            if let Some(ref app_state) = self.app_state {
+                                let job = self.handle.job.read().await.clone();
+                                let _ = app_state.persist_job(&job).await;
+                            }
+                            self.handle.event_bus.emit(CrawlEvent::Error {
+                                job_id,
+                                message: format!(
+                                    "Disk error: {}. Fix output path in Settings and resume.",
+                                    err_msg
+                                ),
+                            });
+                            return;
+                        }
                     }
                 }
             }
@@ -443,11 +503,32 @@ impl Orchestrator {
         let markdown = self.converter.convert(&html_for_md);
 
         if let Err(e) = self.writer.write_page(&url, &markdown).await {
+            let err_msg = format!("Write error for {}: {}", url, e);
             let job_id = self.handle.job.read().await.id.clone();
             self.handle.event_bus.emit(CrawlEvent::Error {
-                job_id,
-                message: format!("Write error for {}: {}", url, e),
+                job_id: job_id.clone(),
+                message: err_msg.clone(),
             });
+            if is_disk_error(&err_msg) {
+                {
+                    let mut job = self.handle.job.write().await;
+                    job.status = JobStatus::Paused;
+                    job.error = Some(err_msg.clone());
+                }
+                self.handle.should_pause.store(true, Ordering::Relaxed);
+                if let Some(ref app_state) = self.app_state {
+                    let job = self.handle.job.read().await.clone();
+                    let _ = app_state.persist_job(&job).await;
+                }
+                self.handle.event_bus.emit(CrawlEvent::Error {
+                    job_id,
+                    message: format!(
+                        "Disk error: {}. Fix output path in Settings and resume.",
+                        err_msg
+                    ),
+                });
+                return;
+            }
         }
 
         let page_result = PageResult {
@@ -503,5 +584,68 @@ impl Orchestrator {
                 }
             }
         }
+    }
+}
+
+/// Returns true if the given error message indicates a disk-related write
+/// failure (permission denied, no space, read-only filesystem, or the
+/// matching OS error codes for those conditions).
+pub fn is_disk_error(msg: &str) -> bool {
+    let lower = msg.to_lowercase();
+    [
+        "permission denied",
+        "no space",
+        "read-only",
+        "os error 28",
+        "os error 5",
+        "os error 30",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disk_error_matches_permission_denied() {
+        assert!(is_disk_error("Permission denied (os error 5)"));
+    }
+
+    #[test]
+    fn disk_error_matches_no_space_left() {
+        assert!(is_disk_error("No space left on device (os error 28)"));
+    }
+
+    #[test]
+    fn disk_error_matches_read_only_filesystem() {
+        assert!(is_disk_error("Read-only file system (os error 30)"));
+    }
+
+    #[test]
+    fn disk_error_matches_case_insensitively() {
+        assert!(is_disk_error("PERMISSION DENIED"));
+        assert!(is_disk_error("read-ONLY"));
+    }
+
+    #[test]
+    fn disk_error_matches_bare_os_codes() {
+        assert!(is_disk_error("os error 5"));
+        assert!(is_disk_error("os error 28"));
+        assert!(is_disk_error("os error 30"));
+    }
+
+    #[test]
+    fn disk_error_does_not_match_network_error() {
+        assert!(!is_disk_error("connection refused"));
+        assert!(!is_disk_error("timeout"));
+        assert!(!is_disk_error("http 500"));
+        assert!(!is_disk_error("DNS resolution failed"));
+    }
+
+    #[test]
+    fn disk_error_does_not_match_empty() {
+        assert!(!is_disk_error(""));
     }
 }

@@ -277,6 +277,70 @@
       el.textContent = msg;
       el.className = type;
     }
+
+    function isValidSemver(version) {
+      return /^\d+\.\d+\.\d+$/.test(version);
+    }
+
+    document.getElementById('newVersion').addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      document.getElementById('bumpBtn').disabled = !isValidSemver(val);
+    });
+
+    function showPreview() {
+      const newVersion = document.getElementById('newVersion').value.trim();
+      if (!isValidSemver(newVersion)) {
+        showStatus('Bitte gültige Version eingeben (z.B. 0.3.0)', 'error');
+        return;
+      }
+
+      const previewSection = document.getElementById('previewSection');
+      const previewContent = document.getElementById('previewContent');
+      previewContent.innerHTML = '';
+
+      for (const target of TARGET_FILES) {
+        const oldContent = fileContents[target.path];
+        const newContent = oldContent.replace(target.pattern, (match, p1) => {
+          return match.replace(p1, newVersion);
+        });
+
+        const div = document.createElement('div');
+        div.className = 'preview-file';
+        div.innerHTML = '<h3>' + target.name + '</h3>';
+
+        const oldLines = oldContent.split('\n');
+        const newLines = newContent.split('\n');
+        const maxLines = Math.max(oldLines.length, newLines.length);
+
+        for (let i = 0; i < maxLines; i++) {
+          const oldLine = oldLines[i] || '';
+          const newLine = newLines[i] || '';
+          if (oldLine !== newLine) {
+            if (oldLine) {
+              const removeSpan = document.createElement('span');
+              removeSpan.className = 'diff-line diff-remove';
+              removeSpan.textContent = '- ' + oldLine;
+              div.appendChild(removeSpan);
+            }
+            if (newLine) {
+              const addSpan = document.createElement('span');
+              addSpan.className = 'diff-line diff-add';
+              addSpan.textContent = '+ ' + newLine;
+              div.appendChild(addSpan);
+            }
+          }
+        }
+
+        previewContent.appendChild(div);
+      }
+
+      previewSection.style.display = 'block';
+      previewSection.scrollIntoView({ behavior: 'smooth' });
+
+      const optionsSection = document.getElementById('optionsSection');
+      optionsSection.style.display = 'block';
+      updateCommands(newVersion);
+    }
   </script>
 </body>
 </html>

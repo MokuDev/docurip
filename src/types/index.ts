@@ -91,3 +91,39 @@ export interface SessionInfo {
   id: string;
   uptimeSecs: number;
 }
+
+export type ExportFormat = 'md_files' | 'pdf_files' | 'merged_md' | 'merged_pdf';
+
+export interface ExportOption {
+  format: ExportFormat;
+  label: string;
+  description: string;
+  requiresHeadless: boolean;
+}
+
+export const EXPORT_OPTIONS: ExportOption[] = [
+  {
+    format: 'md_files',
+    label: 'Markdown Files',
+    description: 'Individual .md files in folder structure',
+    requiresHeadless: false,
+  },
+  {
+    format: 'merged_md',
+    label: 'Merged Markdown',
+    description: 'All pages combined into one .md file',
+    requiresHeadless: false,
+  },
+  {
+    format: 'pdf_files',
+    label: 'PDF Files',
+    description: 'Individual .pdf files per page',
+    requiresHeadless: true,
+  },
+  {
+    format: 'merged_pdf',
+    label: 'Merged PDF',
+    description: 'All pages in one PDF document',
+    requiresHeadless: true,
+  },
+];

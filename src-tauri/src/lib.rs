@@ -41,6 +41,8 @@ pub fn run() {
             commands::update_settings,
             commands::open_output_folder,
             commands::export_job,
+            commands::export_job_v2,
+            commands::check_headless_support,
             commands::search_job_results,
             commands::export_job_zip,
             commands::list_exports,

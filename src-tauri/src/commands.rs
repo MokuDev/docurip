@@ -407,6 +407,59 @@ pub async fn export_job(
     Ok(zip_path.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+pub async fn export_job_v2(
+    job_id: String,
+    format: crate::export::ExportFormat,
+    destination: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<String, String> {
+    let job = {
+        let jobs = state.active_jobs.read().await;
+        if let Some(handle) = jobs.get(&job_id) {
+            handle.job.read().await.clone()
+        } else {
+            let jobs = state.persisted_jobs.read().await;
+            jobs.get(&job_id).cloned().ok_or("Job not found")?
+        }
+    };
+
+    let output_dir = std::path::PathBuf::from(&job.config.output_dir);
+    if !output_dir.exists() {
+        return Err("Output directory not found for job".to_string());
+    }
+
+    let dest = std::path::PathBuf::from(&destination);
+
+    match format {
+        crate::export::ExportFormat::MdFiles => {
+            crate::export::copy_md_files(&output_dir, &dest)
+                .map_err(|e| format!("Export failed: {}", e))?;
+        }
+        crate::export::ExportFormat::PdfFiles => {
+            crate::export::export_pdf_files(&output_dir, &dest)
+                .map_err(|e| format!("PDF export failed: {}", e))?;
+        }
+        crate::export::ExportFormat::MergedMd => {
+            let out_file = dest.join(format!("{}-merged.md", job_id));
+            crate::export::merge_md_files(&output_dir, &out_file)
+                .map_err(|e| format!("Export failed: {}", e))?;
+        }
+        crate::export::ExportFormat::MergedPdf => {
+            let out_file = dest.join(format!("{}-merged.pdf", job_id));
+            crate::export::export_merged_pdf(&output_dir, &out_file)
+                .map_err(|e| format!("PDF export failed: {}", e))?;
+        }
+    }
+
+    Ok(dest.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn check_headless_support() -> bool {
+    cfg!(feature = "headless")
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SearchMatch {
     pub url: String,

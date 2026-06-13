@@ -45,7 +45,7 @@ Trenne `should_stop` (cancel/final) von `should_pause` (soft). Orchestrator häl
 
 **Steps:**
 
-- [ ] **Step 1: `CrawlHandle` erweitern**
+- [x] **Step 1: `CrawlHandle` erweitern**
 
   ```rust
   pub struct CrawlHandle {
@@ -59,7 +59,7 @@ Trenne `should_stop` (cancel/final) von `should_pause` (soft). Orchestrator häl
 
   Update alle `CrawlHandle { ... }` Konstruktionen (grep nach `should_stop:`).
 
-- [ ] **Step 2: Orchestrator Main Loop — Pause-Check + Wait**
+- [x] **Step 2: Orchestrator Main Loop — Pause-Check + Wait**
 
   Im `loop` (orchestrator.rs:222) VOR dem `should_stop` Check:
 
@@ -101,7 +101,7 @@ Trenne `should_stop` (cancel/final) von `should_pause` (soft). Orchestrator häl
 
   Achtung: `should_pause` wird im Loop vor `should_stop` geprüft, damit ein pausierter Job bei resume nicht sofort wieder stoppt.
 
-- [ ] **Step 3: `pause_crawl` Command**
+- [x] **Step 3: `pause_crawl` Command**
 
   ```rust
   #[tauri::command]
@@ -115,7 +115,7 @@ Trenne `should_stop` (cancel/final) von `should_pause` (soft). Orchestrator häl
 
   Anpassen an die echte `AppState::get_handle` Signatur (siehe `commands.rs` für `stop_crawl`).
 
-- [ ] **Step 4: `resume_crawl` Command**
+- [x] **Step 4: `resume_crawl` Command**
 
   ```rust
   #[tauri::command]
@@ -128,7 +128,7 @@ Trenne `should_stop` (cancel/final) von `should_pause` (soft). Orchestrator häl
   }
   ```
 
-- [ ] **Step 5: `lib.rs` registrieren**
+- [x] **Step 5: `lib.rs` registrieren**
 
   ```rust
   .invoke_handler(tauri::generate_handler![
@@ -136,7 +136,7 @@ Trenne `should_stop` (cancel/final) von `should_pause` (soft). Orchestrator häl
   ])
   ```
 
-- [ ] **Step 6: Frontend — Pause/Resume Buttons in `NewCrawl.tsx`**
+- [x] **Step 6: Frontend — Pause/Resume Buttons in `NewCrawl.tsx`**
 
   Zustand `paused` lokal oder via `job.status === 'paused'`. Buttons:
   - Beim `running`: "Pause" (orange) + "Cancel" (rot)
@@ -145,7 +145,7 @@ Trenne `should_stop` (cancel/final) von `should_pause` (soft). Orchestrator häl
 
   Style: kleinere Buttons neben dem Live Monitor, mit Phosphor-Icons `Pause` / `Play`.
 
-- [ ] **Step 7: Build verifizieren**
+- [x] **Step 7: Build verifizieren**
 
   ```bash
   cargo check
@@ -167,13 +167,13 @@ Spec §Error Handling: "Disk errors (write failures): pause the job, emit error,
 
 **Steps:**
 
-- [ ] **Step 1: `FsWriter` — `write_markdown` Error als soft-fail markieren**
+- [x] **Step 1: `FsWriter` — `write_markdown` Error als soft-fail markieren**
 
   Füge `pub enum WriteError { Disk(...), Other(...) }` hinzu (oder nutze `anyhow::Error` mit Marker-Variante). Wichtig: Errors die mit `Disk` getaggt sind, sollen unterscheidbar sein.
 
   Minimal-Invasiv: in `orchestrator.rs::handle_task_result`, wenn `writer.write_*` fehlschlägt UND die `error.message()` "No space" / "Permission denied" / "Read-only" enthält → setze `job.status = Paused` und `should_pause.store(true)`, emit `CrawlEvent::Error` mit Hint "fix output path then resume".
 
-- [ ] **Step 2: Disk-Error-Detection im `handle_task_result`**
+- [x] **Step 2: Disk-Error-Detection im `handle_task_result`**
 
   Im `Err` branch von `handle_task_result` (orchestrator.rs ~360), zusätzlich zum bestehenden Error-Log:
 
@@ -190,11 +190,11 @@ Spec §Error Handling: "Disk errors (write failures): pause the job, emit error,
 
   HINWEIS: Disk-Error ist schreibend → Paused-Status, NICHT Failed. User kann Output-Pfad in Settings ändern, dann resume.
 
-- [ ] **Step 3: Test — synthetischer Disk-Error**
+- [x] **Step 3: Test — synthetischer Disk-Error**
 
   Unit-Test in `orchestrator.rs` oder `writer/fs.rs`: writer der in `tempdir` versucht zu schreiben, Pfad wird read-only gemacht → expect Paused-Status. (Skip falls kompliziert; manuelle Verifikation OK.)
 
-- [ ] **Step 4: Build verifizieren**
+- [x] **Step 4: Build verifizieren**
 
   ```bash
   cargo check
@@ -214,7 +214,7 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
 
 **Steps:**
 
-- [ ] **Step 1: `total_output_size` im Backend**
+- [x] **Step 1: `total_output_size` im Backend**
 
   In `AppState::list_jobs` (oder neuer Helper `compute_stats`):
   - Iteriere alle completed jobs
@@ -223,21 +223,21 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
 
   ODER: in `commands.rs` einen neuen Command `get_dashboard_stats` der nur die Metriken liefert.
 
-- [ ] **Step 2: `Crawl Velocity` berechnen**
+- [x] **Step 2: `Crawl Velocity` berechnen**
 
   Velocity = `pages_done_total / (latest_job.completed_at - latest_job.started_at)` in pages/min.
 
-- [ ] **Step 3: `Fail Rate`**
+- [x] **Step 3: `Fail Rate`**
 
   `failed / total` über alle jobs.
 
-- [ ] **Step 4: Dashboard.tsx — 4 neue Cards**
+- [x] **Step 4: Dashboard.tsx — 4 neue Cards**
 
   Layout: 2x2 grid statt 4x1, oder bleibt 4x1 aber cards: "Pages Saved" (=total pages) | "Total Size" (in MB) | "Crawl Velocity" (pages/min) | "Fail Rate" (%).
 
   Visual: behalte StatCard-Komponente, nur andere Daten.
 
-- [ ] **Step 5: Build verifizieren**
+- [x] **Step 5: Build verifizieren**
 
   ```bash
   cargo check
@@ -256,7 +256,7 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
 
 **Steps:**
 
-- [ ] **Step 1: `exports.rs` — `RecentExport` struct + scannen**
+- [x] **Step 1: `exports.rs` — `RecentExport` struct + scannen**
 
   ```rust
   pub struct RecentExport {
@@ -275,7 +275,7 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
   }
   ```
 
-- [ ] **Step 2: `list_exports` Command**
+- [x] **Step 2: `list_exports` Command**
 
   ```rust
   #[tauri::command]
@@ -286,13 +286,13 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
   }
   ```
 
-- [ ] **Step 3: `lib.rs` registrieren**
+- [x] **Step 3: `lib.rs` registrieren**
 
-- [ ] **Step 4: Dashboard.tsx — Recent Exports Panel**
+- [x] **Step 4: Dashboard.tsx — Recent Exports Panel**
 
   Auf der rechten Seite oder unter dem Recent-Activity. Empty state wenn keine exports. Zeigt: filename, size (human-readable), date, click → öffnet Pfad (nutze `@tauri-apps/plugin-shell` oder `revealItemInDir`).
 
-- [ ] **Step 5: Build verifizieren**
+- [x] **Step 5: Build verifizieren**
 
 ---
 
@@ -310,9 +310,9 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
 
 **Steps:**
 
-- [ ] **Step 1: `Cargo.toml` — `sysinfo = "0.31"`, `uuid` features v4**
+- [x] **Step 1: `Cargo.toml` — `sysinfo = "0.31"`, `uuid` features v4**
 
-- [ ] **Step 2: `system.rs` — SystemStats struct + collector**
+- [x] **Step 2: `system.rs` — SystemStats struct + collector**
 
   ```rust
   pub struct SystemStats {
@@ -331,11 +331,11 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
   }
   ```
 
-- [ ] **Step 3: Session-ID**
+- [x] **Step 3: Session-ID**
 
   In `AppState::new()` oder `init()`: `pub session_id: String` = `Uuid::new_v4().to_string()`. Start-time: `Instant::now()` für Uptime.
 
-- [ ] **Step 4: `get_system_stats` + `get_session_info` Commands**
+- [x] **Step 4: `get_system_stats` + `get_session_info` Commands**
 
   ```rust
   #[tauri::command]
@@ -352,31 +352,31 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
 
   `uptime_secs()` ist eine Methode auf `AppState` die `start_time.elapsed().as_secs()` zurückgibt.
 
-- [ ] **Step 5: `TopStatusBar.tsx`**
+- [x] **Step 5: `TopStatusBar.tsx`**
 
   Fixed top bar, 24px high, zeigt:
   - Links: Logo + "Session: <first 8 hex chars>"
   - Mitte: Uptime live (HH:MM:SS, updated every 1s)
   - Rechts: optional Job-Counter (active jobs)
 
-- [ ] **Step 6: `SystemStatusBar.tsx`**
+- [x] **Step 6: `SystemStatusBar.tsx`**
 
   Fixed bottom bar, 20px high, zeigt:
   - Links: CPU% (mit sparkline optional)
   - Mitte: RAM used/total MB
   - Rechts: Current output path (active job) oder "(idle)"
 
-- [ ] **Step 7: `useSystemStats` hook**
+- [x] **Step 7: `useSystemStats` hook**
 
   Pollt `get_system_stats` alle 2s via `setInterval`, returnt `{ cpu, mem_used, mem_total }`.
 
-- [ ] **Step 8: `App.tsx` — Bars mounten**
+- [x] **Step 8: `App.tsx` — Bars mounten**
 
   Top bar: oberhalb des `main` (full width).
   Bottom bar: unterhalb des `main` (full width).
   Adjust `h-screen` layout zu `h-[calc(100vh-44px)]` für main content (24+20).
 
-- [ ] **Step 9: Build verifizieren**
+- [x] **Step 9: Build verifizieren**
 
   ```bash
   cargo check
@@ -397,7 +397,7 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
 
 **Steps:**
 
-- [ ] **Step 1: `useToasts` — minimaler Toast-Store**
+- [x] **Step 1: `useToasts` — minimaler Toast-Store**
 
   ```typescript
   interface Toast { id: string; type: 'error' | 'info' | 'success'; message: string; }
@@ -405,14 +405,14 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
   // Simple useState<Toast[]> + addToast(message, type) + removeToast(id)
   ```
 
-- [ ] **Step 2: `ToastContainer.tsx`**
+- [x] **Step 2: `ToastContainer.tsx`**
 
   - Fixed bottom-left (`fixed bottom-12 left-4 z-50`)
   - Framer-motion `AnimatePresence` für slide-in/slide-out
   - Max 3 sichtbar, dismissable mit X-Button
   - Auto-dismiss nach 6s (außer `error`)
 
-- [ ] **Step 3: `useCrawlEvents` — push errors to global toast**
+- [x] **Step 3: `useCrawlEvents` — push errors to global toast**
 
   Im bestehenden Event-Listener (`useCrawlEvents.tsx`), zusätzlich zum `error` state:
   ```typescript
@@ -421,11 +421,11 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
   }
   ```
 
-- [ ] **Step 4: `App.tsx` — mount container**
+- [x] **Step 4: `App.tsx` — mount container**
 
   Vor dem schließenden `</div>`.
 
-- [ ] **Step 5: Build verifizieren**
+- [x] **Step 5: Build verifizieren**
 
   ```bash
   npm run build
@@ -445,18 +445,18 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
 
 **Steps:**
 
-- [ ] **Step 1: Cargo.toml — `wiremock` in dev-dependencies**
+- [x] **Step 1: Cargo.toml — `wiremock` in dev-dependencies**
 
   Falls nicht vorhanden: `wiremock = "0.6"` unter `[dev-dependencies]`.
 
-- [ ] **Step 2: Static Site Fixtures erstellen**
+- [x] **Step 2: Static Site Fixtures erstellen**
 
   - `index.html`: enthält link zu `page1.html` + image `<img src="logo.png">`
   - `page1.html`: simple content + link zu `page2.html`
   - `page2.html`: simple content
   - `logo.png`: 1x1 transparent (kann via base64 inline erstellt werden)
 
-- [ ] **Step 3: `e2e_crawl.rs` — full crawl**
+- [x] **Step 3: `e2e_crawl.rs` — full crawl**
 
   ```rust
   use wiremock::{MockServer, Mock, ResponseTemplate};
@@ -474,7 +474,7 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
   }
   ```
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
   ```bash
   cargo test --test e2e_crawl
@@ -482,7 +482,7 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
 
   Expected: 1 test passing.
 
-- [ ] **Step 5: Full build verify**
+- [x] **Step 5: Full build verify**
 
   ```bash
   cargo test
@@ -493,10 +493,10 @@ Spec §Visual Design: 4 metric cards: **Pages Saved, Total Size, Crawl Velocity,
 
 ## Integration & Verifikation
 
-- [ ] **Step 1: `cargo check`**
-- [ ] **Step 2: `cargo test`** (alle Tests, inkl. neuem e2e)
-- [ ] **Step 3: `npm run build`**
-- [ ] **Step 4: Manuelle Smoke Tests**
+- [x] **Step 1: `cargo check`**
+- [x] **Step 2: `cargo test`** (alle Tests, inkl. neuem e2e)
+- [x] **Step 3: `npm run build`**
+- [x] **Step 4: Manuelle Smoke Tests**
   1. Crawl starten → Pause klicken → "Paused" Status + persistiert → Resume → weiter
   2. Output-Pfad ungültig machen (read-only) → Disk-Error → Paused → Pfad fixen → Resume
   3. Dashboard zeigt neue Stats + Recent Exports

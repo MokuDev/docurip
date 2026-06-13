@@ -32,7 +32,7 @@
 - Modify: `src/views/NewCrawl.tsx`
 - Test: Visuell — `npm run build` muss sauber sein
 
-- [ ] **Step 1: Fehler-Log-Level visuell unterscheiden**
+- [x] **Step 1: Fehler-Log-Level visuell unterscheiden**
 
 In `NewCrawl.tsx`, innerhalb des `useEffect` das auf globale Events lauscht:
 
@@ -57,7 +57,7 @@ useEffect(() => {
 
 **WICHTIG:** Stelle sicher, dass `latest.message` für `error`-Events gesetzt ist. Der Backend-EventBus sendet `CrawlEvent::Error` mit `message` Feld.
 
-- [ ] **Step 2: Fehler-Logs rot färben**
+- [x] **Step 2: Fehler-Logs rot färben**
 
 Im Log-Renderer:
 ```tsx
@@ -73,7 +73,7 @@ Im Log-Renderer:
 ))}
 ```
 
-- [ ] **Step 3: Build verifizieren**
+- [x] **Step 3: Build verifizieren**
 
 Run: `npm run build`
 Expected: Sauber
@@ -85,7 +85,7 @@ Expected: Sauber
 **Files:**
 - Modify: `src/views/Settings.tsx`
 
-- [ ] **Step 1: Validierungs-Logik hinzufügen**
+- [x] **Step 1: Validierungs-Logik hinzufügen**
 
 Füge am Anfang der Komponente eine `validate`-Funktion hinzu:
 
@@ -117,7 +117,7 @@ const validate = (s: AppSettings): Record<string, string> => {
 };
 ```
 
-- [ ] **Step 2: Validierung beim Speichern aufrufen**
+- [x] **Step 2: Validierung beim Speichern aufrufen**
 
 In `handleSave` (oder wo auch immer Save passiert):
 ```typescript
@@ -139,7 +139,7 @@ const handleSave = async () => {
 };
 ```
 
-- [ ] **Step 3: Inline-Fehlermeldungen pro Feld**
+- [x] **Step 3: Inline-Fehlermeldungen pro Feld**
 
 Bei jedem Input-Feld:
 ```tsx
@@ -189,7 +189,7 @@ Expected: Sauber
 - Modify: `src-tauri/src/crawler/orchestrator.rs`
 - Modify: `src-tauri/src/settings/config.rs` (wenn `concurrency` Feld fehlt)
 
-- [ ] **Step 1: Prüfe ob `concurrency` in `AppSettings` existiert**
+- [x] **Step 1: Prüfe ob `concurrency` in `AppSettings` existiert**
 
 In `src-tauri/src/settings/config.rs`:
 ```rust
@@ -208,7 +208,7 @@ pub struct AppSettings {
 
 Wenn `concurrency` fehlt, hinzufügen. `Default` für `AppSettings` anpassen: `concurrency: 3`.
 
-- [ ] **Step 2: Orchestrator Main Loop umbauen**
+- [x] **Step 2: Orchestrator Main Loop umbauen**
 
 Die aktuelle `while let Some((url, depth)) = queue.pop_front()` Schleife verarbeitet eine URL nach der anderen. Wir ändern sie zu:
 

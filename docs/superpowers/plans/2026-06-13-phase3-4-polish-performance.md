@@ -33,7 +33,7 @@ Display it in `NewCrawl` as a dismissible red banner at the top of the live moni
 
 **Steps:**
 
-- [ ] **Step 1: Add `error` and `clearError` to the context type/interface**
+- [x] **Step 1: Add `error` and `clearError` to the context type/interface**
 
 ```typescript
 export interface CrawlContextType {
@@ -46,10 +46,10 @@ export interface CrawlContextType {
 }
 ```
 
-- [ ] **Step 2: Implement `error` state in `useCrawlEvents`**
+- [x] **Step 2: Implement `error` state in `useCrawlEvents`**
 Set `error` when an event with `error` payload arrives; expose `clearError` via `useCallback`.
 
-- [ ] **Step 3: Render error banner in `NewCrawl`**
+- [x] **Step 3: Render error banner in `NewCrawl`**
 Above the spinner/monitor panel:
 ```tsx
 {error && (
@@ -60,7 +60,7 @@ Above the spinner/monitor panel:
 )}
 ```
 
-- [ ] **Step 4: Ensure `clearError` is called automatically when a new crawl starts**
+- [x] **Step 4: Ensure `clearError` is called automatically when a new crawl starts**
 
 ---
 
@@ -75,7 +75,7 @@ Add inline validation styling (`red border`, helper text) to `Settings` inputs (
 
 **Steps:**
 
-- [ ] **Step 1: Add empty state to `History`**
+- [x] **Step 1: Add empty state to `History`**
 ```tsx
 {jobs.length === 0 && (
   <div className="flex flex-col items-center justify-center h-64 text-gray-500">
@@ -85,11 +85,11 @@ Add inline validation styling (`red border`, helper text) to `Settings` inputs (
 )}
 ```
 
-- [ ] **Step 2: Add `isValid` helper and validation state in `Settings`**
+- [x] **Step 2: Add `isValid` helper and validation state in `Settings`**
 Track `urlError`, `depthError`, `delayError`, `formatError` booleans.
 Render inputs with conditional `border-red-500` class and `<p className="text-red-500 text-sm">` messages.
 
-- [ ] **Step 3: Prevent save/submit when validation fails**
+- [x] **Step 3: Prevent save/submit when validation fails**
 Disable the "Save" / "Start Crawl" button if any error field is set.
 
 ---
@@ -108,7 +108,7 @@ Validate `CrawlSettings` inside `start_crawl` before spawning the crawler:
 
 **Steps:**
 
-- [ ] **Step 1: Add `validate_settings` helper fn**
+- [x] **Step 1: Add `validate_settings` helper fn**
 ```rust
 fn validate_settings(s: &CrawlSettings) -> Result<(), String> {
     reqwest::Url::parse(&s.url).map_err(|_| "Invalid URL".to_string())?;
@@ -119,10 +119,10 @@ fn validate_settings(s: &CrawlSettings) -> Result<(), String> {
 }
 ```
 
-- [ ] **Step 2: Call it at top of `start_crawl`**
+- [x] **Step 2: Call it at top of `start_crawl`**
 Return `Err(validate_settings(&payload).err().unwrap())` (wrapped via `tauri::Error` or custom error enum) before spawning.
 
-- [ ] **Step 3: Ensure frontend displays the returned error string**
+- [x] **Step 3: Ensure frontend displays the returned error string**
 
 ---
 
@@ -141,10 +141,10 @@ Current orchestrator fetches pages sequentially. Refactor the URL queue worker t
 
 **Steps:**
 
-- [ ] **Step 1: Add `concurrency: usize` field to `Orchestrator`**
+- [x] **Step 1: Add `concurrency: usize` field to `Orchestrator`**
 Default to `5` in builder.
 
-- [ ] **Step 2: Refactor page-processing loop to use bounded concurrency**
+- [x] **Step 2: Refactor page-processing loop to use bounded concurrency**
 Replace sequential `while let Some(url) = urls.pop() { ... }` with:
 ```rust
 let semaphore = Arc::new(tokio::sync::Semaphore::new(self.concurrency));
@@ -160,7 +160,7 @@ for url in urls {
 ```
 Wait for all handles.  Ensure cancel sets a shared `AtomicBool` that each task checks before/after acquiring permit.
 
-- [ ] **Step 3: Add `tokio::time::sleep` before each fetch for rate limiting**
+- [x] **Step 3: Add `tokio::time::sleep` before each fetch for rate limiting**
 ```rust
 if self.request_delay_ms > 0 {
     tokio::time::sleep(Duration::from_millis(self.request_delay_ms.into())).await;
@@ -168,10 +168,10 @@ if self.request_delay_ms > 0 {
 ```
 Place this inside the spawned task, after acquiring permit.
 
-- [ ] **Step 4: Ensure `http::fetch_page` accepts optional timeout override**
+- [x] **Step 4: Ensure `http::fetch_page` accepts optional timeout override**
 Expose `timeout: Duration` param on `fetch_page` (default 30 s); update callers.
 
-- [ ] **Step 5: Add unit test verifying concurrency <= limit**
+- [x] **Step 5: Add unit test verifying concurrency <= limit**
 Use a mock fetcher or counter to ensure max N requests in-flight at once.
 
 ---
@@ -187,17 +187,17 @@ Ensure `headless-chrome` feature flag compiles correctly and the fallback path (
 
 **Steps:**
 
-- [ ] **Step 1: Verify `[features]` block in `Cargo.toml`**
+- [x] **Step 1: Verify `[features]` block in `Cargo.toml`**
 ```toml
 [features]
 default = []
 headless-chrome = ["dep:headless_chrome"]
 ```
 
-- [ ] **Step 2: Gate `mod headless` and its usage with `#[cfg(feature = "headless-chrome")]`**
+- [x] **Step 2: Gate `mod headless` and its usage with `#[cfg(feature = "headless-chrome")]`**
 In `fetcher/mod.rs` and `orchestrator.rs`.
 
-- [ ] **Step 3: Verify `cargo check` and `cargo test` pass with and without feature**
+- [x] **Step 3: Verify `cargo check` and `cargo test` pass with and without feature**
 ```bash
 cargo check
 cargo check --features headless-chrome
@@ -215,10 +215,10 @@ cargo test --features headless-chrome
 
 **Steps:**
 
-- [ ] **Step 1: `cargo test`** — expect all existing + new tests passing.
-- [ ] **Step 2: `cargo check`** — no warnings.
-- [ ] **Step 3: `npm run build`** — no TS/build errors.
-- [ ] **Step 4: `npm run tauri dev` if available, else verify `tauri build` prep step.**
+- [x] **Step 1: `cargo test`** — expect all existing + new tests passing.
+- [x] **Step 2: `cargo check`** — no warnings.
+- [x] **Step 3: `npm run build`** — no TS/build errors.
+- [x] **Step 4: `npm run tauri dev` if available, else verify `tauri build` prep step.**
 
 ---
 

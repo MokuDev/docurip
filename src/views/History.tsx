@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
   Clock,
@@ -9,6 +10,8 @@ import {
   Trash,
   MagnifyingGlass,
   Funnel,
+  X,
+  Eye,
 } from '@phosphor-icons/react';
 import type { CrawlJob } from '../types';
 
@@ -17,6 +20,7 @@ export function HistoryView() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState<CrawlJob | null>(null);
 
   useEffect(() => {
     loadJobs();
@@ -121,7 +125,7 @@ export function HistoryView() {
             {filteredJobs.map((job) => (
               <div
                 key={job.id}
-                className="bg-surface/30 border border-abyssal/50 rounded-lg p-4 hover:border-abyssal hover:bg-surface/50 transition-all duration-fast group"
+                className="bg-surface/30 border border-abyssal/50 rounded-lg p-4 hover:border-abyssal hover:bg-surface/80 hover:scale-[1.01] transition-all duration-fast group"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
@@ -142,6 +146,13 @@ export function HistoryView() {
                   </div>
 
                   <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-fast">
+                    <button
+                      onClick={() => setSelectedJob(job)}
+                      className="p-1.5 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"
+                      title="View Details"
+                    >
+                      <Eye size={16} />
+                    </button>
                     <button
                       onClick={() => handleOpenFolder(job.config.outputDir)}
                       className="p-1.5 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"
@@ -183,6 +194,126 @@ export function HistoryView() {
           </div>
         )}
       </div>
+
+      {/* Detail Panel */}
+      <AnimatePresence>
+        {selectedJob && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 z-40"
+              onClick={() => setSelectedJob(null)}
+            />
+            <motion.div
+              initial={{ x: 300, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 300, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed right-0 top-0 h-full w-[480px] bg-deepVoid border-l border-abyssal/50 z-50 flex flex-col shadow-2xl"
+            >
+              {/* Header */}
+              <div className="h-14 flex items-center justify-between px-5 border-b border-abyssal/50">
+                <h2 className="text-ghost font-semibold text-base">Job Details</h2>
+                <button
+                  onClick={() => setSelectedJob(null)}
+                  className="p-1.5 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                {/* Job Info */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-charcoal">ID</label>
+                    <p className="text-sm text-ghost font-mono">{selectedJob.id}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-charcoal">URL</label>
+                    <p className="text-sm text-ghost break-all">{selectedJob.url}</p>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div>
+                      <label className="text-[11px] font-medium uppercase tracking-wider text-charcoal">Status</label>
+                      <div className="mt-1"><StatusBadge status={selectedJob.status} /></div>
+                    </div>
+                    {selectedJob.startTime && (
+                      <div>
+                        <label className="text-[11px] font-medium uppercase tracking-wider text-charcoal">Started</label>
+                        <p className="text-sm text-ghost">{new Date(selectedJob.startTime).toLocaleString()}</p>
+                      </div>
+                    )}
+                    {selectedJob.endTime && (
+                      <div>
+                        <label className="text-[11px] font-medium uppercase tracking-wider text-charcoal">Ended</label>
+                        <p className="text-sm text-ghost">{new Date(selectedJob.endTime).toLocaleString()}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Results */}
+                <div>
+                  <h3 className="text-ghost font-semibold text-sm mb-3">
+                    Pages ({selectedJob.results?.length || 0})
+                  </h3>
+                  {(!selectedJob.results || selectedJob.results.length === 0) ? (
+                    <p className="text-charcoal text-sm">No pages crawled yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedJob.results.map((page, idx) => (
+                        <div key={idx} className="bg-surface/30 border border-abyssal/50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-sm text-ghost font-medium truncate pr-2" title={page.url}>
+                              {page.title || page.url}
+                            </p>
+                            <span className="text-[10px] text-charcoal bg-abyssal/50 px-1.5 py-0.5 rounded">
+                              {page.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-charcoal break-all mb-2">{page.url}</p>
+                          <div className="flex items-center space-x-4 text-xs text-charcoal">
+                            <span>{page.links.length} links</span>
+                            <span>{page.assets.length} assets</span>
+                          </div>
+                          {page.links.length > 0 && (
+                            <details className="mt-2">
+                              <summary className="text-xs text-secondary cursor-pointer hover:text-ghost transition-colors">
+                                Links ({page.links.length})
+                              </summary>
+                              <ul className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
+                                {page.links.map((link, i) => (
+                                  <li key={i} className="text-[11px] text-charcoal truncate font-mono">{link}</li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                          {page.assets.length > 0 && (
+                            <details className="mt-2">
+                              <summary className="text-xs text-secondary cursor-pointer hover:text-ghost transition-colors">
+                                Assets ({page.assets.length})
+                              </summary>
+                              <ul className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
+                                {page.assets.map((asset, i) => (
+                                  <li key={i} className="text-[11px] text-charcoal truncate font-mono">{asset}</li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -198,4 +329,22 @@ const StatusIcon = ({ status }: { status: string }) => {
     default:
       return <Clock size={16} className="text-charcoal" />;
   }
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const styles: Record<string, string> = {
+    queued: 'bg-amber/10 text-amber',
+    running: 'bg-accentGreen/10 text-accentGreen',
+    paused: 'bg-cyberBlue/10 text-cyberBlue',
+    completed: 'bg-brightGreen/10 text-brightGreen',
+    failed: 'bg-crimson/10 text-crimson',
+  };
+
+  return (
+    <span
+      className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded ${styles[status] || 'text-charcoal'}`}
+    >
+      {status}
+    </span>
+  );
 };

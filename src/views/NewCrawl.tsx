@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { useCrawlEvents } from '../hooks/useCrawlEvents';
 import {
   Play,
   Stop,
@@ -9,23 +9,23 @@ import {
   FileText,
   Download,
   CheckCircle,
-  Spinner
+  SpinnerGap
 } from '@phosphor-icons/react';
-import type { CrawlJob, CrawlConfig, CrawlEvent } from '../types';
+import type { CrawlJob, CrawlConfig } from '../types';
 
 const DEFAULT_CONFIG: CrawlConfig = {
   url: '',
   maxDepth: 2,
   pageLimit: 50,
   downloadAssets: false,
-  headlessStrategy: 'disabled',
+  headlessStrategy: 'never',
   contentSelectors: ['main', 'article', '.content'],
   excludePatterns: [],
   respectRobotsTxt: true,
   outputDir: '',
 };
 
-export function NewCrawlView() {
+export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   const [config, setConfig] = useState<CrawlConfig>(DEFAULT_CONFIG);
   const [activeJob, setActiveJob] = useState<CrawlJob | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -38,35 +38,39 @@ export function NewCrawlView() {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  // Listen for events if job is active
+  // Prefill URL from quick start
+  useEffect(() => {
+    if (prefillUrl) {
+      setConfig(prev => {
+        if (prev.url) return prev;
+        return { ...prev, url: prefillUrl };
+      });
+    }
+  }, [prefillUrl]);
+
+  const { events } = useCrawlEvents();
+
+  // React to global events for the active job
   useEffect(() => {
     if (!activeJob) return;
-    let unlisten: (() => void) | undefined;
+    const jobEvents = events.filter((e) => e.jobId === activeJob.id);
+    if (jobEvents.length === 0) return;
 
-    const setupListener = async () => {
-      unlisten = await listen<CrawlEvent>('crawl-event', (event) => {
-        const ev = event.payload;
-        if (ev.jobId !== activeJob.id) return;
-
-        if (ev.type === 'log') {
-          setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} ${ev.message || ''}`]);
-        } else if (ev.type === 'progress') {
-          setActiveJob((prev) =>
-            prev && ev.progress ? { ...prev, progress: ev.progress } : prev
-          );
-        } else if (ev.type === 'pageComplete') {
-          setActiveJob((prev) =>
-            prev && ev.page ? { ...prev, results: [...prev.results, ev.page] } : prev
-          );
-        } else if (ev.type === 'jobStatusChanged') {
-          setActiveJob((prev) => (prev && ev.status ? { ...prev, status: ev.status } : prev));
-        }
-      });
-    };
-
-    setupListener();
-    return () => unlisten?.();
-  }, [activeJob?.id]);
+    const latest = jobEvents[jobEvents.length - 1];
+    if (latest.type === 'log') {
+      setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} ${latest.message || ''}`]);
+    } else if (latest.type === 'progress') {
+      setActiveJob((prev) =>
+        prev && latest.progress ? { ...prev, progress: latest.progress } : prev
+      );
+    } else if (latest.type === 'pageComplete') {
+      setActiveJob((prev) =>
+        prev && latest.page ? { ...prev, results: [...prev.results, latest.page] } : prev
+      );
+    } else if (latest.type === 'jobStatusChanged') {
+      setActiveJob((prev) => (prev && latest.status ? { ...prev, status: latest.status } : prev));
+    }
+  }, [events, activeJob?.id]);
 
   const validateUrl = (url: string): boolean => {
     try {
@@ -238,9 +242,9 @@ export function NewCrawlView() {
               disabled={!!activeJob}
               className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
             >
-              <option value="disabled">Disabled (raw HTML)</option>
-              <option value="js-only">JS-rendered pages only</option>
-              <option value="all">All pages headless</option>
+              <option value="never">Disabled (raw HTML)</option>
+              <option value="auto">JS-rendered pages only</option>
+              <option value="always">All pages headless</option>
             </select>
           </div>
 
@@ -288,7 +292,7 @@ export function NewCrawlView() {
               className="flex-1 bg-accentGreen hover:bg-brightGreen text-deepVoid font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast hover:shadow-[0_0_15px_rgba(22,224,141,0.3)] disabled:opacity-50"
             >
               {isStarting ? (
-                <Spinner className="animate-spin" size={18} />
+                <SpinnerGap className="animate-spin" size={18} />
               ) : (
                 <Play weight="fill" size={18} />
               )}
@@ -328,7 +332,7 @@ export function NewCrawlView() {
             <div className="ml-auto flex items-center space-x-3">
               <StatusBadge status={activeJob.status} />
               {activeJob.status === 'running' && (
-                <Spinner className="animate-spin text-accentGreen" size={16} />
+                <SpinnerGap className="animate-spin text-accentGreen" size={16} />
               )}
             </div>
           )}

@@ -11,9 +11,8 @@ impl AssetDownloader {
         Self { fetcher, writer }
     }
 
-    pub async fn download(&self, url: &str) -> anyhow::Result<()> {
+    pub async fn download(&self, url: &str) -> anyhow::Result<String> {
         let data = self.fetcher.fetch_bytes(url).await?;
-        self.writer.write_asset(url, &data).await?;
-        Ok(())
+        self.writer.write_asset(url, &data).await
     }
 }

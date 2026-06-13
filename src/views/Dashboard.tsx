@@ -11,8 +11,9 @@ import {
 } from '@phosphor-icons/react';
 import type { CrawlJob } from '../types';
 
-export function DashboardView() {
+export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) => void }) {
   const [recentJobs, setRecentJobs] = useState<CrawlJob[]>([]);
+  const [quickUrl, setQuickUrl] = useState('');
   const [stats, setStats] = useState({
     totalCrawls: 0,
     totalPages: 0,
@@ -53,7 +54,7 @@ export function DashboardView() {
       {/* Welcome */}
       <div className="mb-8">
         <h1 className="text-2xl font-display font-bold text-ghost mb-2">
-          Docurip Dashboard
+          Dashboard
         </h1>
         <p className="text-secondary text-sm">
           High-performance documentation extraction. Ready to rip the web.
@@ -94,12 +95,14 @@ export function DashboardView() {
           <input
             type="url"
             placeholder="Enter a URL to crawl..."
-            disabled
-            className="flex-1 bg-surface/50 border border-abyssal rounded-md px-4 py-3 text-ghost placeholder-charcoal/40 cursor-not-allowed"
+            value={quickUrl}
+            onChange={(e) => setQuickUrl(e.target.value)}
+            className="flex-1 bg-surface/50 border border-abyssal rounded-md px-4 py-3 text-ghost placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 transition-all"
           />
           <button
-            disabled
-            className="bg-accentGreen/20 text-accentGreen/50 px-6 py-3 rounded-md font-semibold cursor-not-allowed"
+            onClick={() => onQuickStart(quickUrl)}
+            disabled={!quickUrl}
+            className="bg-accentGreen hover:bg-brightGreen text-deepVoid px-6 py-3 rounded-md font-semibold transition-all duration-fast disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Start Crawl
           </button>

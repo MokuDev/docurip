@@ -1,47 +1,30 @@
 import { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Browser,
   ClockCounterClockwise,
   Gear,
-  GlobeHemisphereWest,
-  XLogo
+  GlobeHemisphereWest
 } from '@phosphor-icons/react';
 import { DashboardView } from './views/Dashboard';
 import { NewCrawlView } from './views/NewCrawl';
 import { HistoryView } from './views/History';
 import { SettingsView } from './views/Settings';
 import { LiveConsole } from './components/LiveConsole';
-
-interface TrackedJob {
-  jobId: string;
-  url: string;
-  status: string;
-}
+import { useCrawlEvents } from './hooks/useCrawlEvents';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'crawls' | 'history' | 'settings'>('dashboard');
+  const [pendingUrl, setPendingUrl] = useState('');
   const [liveConsoleOpen, setLiveConsoleOpen] = useState(false);
-  const [activeJobs, setActiveJobs] = useState<TrackedJob[]>([]);
+  const { activeJobIds } = useCrawlEvents();
+  const activeJobsCount = activeJobIds.size;
 
-  // Monitor active jobs
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const jobs: TrackedJob[] = await invoke('list_jobs');
-        const running = (jobs || []).filter((j: any) =>
-          j.status === 'running' || j.status === 'queued'
-        );
-        setActiveJobs(running);
-        if (running.length > 0 && !liveConsoleOpen) {
-          setLiveConsoleOpen(true);
-        }
-      } catch {
-        // silently ignore if backend not ready
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [liveConsoleOpen]);
+    if (activeJobsCount > 0 && !liveConsoleOpen) {
+      setLiveConsoleOpen(true);
+    }
+  }, [activeJobsCount, liveConsoleOpen]);
 
   return (
     <div className="h-screen bg-[#050a0f] flex text-smooth font-sans">
@@ -49,10 +32,7 @@ function App() {
       <aside className="w-64 flex-shrink-0 bg-deepVoid border-r border-abyssal/50 flex flex-col">
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-abyssal/50">
-          <XLogo weight="fill" size={24} className="text-accentGreen mr-2" />
-          <span className="font-display text-lg font-bold text-ghost tracking-tight">
-            Docurip
-          </span>
+          <img src="/docurip_logo_g.png" alt="Docurip" className="h-8 object-contain" />
         </div>
 
         {/* Nav */}
@@ -62,7 +42,7 @@ function App() {
             label="Dashboard"
             active={activeTab === 'dashboard'}
             onClick={() => setActiveTab('dashboard')}
-            badge={activeJobs.length > 0 ? `${activeJobs.length}` : undefined}
+            badge={activeJobsCount > 0 ? activeJobsCount.toString() : undefined}
           />
           <NavItem
             icon={<GlobeHemisphereWest weight="fill" size={18} />}
@@ -94,10 +74,21 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        {activeTab === 'dashboard' && <DashboardView />}
-        {activeTab === 'crawls' && <NewCrawlView />}
-        {activeTab === 'history' && <HistoryView />}
-        {activeTab === 'settings' && <SettingsView />}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="h-full"
+          >
+            {activeTab === 'dashboard' && <DashboardView onQuickStart={(url) => { setPendingUrl(url); setActiveTab('crawls'); }} />}
+            {activeTab === 'crawls' && <NewCrawlView prefillUrl={pendingUrl} />}
+            {activeTab === 'history' && <HistoryView />}
+            {activeTab === 'settings' && <SettingsView />}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Live Console Drawer */}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { useCrawlEvents } from '../hooks/useCrawlEvents';
 import {
   X,
   Minus,
@@ -7,7 +7,6 @@ import {
   Circle,
   Trash,
 } from '@phosphor-icons/react';
-import type { CrawlEvent } from '../types';
 
 interface LogEntry {
   id: number;
@@ -22,50 +21,41 @@ export function LiveConsole({ onClose }: { onClose: () => void }) {
   const [minimized, setMinimized] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const logIdCounter = useRef(0);
+  const { events } = useCrawlEvents();
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    if (events.length === 0) return;
+    const latest = events[events.length - 1];
+    const level: LogEntry['level'] =
+      latest.type === 'error'
+        ? 'error'
+        : latest.type === 'pageComplete'
+          ? 'success'
+          : 'info';
 
-    const setupListener = async () => {
-      unlisten = await listen<CrawlEvent>('crawl-event', (event) => {
-        const ev = event.payload;
-        const level: LogEntry['level'] =
-          ev.type === 'error'
-            ? 'error'
-            : ev.type === 'pageComplete'
-              ? 'success'
-              : 'info';
+    const message =
+      latest.type === 'progress'
+        ? `Crawling ${latest.progress?.currentUrl || '...'} (depth ${latest.progress?.depth ?? 0}/${latest.progress?.maxDepth ?? 0})`
+        : latest.type === 'pageComplete'
+          ? `Completed: ${latest.page?.url} (${latest.page?.title || 'no title'})`
+          : latest.type === 'error'
+            ? `Error: ${latest.message || 'Unknown error'}`
+            : latest.type === 'log'
+              ? latest.message || ''
+              : latest.type === 'jobStatusChanged'
+                ? `Job status: ${latest.status || ''}`
+                : 'Unknown event';
 
-        const message =
-          ev.type === 'progress'
-            ? `Crawling ${ev.progress?.currentUrl || '...'} (depth ${ev.progress?.depth ?? 0}/${ev.progress?.maxDepth ?? 0})`
-            : ev.type === 'pageComplete'
-              ? `Completed: ${ev.page?.url} (${ev.page?.title || 'no title'})`
-              : ev.type === 'error'
-                ? `Error: ${ev.message || 'Unknown error'}`
-                : ev.type === 'log'
-                  ? ev.message || ''
-                  : ev.type === 'jobStatusChanged'
-                    ? `Job status: ${ev.status || ''}`
-                    : 'Unknown event';
-
-        const entry: LogEntry = {
-          id: logIdCounter.current++,
-          timestamp: new Date().toLocaleTimeString(),
-          level,
-          message,
-          jobId: ev.jobId,
-        };
-
-        setLogs((prev) => [...prev, entry].slice(-500));
-      });
+    const entry: LogEntry = {
+      id: logIdCounter.current++,
+      timestamp: new Date().toLocaleTimeString(),
+      level,
+      message,
+      jobId: latest.jobId,
     };
 
-    setupListener();
-
-    // Also listen to stderr bridge if any
-    return () => unlisten?.();
-  }, []);
+    setLogs((prev) => [...prev, entry].slice(-500));
+  }, [events]);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });

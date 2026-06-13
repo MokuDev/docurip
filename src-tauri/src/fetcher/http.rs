@@ -101,12 +101,7 @@ impl HttpFetcher {
     }
 
     pub async fn fetch_bytes(&self, url: &str) -> anyhow::Result<Vec<u8>> {
-        let resp = self
-            .client
-            .get(url)
-            .header("User-Agent", &self.user_agent)
-            .send()
-            .await?;
+        let resp = self.client.get(url).header("User-Agent", &self.user_agent).send().await?;
         let status = resp.status();
         if !status.is_success() {
             anyhow::bail!("HTTP {} for {}", status, url);
@@ -144,6 +139,34 @@ mod tests {
         assert!(!HttpFetcher::is_transient_error(&parse_err));
     }
 
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use wiremock::ResponseTemplate;
+
+    struct FlakyResponder {
+        count: Arc<AtomicUsize>,
+    }
+    impl wiremock::Respond for FlakyResponder {
+        fn respond(&self, _request: &wiremock::Request) -> ResponseTemplate {
+            let count = self.count.fetch_add(1, Ordering::SeqCst);
+            if count < 2 {
+                ResponseTemplate::new(503)
+            } else {
+                ResponseTemplate::new(200).set_body_string("Success after retries")
+            }
+        }
+    }
+
+    struct CountResponder {
+        count: Arc<AtomicUsize>,
+    }
+    impl wiremock::Respond for CountResponder {
+        fn respond(&self, _request: &wiremock::Request) -> ResponseTemplate {
+            self.count.fetch_add(1, Ordering::SeqCst);
+            ResponseTemplate::new(404)
+        }
+    }
+
     #[tokio::test]
     async fn test_fetch_success() {
         use wiremock::{MockServer, ResponseTemplate};
@@ -166,23 +189,13 @@ mod tests {
     async fn test_fetch_retries_transient_error_then_success() {
         use wiremock::{MockServer, ResponseTemplate};
         use wiremock::matchers::{method, path};
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
 
         let mock_server = MockServer::start().await;
         let call_count = Arc::new(AtomicUsize::new(0));
-        let cc = call_count.clone();
 
         wiremock::Mock::given(method("GET"))
             .and(path("/flaky"))
-            .respond_with(move |_req: &wiremock::Request| {
-                let count = cc.fetch_add(1, Ordering::SeqCst);
-                if count < 2 {
-                    ResponseTemplate::new(503)
-                } else {
-                    ResponseTemplate::new(200).set_body_string("Success after retries")
-                }
-            })
+            .respond_with(FlakyResponder { count: call_count.clone() })
             .mount(&mock_server)
             .await;
 
@@ -197,19 +210,13 @@ mod tests {
     async fn test_fetch_permanent_error_no_retry() {
         use wiremock::{MockServer, ResponseTemplate};
         use wiremock::matchers::{method, path};
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
 
         let mock_server = MockServer::start().await;
         let call_count = Arc::new(AtomicUsize::new(0));
-        let cc = call_count.clone();
 
         wiremock::Mock::given(method("GET"))
             .and(path("/not-found"))
-            .respond_with(move |_req: &wiremock::Request| {
-                cc.fetch_add(1, Ordering::SeqCst);
-                ResponseTemplate::new(404)
-            })
+            .respond_with(CountResponder { count: call_count.clone() })
             .mount(&mock_server)
             .await;
 

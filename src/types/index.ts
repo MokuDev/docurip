@@ -3,7 +3,7 @@ export interface CrawlConfig {
   maxDepth: number;
   pageLimit: number;
   downloadAssets: boolean;
-  headlessStrategy: 'disabled' | 'js-only' | 'all';
+  headlessStrategy: 'never' | 'auto' | 'always';
   contentSelectors: string[];
   excludePatterns: string[];
   respectRobotsTxt: boolean;

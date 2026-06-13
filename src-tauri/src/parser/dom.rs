@@ -1,4 +1,5 @@
 use scraper::{Html, Selector};
+use std::collections::HashMap;
 use url::Url;
 
 pub struct DomParser;
@@ -84,6 +85,53 @@ impl DomParser {
         } else {
             Some(parts.join("\n\n"))
         }
+    }
+
+    pub fn rewrite_asset_urls(
+        &self,
+        html: &str,
+        base_url: &Url,
+        asset_map: &HashMap<String, String>,
+    ) -> String {
+        let document = Html::parse_fragment(html);
+        let mut replacements: Vec<(String, String, String)> = Vec::new();
+
+        let selectors = [
+            ("img[src]", "src"),
+            ("link[rel='stylesheet'][href]", "href"),
+            ("script[src]", "src"),
+        ];
+
+        for (sel_str, attr) in selectors {
+            if let Ok(sel) = Selector::parse(sel_str) {
+                for el in document.select(&sel) {
+                    if let Some(original_attr) = el.value().attr(attr) {
+                        if let Ok(abs_url) = base_url.join(original_attr) {
+                            let abs_str = abs_url.to_string();
+                            if let Some(rel_path) = asset_map.get(&abs_str) {
+                                replacements.push((
+                                    attr.to_string(),
+                                    original_attr.to_string(),
+                                    rel_path.clone(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut result = html.to_string();
+        for (attr, original_val, rel_path) in replacements {
+            let double = format!(r#"{}="{}""#, attr, original_val);
+            let single = format!(r#"{}='{}'"#, attr, original_val);
+            if result.contains(&double) {
+                result = result.replace(&double, &format!(r#"{}="{}""#, attr, rel_path));
+            } else if result.contains(&single) {
+                result = result.replace(&single, &format!(r#"{}="{}""#, attr, rel_path));
+            }
+        }
+        result
     }
 }
 
@@ -201,5 +249,83 @@ mod tests {
         let parser = DomParser::new();
         let selectors: Vec<String> = vec![];
         assert_eq!(parser.extract_content(TEST_HTML, &selectors), None);
+    }
+
+    #[test]
+    fn test_rewrite_asset_urls_img() {
+        let parser = DomParser::new();
+        let base = Url::parse("https://example.com/").unwrap();
+        let mut map = HashMap::new();
+        map.insert(
+            "https://example.com/images/logo.png".to_string(),
+            "assets/example.com/images/logo.png".to_string(),
+        );
+        let html = r#"<img src="/images/logo.png" alt="Logo">"#;
+        let result = parser.rewrite_asset_urls(html, &base, &map);
+        assert!(
+            result.contains(r#"src="assets/example.com/images/logo.png""#),
+            "Expected rewritten img src, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_rewrite_asset_urls_link() {
+        let parser = DomParser::new();
+        let base = Url::parse("https://example.com/").unwrap();
+        let mut map = HashMap::new();
+        map.insert(
+            "https://example.com/css/style.css".to_string(),
+            "assets/example.com/css/style.css".to_string(),
+        );
+        let html = r#"<link rel="stylesheet" href="/css/style.css">"#;
+        let result = parser.rewrite_asset_urls(html, &base, &map);
+        assert!(
+            result.contains(r#"href="assets/example.com/css/style.css""#),
+            "Expected rewritten link href, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_rewrite_asset_urls_script() {
+        let parser = DomParser::new();
+        let base = Url::parse("https://example.com/").unwrap();
+        let mut map = HashMap::new();
+        map.insert(
+            "https://example.com/js/app.js".to_string(),
+            "assets/example.com/js/app.js".to_string(),
+        );
+        let html = r#"<script src="/js/app.js"></script>"#;
+        let result = parser.rewrite_asset_urls(html, &base, &map);
+        assert!(
+            result.contains(r#"src="assets/example.com/js/app.js""#),
+            "Expected rewritten script src, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_rewrite_asset_urls_unknown_untouched() {
+        let parser = DomParser::new();
+        let base = Url::parse("https://example.com/").unwrap();
+        let map = HashMap::new();
+        let html = r#"<img src="/images/unknown.png" alt="Logo">"#;
+        let result = parser.rewrite_asset_urls(html, &base, &map);
+        assert!(
+            result.contains(r#"src="/images/unknown.png""#),
+            "Expected unchanged src, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_rewrite_asset_urls_no_match() {
+        let parser = DomParser::new();
+        let base = Url::parse("https://example.com/").unwrap();
+        let map = HashMap::new();
+        let html = "<p>Hello</p>";
+        let result = parser.rewrite_asset_urls(html, &base, &map);
+        assert_eq!(result, html);
     }
 }

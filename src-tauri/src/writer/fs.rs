@@ -22,13 +22,17 @@ impl FsWriter {
         Ok(path)
     }
 
-    pub async fn write_asset(&self, url: &str, data: &[u8]) -> anyhow::Result<PathBuf> {
+    pub async fn write_asset(&self, url: &str, data: &[u8]) -> anyhow::Result<String> {
         let path = self.url_to_asset_path(url);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).await?;
         }
         fs::write(&path, data).await?;
-        Ok(path)
+        let rel = path
+            .strip_prefix(&self.base_dir)
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_else(|_| path.to_string_lossy().replace('\\', "/"));
+        Ok(rel)
     }
 
     /// Sanitize a path segment to prevent directory traversal.

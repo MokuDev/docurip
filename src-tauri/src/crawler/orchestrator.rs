@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -237,34 +237,46 @@ impl Orchestrator {
             let links = self.parser.extract_links(&html, &self.base_url);
             let assets = self.parser.extract_assets(&html, &self.base_url);
 
-            let html_for_md = if !self.config.content_selectors.is_empty() {
+            let mut html_for_md = if !self.config.content_selectors.is_empty() {
                 self.parser
                     .extract_content(&html, &self.config.content_selectors)
                     .unwrap_or(html.clone())
             } else {
                 html.clone()
             };
-            let markdown = self.converter.convert(&html_for_md);
-
-            if let Err(e) = self.writer.write_page(&url, &markdown).await {
-                self.handle.event_bus.emit(CrawlEvent::Error {
-                    job_id: self.handle.job.read().await.id.clone(),
-                    message: format!("Write error for {}: {}", url, e),
-                });
-            }
-
+            let mut asset_map = HashMap::new();
             if self.config.download_assets {
                 let asset_downloader =
                     AssetDownloader::new(self.fetcher.clone(), self.writer.clone());
                 for asset_url in &assets {
-                    if let Err(e) = asset_downloader.download(asset_url).await {
-                        self.handle.event_bus.emit(CrawlEvent::Log {
-                            job_id: self.handle.job.read().await.id.clone(),
-                            level: "WARN".into(),
-                            message: format!("Asset download failed for {}: {}", asset_url, e),
-                        });
+                    match asset_downloader.download(asset_url).await {
+                        Ok(rel_path) => {
+                            asset_map.insert(asset_url.clone(), rel_path);
+                        }
+                        Err(e) => {
+                            let job_id = self.handle.job.read().await.id.clone();
+                            self.handle.event_bus.emit(CrawlEvent::Log {
+                                job_id,
+                                level: "WARN".into(),
+                                message: format!("Asset download failed for {}: {}", asset_url, e),
+                            });
+                        }
                     }
                 }
+            }
+
+            if !asset_map.is_empty() {
+                html_for_md = self.parser.rewrite_asset_urls(&html_for_md, &self.base_url, &asset_map);
+            }
+
+            let markdown = self.converter.convert(&html_for_md);
+
+            if let Err(e) = self.writer.write_page(&url, &markdown).await {
+                let job_id = self.handle.job.read().await.id.clone();
+                self.handle.event_bus.emit(CrawlEvent::Error {
+                    job_id,
+                    message: format!("Write error for {}: {}", url, e),
+                });
             }
 
             let page_result = PageResult {

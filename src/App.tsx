@@ -16,12 +16,14 @@ import { TopStatusBar } from './components/TopStatusBar';
 import { SystemStatusBar } from './components/SystemStatusBar';
 import { ToastContainer } from './components/ToastContainer';
 import { useCrawlEvents } from './hooks/useCrawlEvents';
+import { useUpdater } from './hooks/useUpdater';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'crawls' | 'history' | 'settings'>('dashboard');
   const [pendingUrl, setPendingUrl] = useState('');
   const [liveConsoleOpen, setLiveConsoleOpen] = useState(false);
   const { activeJobIds } = useCrawlEvents();
+  const { updateAvailable, downloading, installUpdate, dismiss } = useUpdater();
   const activeJobsCount = activeJobIds.size;
 
   useEffect(() => {
@@ -33,6 +35,29 @@ function App() {
   return (
     <div className="h-screen bg-[#050a0f] flex flex-col text-smooth font-sans">
       <TopStatusBar />
+
+      {updateAvailable && (
+        <div className="bg-accentGreen/10 border-b border-accentGreen/20 px-4 py-2 flex items-center justify-between text-sm">
+          <span className="text-ghost">
+            Update available: <strong className="text-accentGreen">v{updateAvailable.version}</strong>
+          </span>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={installUpdate}
+              disabled={downloading}
+              className="px-3 py-1 bg-accentGreen hover:bg-brightGreen text-deepVoid font-semibold rounded text-xs transition-all disabled:opacity-50"
+            >
+              {downloading ? 'Downloading...' : 'Install & Restart'}
+            </button>
+            <button
+              onClick={dismiss}
+              className="px-2 py-1 text-charcoal hover:text-ghost text-xs transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}

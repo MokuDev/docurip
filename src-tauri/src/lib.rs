@@ -36,6 +36,8 @@ pub fn run() {
             commands::update_settings,
             commands::open_output_folder,
             commands::export_job,
+            commands::search_job_results,
+            commands::export_job_zip,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

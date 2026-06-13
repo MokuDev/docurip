@@ -1,5 +1,8 @@
+use std::fs::File;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use zip::write::FileOptions;
+use serde::Serialize;
 use tauri::{AppHandle, State};
 use tokio::sync::RwLock;
 
@@ -206,5 +209,117 @@ pub async fn export_job(
     crate::export::zip_directory(&output_dir, &zip_path)
         .map_err(|e| e.to_string())?;
 
+    Ok(zip_path.to_string_lossy().to_string())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SearchMatch {
+    pub url: String,
+    pub title: String,
+    pub preview: String,
+    pub relevance: u32,
+}
+
+fn extract_preview(content: &str, query: &str) -> String {
+    let lower = content.to_lowercase();
+    if let Some(pos) = lower.find(&query.to_lowercase()) {
+        let start = pos.saturating_sub(80);
+        let end = (pos + query.len() + 120).min(content.len());
+        let mut preview = content[start..end].to_string();
+        if start > 0 { preview.insert_str(0, "…"); }
+        if end < content.len() { preview.push('…'); }
+        preview
+    } else {
+        content.chars().take(200).collect::<String>() + "…"
+    }
+}
+
+#[tauri::command]
+pub async fn search_job_results(
+    job_id: String,
+    query: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<SearchMatch>, String> {
+    let job = get_job(job_id, state).await?;
+    let q = query.to_lowercase();
+    let mut matches = Vec::new();
+
+    for page in &job.results {
+        let title_lower = page.title.to_lowercase();
+        let content_lower = page.content.to_lowercase();
+        let url_lower = page.url.to_lowercase();
+
+        let title_score = title_lower.matches(&q).count() as u32;
+        let content_score = content_lower.matches(&q).count() as u32;
+        let url_score = url_lower.matches(&q).count() as u32;
+
+        let relevance = title_score * 10 + content_score + url_score * 5;
+
+        if relevance > 0 {
+            let preview = extract_preview(&page.content, &q);
+            matches.push(SearchMatch {
+                url: page.url.clone(),
+                title: page.title.clone(),
+                preview,
+                relevance,
+            });
+        }
+    }
+
+    matches.sort_by(|a, b| b.relevance.cmp(&a.relevance));
+    Ok(matches)
+}
+
+#[tauri::command]
+pub async fn export_job_zip(
+    job_id: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<String, String> {
+    let job = get_job(job_id.clone(), state).await?;
+    let output_dir = std::path::PathBuf::from(&job.config.output_dir);
+
+    if !output_dir.exists() {
+        return Err("Output directory does not exist".into());
+    }
+
+    let zip_path = output_dir.parent()
+        .unwrap_or(&output_dir)
+        .join(format!("{}-export.zip", job_id));
+
+    let file = File::create(&zip_path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = FileOptions::<()>::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o755);
+
+    fn add_dir_to_zip(
+        zip: &mut zip::ZipWriter<File>,
+        base: &std::path::Path,
+        current: &std::path::Path,
+        options: FileOptions<()>,
+    ) -> Result<(), String> {
+        for entry in std::fs::read_dir(current).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            let relative = path.strip_prefix(base).map_err(|e| e.to_string())?;
+
+            if path.is_file() {
+                let mut file = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+                zip.start_file_from_path(relative, options.clone())
+                    .map_err(|e| e.to_string())?;
+                std::io::copy(&mut file, zip).map_err(|e| e.to_string())?;
+            } else if path.is_dir() {
+                zip.add_directory_from_path(relative, options.clone())
+                    .map_err(|e| e.to_string())?;
+                add_dir_to_zip(zip, base, &path, options.clone())?;
+            }
+        }
+        Ok(())
+    }
+
+    add_dir_to_zip(&mut zip, &output_dir, &output_dir, options)
+        .map_err(|e| e.to_string())?;
+
+    zip.finish().map_err(|e| e.to_string())?;
     Ok(zip_path.to_string_lossy().to_string())
 }

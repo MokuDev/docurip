@@ -28,7 +28,7 @@ html2md = "0.2"
 headless_chrome = { version = "1", optional = true }
 open = "5"
 regex = "1"
-zip = "2"
+zip = { version = "2.1", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 wiremock = "0.6"

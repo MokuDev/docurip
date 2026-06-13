@@ -34,6 +34,7 @@ pub struct Orchestrator {
     exclude_set: Option<RegexSet>,
     config: CrawlConfig,
     settings: AppSettings,
+    app_state: Option<Arc<crate::state::AppState>>,
 }
 
 impl Orchestrator {
@@ -58,18 +59,19 @@ impl Orchestrator {
             RegexSet::new(&config.exclude_patterns).ok()
         };
 
-        Ok(Self {
-            handle,
-            base_url,
-            fetcher,
-            headless_fetcher,
-            parser,
-            converter,
-            writer,
-            exclude_set,
-            config,
-            settings,
-        })
+    Ok(Self {
+        handle,
+        base_url,
+        fetcher,
+        headless_fetcher,
+        parser,
+        converter,
+        writer,
+        exclude_set,
+        config,
+        settings,
+        app_state: None,
+    })
     }
 
     pub fn spawn(
@@ -77,6 +79,7 @@ impl Orchestrator {
         config: CrawlConfig,
         settings: AppSettings,
         handle: CrawlHandle,
+        app_state: Option<Arc<crate::state::AppState>>,
     ) {
         tokio::spawn(async move {
             let job_id = handle.job.read().await.id.clone();
@@ -98,6 +101,7 @@ impl Orchestrator {
 
             match Self::new(&start_url, config, settings, handle.clone(), headless) {
                 Ok(mut orch) => {
+                    orch.app_state = app_state;
                     let result = orch.run(&start_url).await;
                     if let Some(mut h) = orch.headless_fetcher.take() {
                         let _ = tokio::task::spawn_blocking(move || {
@@ -197,15 +201,26 @@ impl Orchestrator {
 
         while let Some((url, depth)) = queue.pop_front() {
             if self.handle.should_stop.load(Ordering::Relaxed) {
-                let mut job = self.handle.job.write().await;
-                job.status = JobStatus::Paused;
-                let job_id = job.id.clone();
-                drop(job);
-                self.handle.event_bus.emit(CrawlEvent::JobStatusChanged {
-                    job_id,
-                    status: JobStatus::Paused,
-                });
-                return Ok(());
+                {
+                    let mut job = self.handle.job.write().await;
+                    job.status = JobStatus::Paused;
+                    let job_id = job.id.clone();
+                    drop(job);
+                    self.handle.event_bus.emit(CrawlEvent::JobStatusChanged {
+                        job_id: job_id.clone(),
+                        status: JobStatus::Paused,
+                    });
+                    self.handle.event_bus.emit(CrawlEvent::Log {
+                        job_id,
+                        level: "INFO".into(),
+                        message: "Crawl cancelled by user".into(),
+                    });
+                }
+                if let Some(ref app_state) = self.app_state {
+                    let job = self.handle.job.read().await.clone();
+                    let _ = app_state.persist_job(&job).await;
+                }
+                break;
             }
 
             if processed >= page_limit {
@@ -314,6 +329,11 @@ impl Orchestrator {
                 });
             }
 
+            if let Some(ref app_state) = self.app_state {
+                let job = self.handle.job.read().await.clone();
+                let _ = app_state.persist_job(&job).await;
+            }
+
             if depth < max_depth {
                 for link in links {
                     if !visited.contains(&link) {
@@ -338,10 +358,12 @@ impl Orchestrator {
 
         {
             let mut job = self.handle.job.write().await;
-            if job.error.is_some() {
-                job.status = JobStatus::Failed;
-            } else {
-                job.status = JobStatus::Completed;
+            if job.status != JobStatus::Paused {
+                if job.error.is_some() {
+                    job.status = JobStatus::Failed;
+                } else {
+                    job.status = JobStatus::Completed;
+                }
             }
             let start_time = job.start_time.clone();
             let progress = CrawlProgress {
@@ -365,6 +387,10 @@ impl Orchestrator {
                 job_id: job_id.clone(),
                 progress,
             });
+            if let Some(ref app_state) = self.app_state {
+                let job = self.handle.job.read().await.clone();
+                let _ = app_state.persist_job(&job).await;
+            }
         }
 
         Ok(())

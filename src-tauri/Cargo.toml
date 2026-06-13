@@ -28,10 +28,12 @@ html2md = "0.2"
 headless_chrome = { version = "1", optional = true }
 open = "5"
 regex = "1"
+zip = "2"
 
 [dev-dependencies]
 wiremock = "0.6"
 tokio-test = "0.4"
+tempfile = "3"
 
 [features]
 headless = ["headless_chrome"]

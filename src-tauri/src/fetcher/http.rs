@@ -187,7 +187,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_retries_transient_error_then_success() {
-        use wiremock::{MockServer, ResponseTemplate};
+        use wiremock::MockServer;
         use wiremock::matchers::{method, path};
 
         let mock_server = MockServer::start().await;
@@ -208,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_permanent_error_no_retry() {
-        use wiremock::{MockServer, ResponseTemplate};
+        use wiremock::MockServer;
         use wiremock::matchers::{method, path};
 
         let mock_server = MockServer::start().await;

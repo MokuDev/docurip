@@ -12,6 +12,7 @@ import {
   Funnel,
   X,
   Eye,
+  Download,
 } from '@phosphor-icons/react';
 import type { CrawlJob } from '../types';
 
@@ -39,8 +40,21 @@ export function HistoryView() {
   };
 
   const handleDelete = async (jobId: string) => {
-    // TODO: implement delete command
-    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    try {
+      await invoke('delete_job', { jobId });
+      await loadJobs();
+    } catch (err) {
+      console.error('Failed to delete job', err);
+    }
+  };
+
+  const handleExport = async (jobId: string) => {
+    try {
+      const path: string = await invoke('export_job', { jobId });
+      console.log('Exported to', path);
+    } catch (err) {
+      console.error('Export failed', err);
+    }
   };
 
   const handleOpenFolder = async (outputDir: string) => {
@@ -153,6 +167,15 @@ export function HistoryView() {
                     >
                       <Eye size={16} />
                     </button>
+                    {job.status === 'completed' && (
+                      <button
+                        onClick={() => handleExport(job.id)}
+                        className="p-1.5 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"
+                        title="Export"
+                      >
+                        <Download size={16} />
+                      </button>
+                    )}
                     <button
                       onClick={() => handleOpenFolder(job.config.outputDir)}
                       className="p-1.5 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"

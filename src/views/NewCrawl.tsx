@@ -125,6 +125,15 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     }
   };
 
+  const handleCancel = async () => {
+    if (!activeJob) return;
+    try {
+      await invoke('stop_crawl', { jobId: activeJob.id });
+    } catch (err) {
+      console.error('Failed to cancel crawl', err);
+    }
+  };
+
   const handleReset = () => {
     setActiveJob(null);
     setLogs([]);
@@ -309,6 +318,12 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
                   <span>Stop</span>
                 </button>
               )}
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2.5 bg-surface hover:bg-abyssal text-secondary hover:text-ghost border border-abyssal rounded-md flex items-center space-x-2 transition-all duration-fast"
+              >
+                <span>Cancel</span>
+              </button>
               <button
                 onClick={handleReset}
                 className="px-4 py-2.5 bg-surface hover:bg-abyssal text-secondary hover:text-ghost border border-abyssal rounded-md flex items-center space-x-2 transition-all duration-fast"

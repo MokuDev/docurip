@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -58,7 +59,7 @@ export function ExportModal({ jobId, onClose }: ExportModalProps) {
 
   const isDisabled = (requiresHeadless: boolean) => requiresHeadless && !headlessSupported;
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -72,7 +73,7 @@ export function ExportModal({ jobId, onClose }: ExportModalProps) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[440px] bg-deepVoid border border-abyssal/50 rounded-xl z-50 shadow-2xl"
+        className="fixed inset-0 m-auto w-[440px] h-fit bg-deepVoid border border-abyssal/50 rounded-xl z-50 shadow-2xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-abyssal/50">
@@ -164,6 +165,7 @@ export function ExportModal({ jobId, onClose }: ExportModalProps) {
           </button>
         </div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

@@ -6,6 +6,7 @@ import {
   Gear,
   GlobeHemisphereWest
 } from '@phosphor-icons/react';
+import { open } from '@tauri-apps/plugin-shell';
 import { DashboardView } from './views/Dashboard';
 import { NewCrawlView } from './views/NewCrawl';
 import { HistoryView } from './views/History';
@@ -38,7 +39,7 @@ function App() {
         <aside className="w-64 flex-shrink-0 bg-deepVoid border-r border-abyssal/50 flex flex-col">
           {/* Logo */}
           <div className="h-16 flex items-center px-6 border-b border-abyssal/50">
-            <img src="/docurip_logo_g.png" alt="Docurip" className="h-8 object-contain" />
+            <img src="/docurip_logo_g.png" alt="Docurip" className="h-[38px] object-contain" />
           </div>
 
           {/* Nav */}
@@ -71,9 +72,18 @@ function App() {
           </nav>
 
           {/* Footer */}
-          <div className="h-10 flex items-center justify-center border-t border-abyssal/50">
+          <div className="h-auto flex flex-col items-center justify-center py-3 border-t border-abyssal/50 space-y-1">
             <span className="text-charcoal text-[10px] tracking-widest uppercase">
-              v0.1.0-alpha
+              v0.2.0
+            </span>
+            <span className="text-charcoal text-[10px]">
+              made with love by{' '}
+              <button
+                onClick={() => open('https://moku.cx')}
+                className="text-accentGreen/70 hover:text-accentGreen transition-colors underline-offset-2 hover:underline"
+              >
+                moku
+              </button>
             </span>
           </div>
         </aside>

@@ -13,6 +13,7 @@ import { SettingsView } from './views/Settings';
 import { LiveConsole } from './components/LiveConsole';
 import { TopStatusBar } from './components/TopStatusBar';
 import { SystemStatusBar } from './components/SystemStatusBar';
+import { ToastContainer } from './components/ToastContainer';
 import { useCrawlEvents } from './hooks/useCrawlEvents';
 
 function App() {
@@ -103,6 +104,8 @@ function App() {
       {liveConsoleOpen && (
         <LiveConsole onClose={() => setLiveConsoleOpen(false)} />
       )}
+
+      <ToastContainer />
     </div>
   );
 }

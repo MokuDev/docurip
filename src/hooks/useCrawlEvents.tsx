@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import type { CrawlEvent } from '../types';
+import { useToasts } from './useToasts';
 
 interface CrawlEventsState {
   events: CrawlEvent[];
@@ -19,6 +20,7 @@ const CrawlEventsContext = createContext<CrawlEventsState>({
 export function CrawlEventsProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<CrawlEventsState>({ events: [], activeJobIds: new Set(), error: null, clearError: () => {} });
   const [error, setError] = useState<string | null>(null);
+  const { pushToast } = useToasts();
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -26,7 +28,9 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
       unlisten = await listen<CrawlEvent>('crawl-event', (event) => {
         const ev = event.payload;
         if (ev.type === 'error') {
-          setError(ev.message || 'Unknown error');
+          const message = ev.message || 'Unknown error';
+          setError(message);
+          pushToast('error', message);
         }
         setState((prev) => {
           const nextEvents = [...prev.events, ev].slice(-500);
@@ -47,7 +51,7 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
     };
     setup();
     return () => unlisten?.();
-  }, []);
+  }, [pushToast]);
 
   const clearError = useCallback(() => setError(null), []);
 

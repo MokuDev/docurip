@@ -16,6 +16,7 @@ import {
   FileArrowUp,
 } from '@phosphor-icons/react';
 import { ResultBrowser } from './ResultBrowser';
+import { ExportModal } from '../components/ExportModal';
 import type { CrawlJob } from '../types';
 
 export function HistoryView() {
@@ -25,6 +26,7 @@ export function HistoryView() {
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<CrawlJob | null>(null);
   const [browserJob, setBrowserJob] = useState<CrawlJob | null>(null);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
 
   useEffect(() => {
     loadJobs();
@@ -51,13 +53,8 @@ export function HistoryView() {
     }
   };
 
-  const handleExport = async (jobId: string) => {
-    try {
-      const path: string = await invoke('export_job', { jobId });
-      console.log('Exported to', path);
-    } catch (err) {
-      console.error('Export failed', err);
-    }
+  const handleExport = (jobId: string) => {
+    setExportJobId(jobId);
   };
 
   const handleOpenFolder = async (outputDir: string) => {
@@ -367,6 +364,14 @@ export function HistoryView() {
           />
         )}
       </AnimatePresence>
+
+      {/* Export Modal */}
+      {exportJobId && (
+        <ExportModal
+          jobId={exportJobId}
+          onClose={() => setExportJobId(null)}
+        />
+      )}
     </div>
   );
 }

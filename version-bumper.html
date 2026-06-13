@@ -413,6 +413,45 @@
         showStatus('Commands in Zwischenablage kopiert!', 'success');
       });
     });
+
+    if (!('showDirectoryPicker' in window)) {
+      document.getElementById('pickFolderBtn').style.display = 'none';
+      document.getElementById('fallbackSection').style.display = 'block';
+
+      document.getElementById('fallbackFiles').addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        fileContents = {};
+        currentVersions = {};
+        let allMatch = true;
+        let firstVersion = null;
+
+        for (const file of files) {
+          const content = await file.text();
+          for (const target of TARGET_FILES) {
+            if (file.name === target.name || file.name === target.path.split('/').pop()) {
+              fileContents[target.path] = content;
+              const match = content.match(target.pattern);
+              if (match) {
+                const version = match[1];
+                currentVersions[target.name] = version;
+                if (firstVersion === null) firstVersion = version;
+                if (version !== firstVersion) allMatch = false;
+              } else {
+                currentVersions[target.name] = 'NICHT GEFUNDEN';
+                allMatch = false;
+              }
+            }
+          }
+        }
+
+        document.getElementById('versionSection').style.display = 'block';
+        document.getElementById('currentVersion').textContent = firstVersion || '-';
+
+        if (!allMatch && firstVersion) {
+          showStatus('Warnung: Versionen sind nicht konsistent!', 'error');
+        }
+      });
+    }
   </script>
 </body>
 </html>

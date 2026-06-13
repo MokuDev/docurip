@@ -16,7 +16,7 @@
 - Modify: `src-tauri/src/export.rs`
 - Modify: `src-tauri/src/export.rs` (add `#[cfg(test)] mod tests`)
 
-- [ ] **Step 1: Add `ExportFormat` enum to `export.rs`**
+- [x] **Step 1: Add `ExportFormat` enum to `export.rs`**
 
 Add after the existing `use` statements at the top of `src-tauri/src/export.rs`:
 
@@ -33,7 +33,7 @@ pub enum ExportFormat {
 }
 ```
 
-- [ ] **Step 2: Add `copy_md_files` function**
+- [x] **Step 2: Add `copy_md_files` function**
 
 Add after `zip_directory_inner` function (after line 37):
 
@@ -72,7 +72,7 @@ fn walk_dir(dir: &Path) -> anyhow::Result<Vec<std::path::PathBuf>> {
 }
 ```
 
-- [ ] **Step 3: Add `merge_md_files` function**
+- [x] **Step 3: Add `merge_md_files` function**
 
 Add after `copy_md_files`:
 
@@ -101,7 +101,7 @@ pub fn merge_md_files(src_dir: &Path, dst_file: &Path) -> anyhow::Result<()> {
 }
 ```
 
-- [ ] **Step 4: Add unit tests for `ExportFormat` serde + `copy_md_files` + `merge_md_files`**
+- [x] **Step 4: Add unit tests for `ExportFormat` serde + `copy_md_files` + `merge_md_files`**
 
 Add at the bottom of `src-tauri/src/export.rs`:
 
@@ -175,12 +175,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `cd src-tauri && cargo test --lib export`
 Expected: All 4 new tests PASS, existing zip tests still PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/export.rs
@@ -194,7 +194,7 @@ git commit -m "feat(export): add ExportFormat enum + md_files and merged_md expo
 **Files:**
 - Modify: `src-tauri/src/export.rs`
 
-- [ ] **Step 1: Add `pulldown-cmark` dependency**
+- [x] **Step 1: Add `pulldown-cmark` dependency**
 
 Add to `src-tauri/Cargo.toml` in `[dependencies]`:
 
@@ -205,7 +205,7 @@ pulldown-cmark = "0.12"
 Run: `cd src-tauri && cargo check`
 Expected: Compiles successfully.
 
-- [ ] **Step 2: Add `md_to_html` helper function**
+- [x] **Step 2: Add `md_to_html` helper function**
 
 Add after `merge_md_files` in `src-tauri/src/export.rs`:
 
@@ -239,7 +239,7 @@ th {{ background: #f5f5f5; }}
 }
 ```
 
-- [ ] **Step 3: Add `export_pdf_files` function (headless-gated)**
+- [x] **Step 3: Add `export_pdf_files` function (headless-gated)**
 
 Add after `md_to_html`. Uses temp HTML files + `file://` URLs for Chrome navigation:
 
@@ -292,7 +292,7 @@ pub fn export_pdf_files(_src_dir: &Path, _dst_dir: &Path) -> anyhow::Result<()> 
 }
 ```
 
-- [ ] **Step 4: Add `export_merged_pdf` function (headless-gated)**
+- [x] **Step 4: Add `export_merged_pdf` function (headless-gated)**
 
 ```rust
 #[cfg(feature = "headless")]
@@ -342,17 +342,17 @@ pub fn export_merged_pdf(_src_dir: &Path, _dst_file: &Path) -> anyhow::Result<()
 }
 ```
 
-- [ ] **Step 5: Run all export tests**
+- [x] **Step 5: Run all export tests**
 
 Run: `cd src-tauri && cargo test --lib export`
 Expected: All tests PASS.
 
-- [ ] **Step 6: Run headless feature check**
+- [x] **Step 6: Run headless feature check**
 
 Run: `cd src-tauri && cargo check --features headless`
 Expected: Compiles successfully (or fails with missing headless_chrome binary — that's OK, we just check Rust compilation).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src-tauri/src/export.rs src-tauri/Cargo.toml
@@ -367,7 +367,7 @@ git commit -m "feat(export): add PDF export functions with headless Chrome featu
 - Modify: `src-tauri/src/commands.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Add `export_job_v2` command to `commands.rs`**
+- [x] **Step 1: Add `export_job_v2` command to `commands.rs`**
 
 Add after the existing `export_job` function (after line 408):
 
@@ -426,13 +426,13 @@ pub fn check_headless_support() -> bool {
 }
 ```
 
-- [ ] **Step 2: Add `tempfile` to `[dependencies]` in Cargo.toml**
+- [x] **Step 2: Add `tempfile` to `[dependencies]` in Cargo.toml**
 
 `tempfile` is currently only in `[dev-dependencies]`. PDF export needs it at runtime.
 
 Move `tempfile = "3"` from `[dev-dependencies]` to `[dependencies]` in `src-tauri/Cargo.toml`.
 
-- [ ] **Step 3: Register new commands in `lib.rs`**
+- [x] **Step 3: Register new commands in `lib.rs`**
 
 In `src-tauri/src/lib.rs`, add to the `invoke_handler` list (after `commands::export_job`):
 
@@ -441,17 +441,17 @@ commands::export_job_v2,
 commands::check_headless_support,
 ```
 
-- [ ] **Step 4: Verify compilation**
+- [x] **Step 4: Verify compilation**
 
 Run: `cd src-tauri && cargo check`
 Expected: Compiles successfully.
 
-- [ ] **Step 5: Run all tests**
+- [x] **Step 5: Run all tests**
 
 Run: `cd src-tauri && cargo test`
 Expected: All existing tests still PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/commands.rs src-tauri/src/lib.rs src-tauri/Cargo.toml
@@ -465,7 +465,7 @@ git commit -m "feat(export): add export_job_v2 command and check_headless_suppor
 **Files:**
 - Modify: `src/types/index.ts`
 
-- [ ] **Step 1: Add `ExportFormat` type**
+- [x] **Step 1: Add `ExportFormat` type**
 
 Add at the end of `src/types/index.ts`:
 
@@ -507,12 +507,12 @@ export const EXPORT_OPTIONS: ExportOption[] = [
 ];
 ```
 
-- [ ] **Step 2: Verify TypeScript compiles**
+- [x] **Step 2: Verify TypeScript compiles**
 
 Run: `npm run build`
 Expected: No TypeScript errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/types/index.ts
@@ -526,7 +526,7 @@ git commit -m "feat(export): add ExportFormat types and export options config"
 **Files:**
 - Create: `src/components/ExportModal.tsx`
 
-- [ ] **Step 1: Create `ExportModal.tsx`**
+- [x] **Step 1: Create `ExportModal.tsx`**
 
 Create `src/components/ExportModal.tsx`:
 
@@ -702,12 +702,12 @@ export function ExportModal({ jobId, onClose }: ExportModalProps) {
 }
 ```
 
-- [ ] **Step 2: Verify TypeScript compiles**
+- [x] **Step 2: Verify TypeScript compiles**
 
 Run: `npm run build`
 Expected: No TypeScript errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/components/ExportModal.tsx
@@ -721,7 +721,7 @@ git commit -m "feat(export): add ExportModal component with format picker"
 **Files:**
 - Modify: `src/views/History.tsx`
 
-- [ ] **Step 1: Add import for ExportModal**
+- [x] **Step 1: Add import for ExportModal**
 
 Add at the top of `src/views/History.tsx` after existing imports:
 
@@ -729,7 +729,7 @@ Add at the top of `src/views/History.tsx` after existing imports:
 import { ExportModal } from '../components/ExportModal';
 ```
 
-- [ ] **Step 2: Add state for export modal**
+- [x] **Step 2: Add state for export modal**
 
 Inside the `HistoryView` function, after the existing `useState` declarations (after line 27):
 
@@ -737,7 +737,7 @@ Inside the `HistoryView` function, after the existing `useState` declarations (a
 const [exportJobId, setExportJobId] = useState<string | null>(null);
 ```
 
-- [ ] **Step 3: Replace `handleExport` function**
+- [x] **Step 3: Replace `handleExport` function**
 
 Replace the existing `handleExport` function (lines 54-61) with:
 
@@ -747,7 +747,7 @@ const handleExport = (jobId: string) => {
 };
 ```
 
-- [ ] **Step 4: Add ExportModal render before closing `</div>`**
+- [x] **Step 4: Add ExportModal render before closing `</div>`**
 
 Add before the final closing tag of the component:
 
@@ -760,12 +760,12 @@ Add before the final closing tag of the component:
 )}
 ```
 
-- [ ] **Step 5: Verify TypeScript compiles**
+- [x] **Step 5: Verify TypeScript compiles**
 
 Run: `npm run build`
 Expected: No TypeScript errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/views/History.tsx
@@ -779,26 +779,26 @@ git commit -m "feat(export): wire ExportModal into History view"
 **Files:**
 - None (verification only)
 
-- [ ] **Step 1: Run backend checks**
+- [x] **Step 1: Run backend checks**
 
 Run: `cd src-tauri && cargo check && cargo test`
 Expected: `cargo check` clean, all tests PASS.
 
-- [ ] **Step 2: Run frontend build**
+- [x] **Step 2: Run frontend build**
 
 Run: `npm run build`
 Expected: No errors, successful build.
 
-- [ ] **Step 3: Run headless feature check**
+- [x] **Step 3: Run headless feature check**
 
 Run: `cd src-tauri && cargo check --features headless`
 Expected: Compiles (may fail if headless_chrome binary not installed — that's OK for CI without Chrome).
 
-- [ ] **Step 4: Verify old export still works**
+- [x] **Step 4: Verify old export still works**
 
 Confirm `export_job` and `export_job_zip` commands still registered and compiled. No removal of backward-compatible code.
 
-- [ ] **Step 5: Final commit if needed**
+- [x] **Step 5: Final commit if needed**
 
 If any fixes were needed during verification, commit them:
 

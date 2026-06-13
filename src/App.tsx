@@ -38,7 +38,7 @@ function App() {
         {/* Sidebar */}
         <aside className="w-64 flex-shrink-0 bg-deepVoid border-r border-abyssal/50 flex flex-col">
           {/* Logo */}
-          <div className="h-16 flex items-center px-6 border-b border-abyssal/50">
+            <div className="h-16 flex items-center justify-center px-6 border-b border-abyssal/50">
             <img src="/docurip_logo_g.png" alt="Docurip" className="h-[38px] object-contain" />
           </div>
 

@@ -2,7 +2,7 @@
 name = "docurip"
 version = "0.2.0"
 description = "High-performance documentation site crawler"
-authors = ["you"]
+authors = ["Docurip Contributors"]
 edition = "2021"
 
 [build-dependencies]

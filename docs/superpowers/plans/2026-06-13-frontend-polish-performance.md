@@ -162,7 +162,7 @@ Bei jedem Input-Feld:
 const [errors, setErrors] = useState<Record<string, string>>({});
 ```
 
-- [ ] **Step 4: Build verifizieren**
+- [x] **Step 4: Build verifizieren**
 
 Run: `npm run build`
 Expected: Sauber
@@ -175,81 +175,11 @@ Expected: Sauber
 - Create: `src/components/EmptyState.tsx`
 - Modify: `src/views/History.tsx`, `src/views/Dashboard.tsx`, `src/views/NewCrawl.tsx`
 
-- [ ] **Step 1: EmptyState Komponente erstellen**
-
-```tsx
-import type { ReactNode } from 'react';
-
-interface EmptyStateProps {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  action?: ReactNode;
-}
-
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="text-charcoal mb-4">{icon}</div>
-      <h3 className="text-ghost font-semibold mb-2">{title}</h3>
-      <p className="text-secondary text-sm max-w-sm mb-4">{description}</p>
-      {action}
-    </div>
-  );
-}
-```
-
-- [ ] **Step 2: History Empty State**
-
-In `History.tsx`, wenn `filteredJobs.length === 0`:
-```tsx
-{filteredJobs.length === 0 && !loading && (
-  <EmptyState
-    icon={<ClockCounterClockwise size={48} />}
-    title="No crawls yet"
-    description="Start your first crawl from the Dashboard or New Crawl page."
-  />
-)}
-```
-
-- [ ] **Step 3: Dashboard Empty State**
-
-In `Dashboard.tsx`, wenn `stats.totalCrawls === 0`:
-```tsx
-{stats.totalCrawls === 0 && (
-  <EmptyState
-    icon={<Globe size={48} />}
-    title="Welcome to Docurip"
-    description="Enter a URL above to start ripping documentation."
-    action={
-      <button
-        onClick={() => onQuickStart('https://example.com')}
-        className="bg-accentGreen hover:bg-brightGreen text-deepVoid px-4 py-2 rounded-md text-sm font-semibold transition-all"
-      >
-        Try with example.com
-      </button>
-    }
-  />
-)}
-```
-
-- [ ] **Step 4: NewCrawl Logs Empty State**
-
-In `NewCrawl.tsx`, wenn `logs.length === 0 && !activeJob`:
-```tsx
-{logs.length === 0 && !activeJob && (
-  <EmptyState
-    icon={<FileText size={48} />}
-    title="No crawl running"
-    description="Configure and start a crawl to see real-time logs here."
-  />
-)}
-```
-
-- [ ] **Step 5: Build verifizieren**
-
-Run: `npm run build`
-Expected: Sauber
+- [x] **Step 1: EmptyState Komponente erstellen**
+- [x] **Step 2: History Empty State**
+- [x] **Step 3: Dashboard Empty State**
+- [x] **Step 4: NewCrawl Logs Empty State**
+- [x] **Step 5: Build verifizieren**
 
 ---
 
@@ -350,177 +280,10 @@ while !queue.is_empty() && processed < page_limit {
 
 **WICHTIG:** `Orchestrator` muss `Clone` implementieren, damit `self.clone()` funktioniert. Da `FsWriter` und `EventBus` evtl. nicht Clone sind, müssen diese in `Arc` gewrapped werden.
 
-- [ ] **Step 3: `Orchestrator` auf `Clone` vorbereiten**
-
-Füge `#[derive(Clone)]` hinzu wo möglich, oder wrappe Felder in `Arc`:
-
-```rust
-pub struct Orchestrator {
-    handle: CrawlHandle,
-    base_url: Url,
-    fetcher: HttpFetcher,
-    headless_fetcher: Option<HeadlessFetcher>,
-    parser: DomParser,
-    converter: HtmlToMarkdown,
-    writer: Arc<FsWriter>,
-    exclude_set: Option<RegexSet>,
-    config: CrawlConfig,
-    settings: AppSettings,
-    app_state: Option<Arc<crate::state::AppState>>,
-}
-```
-
-`FsWriter` prüfen — wenn er `#[derive(Clone)]` hat, kein Arc nötig. Wenn nicht, `Arc<FsWriter>`. Gleiches für `EventBus` in `CrawlHandle`.
-
-- [ ] **Step 4: `process_page` Methode extrahieren**
-
-Extrahiere die Logik aus der alten Schleife in eine separate Methode:
-
-```rust
-async fn process_page(&self, url: &str, depth: u32) -> anyhow::Result<(PageResult, Vec<String>, Vec<String>)> {
-    let job_id = self.handle.job.read().await.id.clone();
-    let (status_code, html) = self.fetch_page(url).await?;
-    
-    let title = self.parser.extract_title(&html).unwrap_or_default();
-    let links = self.parser.extract_links(&html, &self.base_url);
-    let assets = self.parser.extract_assets(&html, &self.base_url);
-    
-    let mut html_for_md = if !self.config.content_selectors.is_empty() {
-        self.parser.extract_content(&html, &self.config.content_selectors).unwrap_or(html.clone())
-    } else {
-        html.clone()
-    };
-    
-    // Asset downloading und rewriting (wie bisher)
-    let mut asset_map = HashMap::new();
-    if self.config.download_assets {
-        let asset_downloader = AssetDownloader::new(self.fetcher.clone(), match Arc::try_unwrap(self.writer.clone()) { ... });
-        // ... (wie bisher)
-    }
-    
-    let markdown = self.converter.convert(&html_for_md);
-    self.writer.write_page(url, &markdown).await?;
-    
-    let page_result = PageResult {
-        url: url.to_string(),
-        title,
-        content: markdown,
-        links: links.clone(),
-        assets: assets.clone(),
-        status: status_code,
-    };
-    
-    Ok((page_result, links, assets))
-}
-```
-
-**WICHTIG:** Die `writer` und `event_bus` Aufrufe sind nicht thread-safe wenn mehrere Tasks gleichzeitig schreiben. `Arc<FsWriter>` ist OK, aber `write_page` muss entweder thread-safe sein oder wir müssen einen `Mutex` um die Writer-Aufrufe legen.
-
-Alternative (einfacher): 
-- Fetching ist parallel
-- Aber das Schreiben auf Disk und das Job-State-Update ist sequentiell (innerhalb `spawn_blocking` oder mit `Mutex`)
-
-Vereinfachter Ansatz für Parallel-Fetching nur:
-```rust
-// Nur den Fetch-Teil parallelisieren, der Rest bleibt sequentiell
-```
-
-Aber das ist komplex. Vereinfachen wir:
-
-**Alternative Implementation (einfacher):**
-
-Statt die gesamte Verarbeitung zu parallelisieren, parallelisieren wir nur den `fetch_page`-Aufruf und sammeln die HTMLs. Dann verarbeiten wir sie sequentiell weiter:
-
-```rust
-let mut batch = Vec::new();
-while let Some((url, depth)) = queue.pop_front() {
-    if processed + batch.len() >= page_limit { break; }
-    if depth > max_depth { continue; }
-    batch.push((url, depth));
-    if batch.len() >= self.settings.concurrency as usize { break; }
-}
-
-// Parallel fetchen
-let fetch_results = futures::future::join_all(
-    batch.into_iter().map(|(url, depth)| {
-        let fetcher = self.fetcher.clone();
-        let headless = self.headless_fetcher.clone();
-        let config = self.config.clone();
-        async move {
-            let result = if config.headless_strategy == "always" && headless.is_some() {
-                headless.unwrap().fetch(&url).await.map(|h| (200u16, h))
-            } else {
-                fetcher.fetch_with_status(&url).await
-            };
-            (url, depth, result)
-        }
-    })
-).await;
-
-// Sequentiell verarbeiten (parsen, assets, schreiben)
-for (url, depth, result) in fetch_results {
-    let (status, html) = match result {
-        Ok(r) => r,
-        Err(e) => { /* error handling */ continue; }
-    };
-    
-    // ... restliche Verarbeitung (parser, converter, writer) wie bisher
-    // Links zu queue hinzufügen
-}
-```
-
-Das ist sauberer. `HttpFetcher` hat bereits `#[derive(Clone)]` (prüfen!).
-
-- [ ] **Step 5: `HttpFetcher` Clone sicherstellen**
-
-```rust
-#[derive(Clone)]
-pub struct HttpFetcher {
-    client: Client,
-    ...
-}
-```
-
-`reqwest::Client` ist bereits `Clone`, also sollte das funktionieren.
-
-- [ ] **Step 6: Tests**
-
-```rust
-#[tokio::test]
-async fn test_parallel_fetching() {
-    use wiremock::MockServer;
-    use wiremock::matchers::method;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
-
-    let mock_server = MockServer::start().await;
-    let call_count = Arc::new(AtomicUsize::new(0));
-    let cc = call_count.clone();
-
-    wiremock::Mock::given(method("GET"))
-        .respond_with(move |_req| {
-            cc.fetch_add(1, Ordering::SeqCst);
-            ResponseTemplate::new(200).set_body_string("page")
-        })
-        .mount(&mock_server)
-        .await;
-
-    let fetcher = HttpFetcher::new();
-    let urls: Vec<String> = (0..5).map(|i| format!("{}/page{}", mock_server.uri(), i)).collect();
-    
-    let start = std::time::Instant::now();
-    let results = futures::future::join_all(
-        urls.iter().map(|url| fetcher.fetch(url))
-    ).await;
-    let elapsed = start.elapsed();
-
-    assert!(results.iter().all(|r| r.is_ok()));
-    assert_eq!(call_count.load(Ordering::SeqCst), 5);
-    // Parallel: sollte schneller sein als 5 * delay
-}
-```
-
-**WICHTIG:** Der Test muss zeigen, dass 5 Requests schneller als sequentiell sind (unter 5s bei 1s delay).
+- [x] **Step 3: `Orchestrator` auf `Clone` vorbereiten**
+- [x] **Step 4: `process_page` Methode extrahieren**
+- [x] **Step 5: `HttpFetcher` Clone sicherstellen**
+- [x] **Step 6: Tests**
 
 ---
 
@@ -529,71 +292,18 @@ async fn test_parallel_fetching() {
 **Files:**
 - Modify: `src-tauri/src/fetcher/http.rs`
 
-- [ ] **Step 1: Pool-Größe konfigurierbar machen**
-
-```rust
-impl HttpFetcher {
-    pub fn with_pool_size(pool_size: usize) -> Self {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .pool_idle_timeout(Duration::from_secs(90))
-            .pool_max_idle_per_host(pool_size)
-            .build()
-            .expect("build reqwest client");
-        Self {
-            client,
-            user_agent: String::from("Docurip/0.1.0 (+https://github.com/docurip)"),
-            max_retries: 3,
-            base_delay_ms: 1000,
-        }
-    }
-}
-```
-
-Der `reqwest::Client` hat bereits ein Connection Pool. `pool_max_idle_per_host` steuert die Pool-Größe pro Host.
-
-- [ ] **Step 2: `HttpFetcher::new()` verwendet Default-Pool**
-
-```rust
-pub fn new() -> Self {
-    Self::with_pool_size(10)
-}
-```
-
-- [ ] **Step 3: Tests**
-
-```rust
-#[test]
-fn test_fetcher_clone_shares_pool() {
-    let fetcher1 = HttpFetcher::new();
-    let fetcher2 = fetcher1.clone();
-    // Beide haben denselben Client (Arc intern)
-    assert!(Arc::ptr_eq(
-        &Arc::new(fetcher1), 
-        &Arc::new(fetcher2)
-    ) == false); // Clone kopiert den Arc, nicht den Client
-}
-```
-
-**WICHTIG:** `HttpFetcher` Clone kopiert den `Client` Arc, nicht den Client selbst. Der Pool wird geteilt.
+- [x] **Step 1: Pool-Größe konfigurierbar machen**
+- [x] **Step 2: `HttpFetcher::new()` verwendet Default-Pool**
+- [x] **Step 3: Tests**
 
 ---
 
 ## Integration & Verifikation
 
-- [ ] **Step 1: `cargo check`**
-
-Expected: Sauber
-
-- [ ] **Step 2: `cargo test`**
-
-Expected: Alle Tests passing (inkl. neuer Parallel-Fetching Test)
-
-- [ ] **Step 3: `npm run build`**
-
-Expected: Sauber
-
-- [ ] **Step 4: Manuelle Tests**
+- [x] **Step 1: `cargo check`**
+- [x] **Step 2: `cargo test`**
+- [x] **Step 3: `npm run build`**
+- [x] **Step 4: Manuelle Tests**
 
 1. Crawl mit `concurrency: 5` starten → schneller als mit `concurrency: 1`
 2. Ungültige URL in Settings → Fehlermeldung sofort sichtbar

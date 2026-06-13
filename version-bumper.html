@@ -209,7 +209,74 @@
   </div>
 
   <script>
-    // JavaScript will be added in subsequent tasks
+    const TARGET_FILES = [
+      { name: 'package.json', path: 'package.json', pattern: /\"version\":\s*\"([^\"]+)\"/ },
+      { name: 'tauri.conf.json', path: 'src-tauri/tauri.conf.json', pattern: /\"version\":\s*\"([^\"]+)\"/ },
+      { name: 'Cargo.toml', path: 'src-tauri/Cargo.toml', pattern: /^version\s*=\s*\"([^\"]+)\"/m },
+      { name: 'App.tsx', path: 'src/App.tsx', pattern: /v(\d+\.\d+\.\d+)/ }
+    ];
+
+    let directoryHandle = null;
+    let currentVersions = {};
+    let fileContents = {};
+
+    document.getElementById('pickFolderBtn').addEventListener('click', pickDirectory);
+    document.getElementById('previewBtn').addEventListener('click', showPreview);
+    document.getElementById('bumpBtn').addEventListener('click', bumpVersions);
+
+    async function pickDirectory() {
+      try {
+        directoryHandle = await window.showDirectoryPicker();
+        document.getElementById('folderName').textContent = directoryHandle.name;
+        await loadFiles();
+      } catch (err) {
+        showStatus('Fehler beim Oeffnen des Ordners: ' + err.message, 'error');
+      }
+    }
+
+    async function loadFiles() {
+      currentVersions = {};
+      fileContents = {};
+      let allMatch = true;
+      let firstVersion = null;
+
+      for (const target of TARGET_FILES) {
+        try {
+          const fileHandle = await directoryHandle.getFileHandle(target.path);
+          const file = await fileHandle.getFile();
+          const content = await file.text();
+          fileContents[target.path] = content;
+
+          const match = content.match(target.pattern);
+          if (match) {
+            const version = match[1];
+            currentVersions[target.name] = version;
+            if (firstVersion === null) firstVersion = version;
+            if (version !== firstVersion) allMatch = false;
+          } else {
+            currentVersions[target.name] = 'NICHT GEFUNDEN';
+            allMatch = false;
+          }
+        } catch (err) {
+          currentVersions[target.name] = 'FEHLER: ' + err.message;
+          allMatch = false;
+        }
+      }
+
+      const versionSection = document.getElementById('versionSection');
+      versionSection.style.display = 'block';
+      document.getElementById('currentVersion').textContent = firstVersion || '-';
+
+      if (!allMatch && firstVersion) {
+        showStatus('Warnung: Versionen sind nicht konsistent ueber alle Dateien!', 'error');
+      }
+    }
+
+    function showStatus(msg, type) {
+      const el = document.getElementById('statusMessage');
+      el.textContent = msg;
+      el.className = type;
+    }
   </script>
 </body>
 </html>

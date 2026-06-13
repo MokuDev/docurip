@@ -25,9 +25,6 @@ mod inner {
             Ok(html)
         }
 
-        pub fn close(&mut self) {
-            let _ = self.browser.close();
-        }
     }
 }
 
@@ -43,8 +40,6 @@ mod inner {
         pub async fn fetch(&self, _url: &str) -> anyhow::Result<String> {
             anyhow::bail!("headless feature not enabled in this build")
         }
-
-        pub fn close(&mut self) {}
     }
 }
 

@@ -152,11 +152,8 @@ impl Orchestrator {
                 Ok(mut orch) => {
                     orch.app_state = app_state;
                     let result = orch.run(&start_url).await;
-                    if let Some(mut h) = orch.headless_fetcher.take() {
-                        let _ = tokio::task::spawn_blocking(move || {
-                            h.close();
-                        })
-                        .await;
+                    if let Some(h) = orch.headless_fetcher.take() {
+                        drop(h);
                     }
                     if let Err(e) = result {
                         let mut job = handle.job.write().await;
@@ -307,10 +304,8 @@ impl Orchestrator {
 
         if let Some(h_arc) = fetch_ctx.headless_fetcher {
             if let Ok(mutex) = Arc::try_unwrap(h_arc) {
-                let mut h = mutex.into_inner();
-                let _ = tokio::task::spawn_blocking(move || {
-                    h.close();
-                }).await;
+                let h = mutex.into_inner();
+                drop(h);
             }
         }
 

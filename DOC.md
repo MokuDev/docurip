@@ -1,6 +1,6 @@
 # Docurip — Full Documentation
 
-> **v0.2.0** — Offline documentation crawler for Tauri v2 desktop.
+> **v0.2.5** — Offline documentation crawler for Tauri v2 desktop.
 > Crawls public doc sites, converts HTML to Markdown, persists assets locally, streams live progress.
 > Made with love by [moku](https://moku.cx).
 
@@ -88,7 +88,7 @@ npm run lint               # Frontend lint
 | Module | Responsibility |
 |--------|---------------|
 | `lib.rs` | Tauri app setup, plugin init, command registration |
-| `commands.rs` | All Tauri commands (`start_crawl`, `stop_crawl`, `list_jobs`, `delete_job`, `export_job`, `export_job_v2`, `pause_crawl`, `resume_crawl`, `get_settings`, `update_settings`, `get_system_stats`, `check_headless_support`) |
+| `commands.rs` | All Tauri commands: `start_crawl`, `stop_crawl`, `pause_crawl`, `resume_crawl`, `list_jobs`, `get_job`, `delete_job`, `export_job_zip`, `export_job_v2`, `search_job_results`, `get_settings`, `update_settings`, `get_system_stats`, `check_headless_support`, `get_session_info`, `list_exports` |
 | `state.rs` | `AppState` with `active_jobs` (in-memory `DashMap`) + `persisted_jobs` (disk-backed JSON at `%APPDATA%`) |
 | `crawler/orchestrator.rs` | Main crawl loop: parallel fetch with `Semaphore`, parse, convert, write. Supports pause/resume/cancel via `AtomicBool` + `Notify` |
 | `crawler/job.rs` | `CrawlJob`, `CrawlProgress`, `PageResult`, `JobStatus` types |
@@ -160,12 +160,14 @@ Frontend listens via useCrawlEvents → updates UI in real-time
 
 ```rust
 pub struct CrawlConfig {
-    pub start_url: String,
-    pub max_depth: u32,
-    pub stay_within_domain: bool,
     pub output_dir: String,
-    pub concurrency: u32,
-    pub timeout_secs: u32,
+    pub max_depth: u32,
+    pub page_limit: u32,
+    pub download_assets: bool,
+    pub headless_strategy: String,
+    pub content_selectors: Vec<String>,
+    pub exclude_patterns: Vec<String>,
+    pub respect_robots_txt: bool,
 }
 
 pub enum JobStatus {
@@ -178,26 +180,28 @@ pub enum JobStatus {
 
 pub struct CrawlJob {
     pub id: String,
+    pub url: String,
     pub config: CrawlConfig,
     pub status: JobStatus,
     pub created_at: String,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
-    pub pages_total: u32,
-    pub pages_done: u32,
-    pub assets_total: u32,
-    pub assets_done: u32,
-    pub errors: Vec<String>,
+    pub pages_crawled: u32,
+    pub page_limit: u32,
+    pub current_url: Option<String>,
+    pub depth: u32,
+    pub max_depth: u32,
     pub results: Vec<PageResult>,
+    pub errors: Vec<String>,
 }
 
 pub struct PageResult {
     pub url: String,
-    pub status_code: u16,
-    pub markdown_path: String,
     pub title: String,
-    pub links_found: Vec<String>,
-    pub assets_found: Vec<String>,
+    pub content: String,
+    pub links: Vec<String>,
+    pub assets: Vec<String>,
+    pub status: String,
 }
 
 pub struct AppSettings {
@@ -208,6 +212,9 @@ pub struct AppSettings {
     pub user_agent: String,
     pub default_max_depth: u32,
     pub default_page_limit: u32,
+    pub default_download_assets: bool,
+    pub default_headless_strategy: String,
+    pub default_respect_robots_txt: bool,
 }
 ```
 
@@ -218,26 +225,41 @@ type JobStatus = 'queued' | 'running' | 'paused' | 'completed' | 'failed'
 
 interface CrawlJob {
   id: string
+  url: string
   config: CrawlConfig
   status: JobStatus
   createdAt: string
   startedAt?: string
   completedAt?: string
-  pagesTotal: number
-  pagesDone: number
-  assetsTotal: number
-  assetsDone: number
-  errors: string[]
+  pagesCrawled: number
+  pageLimit: number
+  currentUrl?: string
+  depth: number
+  maxDepth: number
   results: PageResult[]
+  errors: string[]
 }
 
 interface PageResult {
   url: string
-  statusCode: number
-  markdownPath: string
   title: string
-  linksFound: string[]
-  assetsFound: string[]
+  content: string
+  links: string[]
+  assets: string[]
+  status: string
+}
+
+interface AppSettings {
+  outputDir: string
+  concurrency: number
+  requestDelay: number
+  timeout: number
+  userAgent: string
+  defaultMaxDepth: number
+  defaultPageLimit: number
+  defaultDownloadAssets: boolean
+  defaultHeadlessStrategy: string
+  defaultRespectRobotsTxt: boolean
 }
 ```
 
@@ -339,19 +361,22 @@ Full configuration form:
 - **User Agent** string
 - **Default Max Depth** (1-10)
 - **Default Page Limit** (1-1000)
+- **Default Download Assets** (toggle)
+- **Default Headless Strategy** (auto/http/always)
+- **Default Respect Robots.txt** (toggle)
 - **Inline validation** with red borders and error messages per field
 - Save/Reset buttons
 
 ### System Chrome
 
-- **Sidebar:** Logo (centered), nav icons (Dashboard, Crawls, History, Settings), version `v0.2.0`, "made with love by moku" link
+- **Sidebar:** Logo (centered), nav icons (Dashboard, Crawls, History, Settings), version `v0.2.5`, "made with love by moku" link
 - **Top Status Bar:** Session ID (first 8 chars), live uptime counter (HH:MM:SS)
 - **Bottom Status Bar:** CPU%, RAM used/total, active output path (or "idle")
 - **Toast Container:** Bottom-left, slide-in animations, auto-dismiss (6s), dismissible
 
 ---
 
-## Export System (v0.2.0)
+## Export System (v0.2.5)
 
 ### Export Formats
 
@@ -522,6 +547,17 @@ Docurip was built across 4 implementation phases + 1 polish phase:
 
 ## Changelog
 
+### v0.2.5 (2026-06-14)
+
+**Added:**
+- Comprehensive codebase analysis and bug documentation
+- Missing commands: `get_job`, `search_job_results`, `get_session_info`, `list_exports`
+- Missing settings: `defaultDownloadAssets`, `defaultHeadlessStrategy`, `defaultRespectRobotsTxt`
+- Updated data model to match actual implementation
+
+**Known Issues:**
+- See `docs/checks/PROBLEMS.md` for detailed bug/security/performance analysis
+
 ### v0.2.0 (2026-06-13)
 
 **Added:**
@@ -567,6 +603,10 @@ Docurip was built across 4 implementation phases + 1 polish phase:
 | Feature | Status |
 |---------|--------|
 | Headless browser fetch for JS-heavy SPAs | Feature-gated, ready |
+| Multi-format export (MD, PDF, Merged) | Implemented v0.2.0 |
+| Pause/Resume with persistence | Implemented v0.2.0 |
+| Dashboard stats (Pages, Size, Velocity, Fail Rate) | Implemented v0.2.0 |
+| System status bars (CPU, RAM, Uptime) | Implemented v0.2.0 |
 | Authentication (cookies, basic auth, bearer tokens) | Planned |
 | Incremental/differential crawls (etag/last-modified) | Planned |
 | Custom PDF styling/theming | Planned |
@@ -574,6 +614,9 @@ Docurip was built across 4 implementation phases + 1 polish phase:
 | Batch export of multiple jobs | Planned |
 | Built-in Markdown editor | Planned |
 | Frontend automated tests | Planned |
+| SSRF protection (optional IP blacklist) | Planned |
+| robots.txt enforcement | Planned |
+| stay_within_domain enforcement | Planned |
 
 ---
 
@@ -717,3 +760,73 @@ Windows: %APPDATA%\com.docurip.app\
 - Headless Chrome: feature-gated (`cargo check --features headless` to verify)
 - No `Spinner` icon in Phosphor Icons — use `SpinnerGap` instead
 - `Browser::close()` removed in `headless_chrome` v1.x — use `drop(h)` instead
+
+---
+
+## Known Issues & Technical Debt
+
+> Detailed analysis available in `docs/checks/PROBLEMS.md`
+
+### Critical
+
+| ID | Issue | Location |
+|----|-------|----------|
+| B1 | `stay_within_domain` config exists but is never enforced | orchestrator.rs |
+| B2 | `respect_robots_txt` config exists but is never enforced | orchestrator.rs, config.rs |
+| P1 | All disk I/O is synchronous (`std::fs`), blocks tokio runtime | state.rs, commands.rs |
+
+### High Priority
+
+| ID | Issue | Location |
+|----|-------|----------|
+| B3 | Cancel sets status to `Paused` instead of `Failed` | orchestrator.rs:299 |
+| B4 | `timeout` setting not passed to HttpFetcher (hardcoded 30s) | http.rs, config.rs |
+| B5 | Version strings inconsistent (0.1.0 / 0.2.0 / 0.2.5) | Multiple files |
+| B6 | Query strings not stripped from filenames (invalid on Windows) | writer/fs.rs |
+| B7 | Double update check in useUpdater | useUpdater.ts |
+| P2 | Headless browser created per fetch (should reuse) | headless.rs |
+| P3 | System stats not cached (new sysinfo::System every 2s) | system.rs |
+| S2 | No content-type validation on asset downloads | downloader.rs |
+| S3 | No file size limits on asset downloads | downloader.rs |
+
+### Medium Priority
+
+| ID | Issue | Location |
+|----|-------|----------|
+| B8 | LiveConsole only processes last event, misses events between renders | LiveConsole.tsx |
+| B9 | History loading spinner flickers every 3s poll | History.tsx |
+| B10 | prefillUrl useEffect not re-triggerable after manual clear | NewCrawl.tsx |
+| B11 | AppSettings TypeScript type missing 3 fields | types/index.ts |
+| B12 | walk_dir duplicated with different implementations | export.rs, commands.rs |
+| P4 | Dashboard polls 3× separately (wasteful) | Dashboard.tsx |
+| P5 | Assets downloaded sequentially instead of parallel | orchestrator.rs |
+| P6 | Logs array copy-on-write on every event | NewCrawl.tsx |
+| P7 | No virtualization in ResultTree (slow for 500+ pages) | ResultTree.tsx |
+| C1 | `is_disk_error` via string matching (fragile) | orchestrator.rs |
+| C2 | `is_transient_error` via string matching (fragile) | http.rs |
+
+### Low Priority
+
+| ID | Issue | Location |
+|----|-------|----------|
+| B13 | LiveConsole doesn't update with multiple events | LiveConsole.tsx |
+| B14 | useUpdater error state never displayed in UI | useUpdater.ts |
+| C3 | `collect_all_jobs` uses try_read (silently drops data) | commands.rs |
+| C4 | DashboardStats cache uses std::sync::Mutex (blocks async) | commands.rs |
+| C5 | rewrite_asset_urls does string replacement (not DOM-aware) | dom.rs |
+| C6 | merge_md_files reads all into single String (OOM risk) | export.rs |
+| C7 | walk_dir reads entire dir into memory (no streaming) | commands.rs |
+| C8 | StatusIcon/StatusBadge duplicated in 3 components | Multiple TSX |
+| C9 | Regex-based Markdown rendering (fragile) | MarkdownPreview.tsx |
+| C10 | Redundant log storage (local + global) | NewCrawl.tsx |
+| C11 | Dashboard catch blocks are empty (errors silently ignored) | Dashboard.tsx |
+
+### Security Notes
+
+| ID | Issue | Mitigation |
+|----|-------|------------|
+| S1 | No SSRF protection (can crawl internal IPs) | Low risk for desktop app; add optional IP blacklist |
+| S4 | Regex DoS via exclude_patterns | Use fancy-regex with timeout |
+| S5 | Path traversal via query strings | Strip query params from filenames |
+| S6 | Output path not sanitized on frontend | Backend validation exists via Tauri |
+| S7 | No user input sanitization | Typed Tauri commands limit attack surface

@@ -12,7 +12,7 @@ import {
   SpinnerGap,
   Pause,
 } from '@phosphor-icons/react';
-import type { CrawlJob, CrawlConfig } from '../types';
+import type { CrawlConfig, CrawlJob, PageResult } from '../types';
 
 const DEFAULT_CONFIG: CrawlConfig = {
   url: '',
@@ -33,6 +33,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   const [isStarting, setIsStarting] = useState(false);
   const [urlError, setUrlError] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
+  const prevEventCountRef = useRef(0);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -57,19 +58,44 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     const jobEvents = events.filter((e) => e.jobId === activeJob.id);
     if (jobEvents.length === 0) return;
 
-    const latest = jobEvents[jobEvents.length - 1];
-    if (latest.type === 'log') {
-      setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} ${latest.message || ''}`]);
-    } else if (latest.type === 'progress') {
-      setActiveJob((prev) =>
-        prev && latest.progress ? { ...prev, progress: latest.progress } : prev
-      );
-    } else if (latest.type === 'pageComplete') {
-      setActiveJob((prev) =>
-        prev && latest.page ? { ...prev, results: [...prev.results, latest.page] } : prev
-      );
-    } else if (latest.type === 'jobStatusChanged') {
-      setActiveJob((prev) => (prev && latest.status ? { ...prev, status: latest.status } : prev));
+    const prevLen = prevEventCountRef.current;
+    if (jobEvents.length <= prevLen) return;
+
+    const newEvents = jobEvents.slice(prevLen);
+    prevEventCountRef.current = jobEvents.length;
+
+    let jobChanged = false;
+
+    for (const latest of newEvents) {
+      if (latest.type === 'log') {
+        setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} ${latest.message || ''}`]);
+      } else if (latest.type === 'progress') {
+        prevEventCountRef.current; // keep tracking
+      } else if (latest.type === 'pageComplete') {
+        jobChanged = true;
+      } else if (latest.type === 'jobStatusChanged') {
+        jobChanged = true;
+      }
+    }
+
+    if (jobChanged || newEvents.some((e) => e.type === 'progress' || e.type === 'pageComplete' || e.type === 'jobStatusChanged')) {
+      setActiveJob((prev) => {
+        if (!prev) return prev;
+        const updated = { ...prev };
+        const latestProgress = newEvents.filter((e) => e.type === 'progress').pop()?.progress;
+        if (latestProgress) {
+          updated.progress = latestProgress;
+        }
+        const latestPage = newEvents.filter((e) => e.type === 'pageComplete').map((e) => e.page).filter(Boolean) as PageResult[];
+        if (latestPage.length > 0) {
+          updated.results = [...prev.results, ...latestPage];
+        }
+        const latestStatus = newEvents.filter((e) => e.type === 'jobStatusChanged').pop()?.status;
+        if (latestStatus) {
+          updated.status = latestStatus;
+        }
+        return updated;
+      });
     }
   }, [events, activeJob?.id]);
 

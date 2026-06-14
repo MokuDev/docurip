@@ -103,11 +103,21 @@ impl Orchestrator {
         let fetcher = HttpFetcher::new();
         let parser = DomParser::new();
         let converter = HtmlToMarkdown::new();
-        let writer = FsWriter::new(&config.output_dir);
-        let exclude_set = if config.exclude_patterns.is_empty() {
+        let writer_base = if config.output_dir.is_empty() {
+            settings.output_dir.clone()
+        } else {
+            config.output_dir.clone()
+        };
+        let writer = FsWriter::new(&writer_base);
+        let resolved_config = if config.output_dir.is_empty() {
+            CrawlConfig { output_dir: settings.output_dir.clone(), ..config }
+        } else {
+            config
+        };
+        let exclude_set = if resolved_config.exclude_patterns.is_empty() {
             None
         } else {
-            RegexSet::new(&config.exclude_patterns).ok()
+            RegexSet::new(&resolved_config.exclude_patterns).ok()
         };
 
     Ok(Self {
@@ -119,7 +129,7 @@ impl Orchestrator {
         converter,
         writer,
         exclude_set,
-        config,
+        config: resolved_config,
         settings,
         app_state: None,
     })

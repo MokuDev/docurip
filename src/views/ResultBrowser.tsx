@@ -13,6 +13,7 @@ import { ResultTree } from '../components/ResultTree';
 import { MarkdownPreview } from '../components/MarkdownPreview';
 import { ResultSearch } from '../components/ResultSearch';
 import { EmptyState } from '../components/EmptyState';
+import { useToasts } from '../hooks/useToasts';
 
 interface ResultBrowserProps {
   job: CrawlJob;
@@ -20,6 +21,7 @@ interface ResultBrowserProps {
 }
 
 export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
+  const { pushToast } = useToasts();
   const [selectedPage, setSelectedPage] = useState<PageResult | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -43,8 +45,10 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
     try {
       const path: string = await invoke('export_job_zip', { jobId: job.id });
       setExportPath(path);
+      pushToast('success', `ZIP saved to: ${path}`);
     } catch (err) {
       console.error('Export failed', err);
+      pushToast('error', `Export failed: ${err}`);
     } finally {
       setExporting(false);
     }

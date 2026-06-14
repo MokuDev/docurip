@@ -54,7 +54,8 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
         crawlVelocity: s?.crawlVelocity ?? 0,
         failRate: s?.failRate ?? 0,
       });
-    } catch {
+    } catch (err) {
+      console.warn('[Dashboard] get_dashboard_stats failed:', err);
       setStats({
         pagesSaved: 0,
         totalSizeBytes: 0,

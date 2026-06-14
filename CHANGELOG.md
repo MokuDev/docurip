@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.3 (2026-06-14)
+
+### Fixed
+- **Dashboard stats showing zero**: `DashboardStats` struct was missing `#[serde(rename_all = "camelCase")]`, so the backend sent `pages_saved` but the frontend expected `pagesSaved` — all fields were `undefined` and fell back to `0`.
+- **Recent Exports always empty**: `list_recent_exports` scanned the nonexistent `app_data_dir/exports/` directory. Exports are actually written to `{outputDir}/zip/`. Rewrote the function to accept a list of job output dirs and scan each `{dir}/zip/` subfolder. `list_exports` command now collects unique output dirs from all active + persisted jobs.
+
+### Changed
+- Removed unused `Manager` import from `commands.rs`.
+
+
 ## v0.3.2 (2026-06-14)
 
 ### Added

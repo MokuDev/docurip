@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use zip::write::FileOptions;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 use tokio::sync::RwLock;
 
 use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
@@ -181,6 +181,7 @@ pub async fn list_jobs(state: State<'_, Arc<AppState>>) -> Result<Vec<CrawlJob>,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DashboardStats {
     pub pages_saved: u32,
     pub total_size_bytes: u64,
@@ -633,12 +634,34 @@ pub async fn export_job_zip(
 
 #[tauri::command]
 pub async fn list_exports(
-    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
     limit: Option<usize>,
 ) -> Result<Vec<RecentExport>, String> {
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let n = limit.unwrap_or(5);
-    Ok(exports::list_recent_exports(&dir, n))
+
+    let mut output_dirs: Vec<std::path::PathBuf> = Vec::new();
+
+    {
+        let active = state.active_jobs.read().await;
+        for handle in active.values() {
+            let job = handle.job.read().await;
+            let dir = std::path::PathBuf::from(&job.config.output_dir);
+            if !output_dirs.contains(&dir) {
+                output_dirs.push(dir);
+            }
+        }
+    }
+    {
+        let persisted = state.persisted_jobs.read().await;
+        for job in persisted.values() {
+            let dir = std::path::PathBuf::from(&job.config.output_dir);
+            if !output_dirs.contains(&dir) {
+                output_dirs.push(dir);
+            }
+        }
+    }
+
+    Ok(exports::list_recent_exports(&output_dirs, n))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

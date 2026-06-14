@@ -17,7 +17,8 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     try {
-      const unlistenFn = (window as any).__TAURI__?.event?.listen('crawl-event', (event: any) => {
+      const unlistenFn = (window as any).__TAURI__?.event?.listen('crawl-event', (raw: any) => {
+        const event = raw?.payload ?? raw;
         setState((prev) => {
           const nextEvents = [...prev.events, event].slice(-500);
           const nextActive = new Set(prev.activeJobIds);

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   Browser,
   ClockCounterClockwise,
@@ -115,21 +114,10 @@ function App() {
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col overflow-hidden relative">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="h-full"
-            >
-              {activeTab === 'dashboard' && <DashboardView onQuickStart={(url) => { setPendingUrl(url); setActiveTab('crawls'); }} />}
-              {activeTab === 'crawls' && <NewCrawlView prefillUrl={pendingUrl} />}
-              {activeTab === 'history' && <HistoryView />}
-              {activeTab === 'settings' && <SettingsView />}
-            </motion.div>
-          </AnimatePresence>
+          {activeTab === 'dashboard' && <DashboardView onQuickStart={(url) => { setPendingUrl(url); setActiveTab('crawls'); }} />}
+          {activeTab === 'crawls' && <NewCrawlView prefillUrl={pendingUrl} key={pendingUrl} />}
+          {activeTab === 'history' && <HistoryView />}
+          {activeTab === 'settings' && <SettingsView />}
         </main>
       </div>
 

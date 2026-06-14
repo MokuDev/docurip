@@ -26,7 +26,7 @@ impl DomParser {
 
     pub fn extract_links(&self, html: &str, base_url: &Url) -> Vec<String> {
         let document = Html::parse_document(html);
-        let selector = Selector::parse("a[href]").unwrap();
+        let selector = Selector::parse("a[href]").expect("static selector 'a[href]' is valid CSS");
         document
             .select(&selector)
             .filter_map(|e| e.value().attr("href"))

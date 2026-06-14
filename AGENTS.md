@@ -55,7 +55,6 @@ npm run tauri dev    # Starts both Vite and Tauri backend
 4. Messung vor Behauptung — `verification-before-completion` bevor "fertig" gesagt wird
 5. Brainstorming vor Implementierung bei kreativen Aufgaben
 6. Tests vor Code bei Features und Bugfixes
-7. Immer Codegraph zum codebase checken verwenden!
 
 ## Architecture
 

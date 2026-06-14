@@ -55,6 +55,8 @@ export interface AppSettings {
   defaultRespectRobotsTxt: boolean;
   defaultStayWithinDomain: boolean;
   defaultSsrfProtection: boolean;
+  windowWidth: number;
+  windowHeight: number;
 }
 
 export interface CrawlEvent {

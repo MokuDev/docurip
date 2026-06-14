@@ -2,6 +2,9 @@
 
 ## v0.3.3 (2026-06-14)
 
+### Added
+- **Window size setting**: new dropdown in Settings → Window with 5 presets (1280×900 Compact, 1600×1000 Standard, 1920×1080 Full HD, 2560×1440 QHD, 3840×2160 UHD/4K). Selection applies immediately — the window resizes and centers on the current monitor without restart. Persisted across sessions via `tauri-plugin-store`. On startup, the saved size is applied before the window becomes visible. Oversized selections (e.g. UHD on a 1080p display) are clamped to the available monitor dimensions with a toast notice. Minimum window size constraint of 1280×900 enforced via `tauri.conf.json`.
+
 ### Fixed
 - **Dashboard stats showing zero**: `DashboardStats` struct was missing `#[serde(rename_all = "camelCase")]`, so the backend sent `pages_saved` but the frontend expected `pagesSaved` — all fields were `undefined` and fell back to `0`.
 - **Recent Exports always empty**: `list_recent_exports` scanned the nonexistent `app_data_dir/exports/` directory. Exports are actually written to `{outputDir}/zip/`. Rewrote the function to accept a list of job output dirs and scan each `{dir}/zip/` subfolder. `list_exports` command now collects unique output dirs from all active + persisted jobs.

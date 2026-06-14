@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use zip::write::FileOptions;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::sync::RwLock;
 
 use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
@@ -684,5 +684,51 @@ pub async fn get_session_info(
     Ok(SessionInfo {
         id: s.session_id.clone(),
         uptime_secs: s.uptime_secs(),
+    })
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowResizeResult {
+    pub clamped: bool,
+    pub applied_width: u32,
+    pub applied_height: u32,
+}
+
+#[tauri::command]
+pub async fn set_window_size(
+    width: u32,
+    height: u32,
+    app: AppHandle,
+) -> Result<WindowResizeResult, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("Main window not found")?;
+
+    let (clamped_w, clamped_h, clamped) = match window.current_monitor() {
+        Ok(Some(monitor)) => {
+            let sf = monitor.scale_factor();
+            let max_w = (monitor.size().width as f64 / sf) as u32;
+            let max_h = (monitor.size().height as f64 / sf) as u32;
+            let w = width.max(1280).min(max_w);
+            let h = height.max(900).min(max_h);
+            let c = w != width.max(1280) || h != height.max(900);
+            (w, h, c)
+        }
+        _ => (width.max(1280), height.max(900), false),
+    };
+
+    window
+        .set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+            clamped_w as f64,
+            clamped_h as f64,
+        )))
+        .map_err(|e| e.to_string())?;
+    window.center().map_err(|e| e.to_string())?;
+
+    Ok(WindowResizeResult {
+        clamped,
+        applied_width: clamped_w,
+        applied_height: clamped_h,
     })
 }

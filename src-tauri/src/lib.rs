@@ -28,6 +28,22 @@ pub fn run() {
             let persist_dir = app.path().app_data_dir()?.join("jobs");
             let app_state = Arc::new(state::AppState::init(persist_dir)?);
             app.manage(app_state);
+
+            use tauri_plugin_store::StoreExt;
+            if let Ok(store) = app.store("settings.json") {
+                if let Some(val) = store.get("settings") {
+                    if let Ok(s) = serde_json::from_value::<settings::config::AppSettings>(val) {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+                                s.window_width as f64,
+                                s.window_height as f64,
+                            )));
+                            let _ = win.center();
+                        }
+                    }
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -50,6 +66,7 @@ pub fn run() {
             commands::list_exports,
             commands::get_system_stats,
             commands::get_session_info,
+            commands::set_window_size,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

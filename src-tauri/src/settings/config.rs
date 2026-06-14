@@ -16,6 +16,8 @@ pub struct AppSettings {
     pub default_respect_robots_txt: bool,
     pub default_stay_within_domain: bool,
     pub default_ssrf_protection: bool,
+    pub window_width: u32,
+    pub window_height: u32,
 }
 
 impl Default for AppSettings {
@@ -36,6 +38,8 @@ impl Default for AppSettings {
             default_respect_robots_txt: true,
             default_stay_within_domain: true,
             default_ssrf_protection: true,
+            window_width: 1280,
+            window_height: 900,
         }
     }
 }

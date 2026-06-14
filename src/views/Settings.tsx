@@ -23,7 +23,17 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultRespectRobotsTxt: true,
   defaultStayWithinDomain: true,
   defaultSsrfProtection: true,
+  windowWidth: 1280,
+  windowHeight: 900,
 };
+
+const WINDOW_PRESETS = [
+  { w: 1280, h: 900, label: 'Compact' },
+  { w: 1600, h: 1000, label: 'Standard' },
+  { w: 1920, h: 1080, label: 'Full HD' },
+  { w: 2560, h: 1440, label: 'QHD' },
+  { w: 3840, h: 2160, label: 'UHD / 4K' },
+];
 
 export function SettingsView() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -31,6 +41,7 @@ export function SettingsView() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -80,6 +91,25 @@ export function SettingsView() {
     setSaved(false);
     setError('');
     setErrors({});
+    setNotice('');
+    invoke('set_window_size', { width: DEFAULT_SETTINGS.windowWidth, height: DEFAULT_SETTINGS.windowHeight }).catch(() => {});
+  };
+
+  const handleWindowSizeChange = async (value: string) => {
+    const [w, h] = value.split('x').map(Number);
+    setSettings({ ...settings, windowWidth: w, windowHeight: h });
+    try {
+      const result: { clamped: boolean; appliedWidth: number; appliedHeight: number } =
+        await invoke('set_window_size', { width: w, height: h });
+      if (result.clamped) {
+        setNotice(`Window size clamped to ${result.appliedWidth}\u00d7${result.appliedHeight} to fit your display.`);
+        setTimeout(() => setNotice(''), 5000);
+      } else {
+        setNotice('');
+      }
+    } catch (err) {
+      console.error('Failed to resize window', err);
+    }
   };
 
   if (loading) {
@@ -129,6 +159,13 @@ export function SettingsView() {
         </div>
       )}
 
+      {notice && (
+        <div className="mb-6 flex items-center text-yellow-400 text-sm bg-yellow-400/10 border border-yellow-400/20 rounded-md px-4 py-3">
+          <Warning weight="fill" size={16} className="mr-2" />
+          {notice}
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Output Settings */}
         <Section title="Output">
@@ -164,6 +201,29 @@ export function SettingsView() {
                 )}
               </div>
             </div>
+          </div>
+        </Section>
+
+        {/* Window Settings */}
+        <Section title="Window">
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+              Window Size
+            </label>
+            <select
+              value={`${settings.windowWidth}x${settings.windowHeight}`}
+              onChange={(e) => handleWindowSizeChange(e.target.value)}
+              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all appearance-none"
+            >
+              {WINDOW_PRESETS.map((p) => (
+                <option key={`${p.w}x${p.h}`} value={`${p.w}x${p.h}`}>
+                  {p.w} × {p.h} — {p.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-charcoal text-xs mt-1.5">
+              Applied immediately. Resizes and centers the window on your current display.
+            </p>
           </div>
         </Section>
 

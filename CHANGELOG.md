@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.2.4 (2026-06-14)
+
+### Added
+- `dirs` crate for cross-platform home directory resolution
+- `event_bus.register()` typed wrapper returning `(&Self, broadcast::Receiver)` with `Receiver::start()`
+
+### Changed
+- AppSettings default output dir to `~/.docurip`; `Orchestrator::new` auto-creates output directory via `std::fs::create_dir_all`
+- Dashboard stats fallback: when `job.output_dir` is empty, use AppSettings default output dir
+- Frontend event listener migrated from `@tauri-apps/api/event` `listen` to `window.__TAURI__.event.listen` for reliable synchronous cleanup
+- EventBus `emit` now calls synchronous `app.emit` for reliable event delivery
+- `useCrawlEvents` context simplified — removed `error`/`clearError` state; retains only `events` and `activeJobIds`
+
+### Fixed
+- History view polling: 3-second interval ensures job list stays in sync after navigation
+- New Crawl live monitor: replaced unreliable `crawl-event` diffing with direct `get_job` polling every 2s
+- Config object indentation in `start_crawl` invocation
+- Removed unused `useCrawlEvents` / error-handling dead code from `NewCrawl.tsx`
+- LiveConsole "Unknown event": unwrapped Tauri v2 `{ id, payload }` wrapper in `useCrawlEvents`
+- App.tsx tab-switch reset: removed dynamic `key={activeTab}` to prevent view unmount/remount on navigation
+
 ## v0.2.3 (2026-06-14)
 
 ### Added

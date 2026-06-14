@@ -9,6 +9,7 @@
 - **Dashboard error logging**: empty `catch` blocks in `Dashboard.tsx` now emit `console.warn` with context for debugging
 
 ### Fixed
+- **Startup crash**: `AppState::init()` called `Handle::current().block_on()` before Tauri starts its Tokio runtime, causing an immediate panic; reverted to synchronous `std::fs` for the one-time startup load
 - **prefillUrl re-trigger**: removed the `if (prev.url) return prev` guard in `NewCrawl.tsx` so quick-start URLs are always applied, even after the user has manually edited the URL field
 
 

@@ -1,0 +1,6 @@
+     Running BeforeDevCommand (`npm run dev`)
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching D:\.GitHub2\docurip\src-tauri for changes...
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.40s
+[1m[92m     Running[0m `target\debug\docurip.exe`
+[1m[91merror[0m: process didn't exit successfully: `target\debug\docurip.exe` (exit code: 0xffffffff)

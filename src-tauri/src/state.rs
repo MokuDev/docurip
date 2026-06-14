@@ -28,10 +28,21 @@ pub struct AppState {
 
 impl AppState {
     pub fn init(persist_dir: PathBuf) -> anyhow::Result<Self> {
-        let rt = tokio::runtime::Handle::current();
-        let all_jobs = rt.block_on(Self::load_all_jobs(&persist_dir))?;
+        let mut jobs = Vec::new();
+        if persist_dir.exists() {
+            for entry in std::fs::read_dir(&persist_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    let contents = std::fs::read_to_string(&path)?;
+                    if let Ok(job) = serde_json::from_str::<CrawlJob>(&contents) {
+                        jobs.push(job);
+                    }
+                }
+            }
+        }
         let persisted_jobs: HashMap<String, CrawlJob> =
-            all_jobs.into_iter().map(|job| (job.id.clone(), job)).collect();
+            jobs.into_iter().map(|job| (job.id.clone(), job)).collect();
 
         Ok(Self {
             active_jobs: RwLock::new(HashMap::new()),

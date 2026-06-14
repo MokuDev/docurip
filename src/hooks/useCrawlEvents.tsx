@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import type { CrawlEvent } from '../types';
 
 interface CrawlEventsState {
@@ -16,28 +17,27 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    try {
-      const unlistenFn = (window as any).__TAURI__?.event?.listen('crawl-event', (raw: any) => {
-        const event = raw?.payload ?? raw;
-        setState((prev) => {
-          const nextEvents = [...prev.events, event].slice(-500);
-          const nextActive = new Set(prev.activeJobIds);
-          if (event.type === 'jobStatusChanged') {
-            if (event.status === 'running' || event.status === 'queued') {
-              nextActive.add(event.jobId);
-            } else {
-              nextActive.delete(event.jobId);
-            }
-          } else {
+
+    listen<CrawlEvent>('crawl-event', (raw) => {
+      const event = raw.payload;
+      setState((prev) => {
+        const nextEvents = [...prev.events, event].slice(-500);
+        const nextActive = new Set(prev.activeJobIds);
+        if (event.type === 'jobStatusChanged') {
+          if (event.status === 'running' || event.status === 'queued') {
             nextActive.add(event.jobId);
+          } else {
+            nextActive.delete(event.jobId);
           }
-          return { ...prev, events: nextEvents, activeJobIds: nextActive };
-        });
+        } else {
+          nextActive.add(event.jobId);
+        }
+        return { ...prev, events: nextEvents, activeJobIds: nextActive };
       });
-      unlisten = typeof unlistenFn === 'function' ? unlistenFn : undefined;
-    } catch (err) {
-      console.warn('Tauri event listener not available (running in browser?):', err);
-    }
+    })
+      .then((fn) => { unlisten = fn; })
+      .catch((err) => { console.warn('Tauri event listener not available:', err); });
+
     return () => unlisten?.();
   }, []);
 

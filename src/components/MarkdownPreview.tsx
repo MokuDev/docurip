@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import DOMPurify from 'dompurify';
 
 interface MarkdownPreviewProps {
   content: string;
@@ -63,14 +64,24 @@ export function MarkdownPreview({ content, searchQuery }: MarkdownPreviewProps) 
       return `<p class="text-secondary leading-relaxed my-1">${line}</p>`;
     });
 
-    return processed.join('\n');
+    const raw = processed.join('\n');
+    return DOMPurify.sanitize(raw, {
+      ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'h4', 'strong', 'em', 'code', 'pre', 'a', 'ul', 'ol', 'li', 'blockquote', 'hr', 'div', 'mark'],
+      ALLOWED_ATTR: ['class', 'href', 'target', 'rel'],
+      ALLOWED_URI_REGEXP: /^https?:/i,
+    });
   }, [content]);
 
   const highlightedHtml = useMemo(() => {
     if (!searchQuery || searchQuery.length < 2) return html;
     const q = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`(${q})`, 'gi');
-    return html.replace(regex, '<mark class="bg-accentGreen/30 text-accentGreen rounded px-0.5">$1</mark>');
+    const highlighted = html.replace(regex, '<mark class="bg-accentGreen/30 text-accentGreen rounded px-0.5">$1</mark>');
+    return DOMPurify.sanitize(highlighted, {
+      ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'h4', 'strong', 'em', 'code', 'pre', 'a', 'ul', 'ol', 'li', 'blockquote', 'hr', 'div', 'mark'],
+      ALLOWED_ATTR: ['class', 'href', 'target', 'rel'],
+      ALLOWED_URI_REGEXP: /^https?:/i,
+    });
   }, [html, searchQuery]);
 
   return (

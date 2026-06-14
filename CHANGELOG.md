@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.2.5 (2026-06-14)
+
+### Security
+- **XSS prevention in MarkdownPreview**: added DOMPurify sanitization after Markdown-to-HTML rendering and after search-query highlighting; restricted allowed tags/attributes and blocked `javascript:` URIs in links
+- **CSP hardened**: removed `'unsafe-inline'` from `script-src`; set `withGlobalTauri: false` so the Content Security Policy now actually blocks injected inline scripts
+
+### Changed
+- `useCrawlEvents`: migrated from `window.__TAURI__.event.listen` back to typed `listen()` from `@tauri-apps/api/event` with proper async cleanup and TypeScript-safe event payloads
+
+### Fixed
+- **UTF-8 panic in search preview**: `extract_preview` now uses `char_safe_start`/`char_safe_end` helpers to find valid UTF-8 character boundaries before slicing, preventing panics on non-ASCII content (e.g. German umlauts, CJK characters)
+- **Panic-safe CSS selector**: replaced `unwrap()` on hardcoded `a[href]` selector in `DomParser` with `expect()` carrying an explanatory message
+- **ZIP export path error**: `export_job_zip` now propagates an explicit error when `output_dir` has no parent directory instead of silently falling back via `unwrap_or`
+- **Silent polling failure in New Crawl**: `get_job` polling now tracks consecutive errors via a ref; after 3 consecutive failures the interval is cleared and the job status is set to `failed` so the UI reflects the broken state instead of freezing silently
+- **Invalid exclude patterns ignored silently**: `validate_crawl_input` now validates each exclude pattern before the crawl starts and returns an actionable error if any pattern is malformed; `Orchestrator::new` propagates the error via `?` instead of discarding it with `.ok()`
+
 ## v0.2.4 (2026-06-14)
 
 ### Added

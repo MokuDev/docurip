@@ -31,6 +31,12 @@ fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
     if config.headless_strategy.is_empty() {
         return Err("headless_strategy must not be empty".to_string());
     }
+    for pattern in &config.exclude_patterns {
+        if !pattern.is_empty() {
+            regex::Regex::new(pattern)
+                .map_err(|e| format!("Invalid exclude pattern '{}': {}", pattern, e))?;
+        }
+    }
     Ok(())
 }
 
@@ -474,11 +480,23 @@ pub struct SearchMatch {
     pub relevance: u32,
 }
 
+fn char_safe_start(s: &str, byte_pos: usize) -> usize {
+    let mut p = byte_pos.min(s.len());
+    while p > 0 && !s.is_char_boundary(p) { p -= 1; }
+    p
+}
+
+fn char_safe_end(s: &str, byte_pos: usize) -> usize {
+    let mut p = byte_pos.min(s.len());
+    while p < s.len() && !s.is_char_boundary(p) { p += 1; }
+    p
+}
+
 fn extract_preview(content: &str, query: &str) -> String {
     let lower = content.to_lowercase();
     if let Some(pos) = lower.find(&query.to_lowercase()) {
-        let start = pos.saturating_sub(80);
-        let end = (pos + query.len() + 120).min(content.len());
+        let start = char_safe_start(content, pos.saturating_sub(80));
+        let end = char_safe_end(content, pos + query.len() + 120);
         let mut preview = content[start..end].to_string();
         if start > 0 { preview.insert_str(0, "…"); }
         if end < content.len() { preview.push('…'); }
@@ -536,9 +554,9 @@ pub async fn export_job_zip(
         return Err("Output directory does not exist".into());
     }
 
-    let zip_path = output_dir.parent()
-        .unwrap_or(&output_dir)
-        .join(format!("{}-export.zip", job_id));
+    let zip_dir = output_dir.parent()
+        .ok_or_else(|| "Output directory has no parent: cannot place zip file".to_string())?;
+    let zip_path = zip_dir.join(format!("{}-export.zip", job_id));
 
     let file = File::create(&zip_path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);

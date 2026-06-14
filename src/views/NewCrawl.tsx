@@ -32,6 +32,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   const [isStarting, setIsStarting] = useState(false);
   const [urlError, setUrlError] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
+  const consecutiveErrors = useRef(0);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -50,11 +51,20 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
 
   useEffect(() => {
     if (!activeJob) return;
+    consecutiveErrors.current = 0;
     const id = setInterval(async () => {
       try {
         const job: CrawlJob = await invoke('get_job', { jobId: activeJob.id });
+        consecutiveErrors.current = 0;
         setActiveJob(job);
-      } catch {}
+      } catch (err) {
+        consecutiveErrors.current++;
+        console.warn('[NewCrawl] get_job polling failed:', err);
+        if (consecutiveErrors.current >= 3) {
+          clearInterval(id);
+          setActiveJob(prev => prev ? { ...prev, status: 'failed' } : prev);
+        }
+      }
     }, 2000);
     return () => clearInterval(id);
   }, [activeJob?.id]);

@@ -3,9 +3,15 @@
 ## v0.3.2 (2026-06-14)
 
 ### Added
-- **Auto-organized output folders**: crawls now create `{domain}/{YYYY-MM-DD}-{job_id}/` subfolders under the global output directory by default, keeping crawl results organized without manual intervention
-- **Native folder pickers**: NewCrawl and Settings views use native OS directory pickers instead of text inputs for output directory selection
-- **ExportModal pre-fill**: export destination now auto-fills from the job's output directory, eliminating the manual folder picker step for most exports
+- **Auto-organized output folders**: every crawl now creates three subfolders under the global output directory: `{outputDir}/{targetName}/main/` for crawled content, `{outputDir}/{targetName}/zip/` for exported ZIPs, and `{outputDir}/{targetName}/formats/` for format exports (MD files, PDF files, merged variants). Folders are created automatically when a crawl starts — no manual setup required.
+- **targetName extraction**: the subfolder name is derived from the crawl URL's domain (e.g. `docs.example.com`), keeping results organized by site.
+- **Simplified ExportModal**: export destination is now fully automatic — the format picker is all you need. ZIP exports land in the job's `zip/` subfolder; all other formats (Markdown files, PDF files, merged MD, merged PDF) land in the `formats/` subfolder. No more manual folder picker step.
+- **"Open folder" opens main/ subfolder**: History and ResultBrowser "Open output folder" buttons now open the `main/` subfolder directly, showing the crawled content instead of the parent directory.
+
+### Changed
+- **Output directory setting moved to Settings only**: the per-crawl output directory picker in New Crawl has been removed. The output directory is configured once in Settings and applies to all crawls, reducing configuration friction and ensuring a consistent folder structure.
+- **Export commands use subfolder structure**: `export_job` and `export_job_zip` now read crawled content from `{outputDir}/main/` and write ZIPs to `{outputDir}/zip/`. `export_job_v2` auto-derives the destination to `{outputDir}/formats/` when no explicit destination is provided, with the `destination` parameter becoming optional.
+- **`resolve_output_dir` simplified**: generates `{baseDir}/{domain}` (no date/id suffix), matching the cleaner subfolder structure.
 
 
 ## v0.3.1 (2026-06-14)

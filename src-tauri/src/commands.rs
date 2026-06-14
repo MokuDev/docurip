@@ -408,12 +408,15 @@ pub async fn export_job(
     };
 
     let output_dir = std::path::PathBuf::from(&job.config.output_dir);
-    if !output_dir.exists() {
+    let main_dir = output_dir.join("main");
+    if !main_dir.exists() {
         return Err("Output directory not found".to_string());
     }
 
-    let zip_path = output_dir.with_extension("zip");
-    crate::export::zip_directory(&output_dir, &zip_path)
+    let zip_dir = output_dir.join("zip");
+    std::fs::create_dir_all(&zip_dir).map_err(|e| e.to_string())?;
+    let zip_path = zip_dir.join(format!("{}.zip", job_id));
+    crate::export::zip_directory(&main_dir, &zip_path)
         .map_err(|e| e.to_string())?;
 
     Ok(zip_path.to_string_lossy().to_string())
@@ -423,7 +426,7 @@ pub async fn export_job(
 pub async fn export_job_v2(
     job_id: String,
     format: crate::export::ExportFormat,
-    destination: String,
+    destination: Option<String>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<String, String> {
     let job = {
@@ -437,29 +440,34 @@ pub async fn export_job_v2(
     };
 
     let output_dir = std::path::PathBuf::from(&job.config.output_dir);
-    if !output_dir.exists() {
+    let main_dir = output_dir.join("main");
+    if !main_dir.exists() {
         return Err("Output directory not found for job".to_string());
     }
 
-    let dest = std::path::PathBuf::from(&destination);
+    let dest = match destination {
+        Some(d) if !d.is_empty() => std::path::PathBuf::from(d),
+        _ => output_dir.join("formats"),
+    };
+    std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
 
     match format {
         crate::export::ExportFormat::MdFiles => {
-            crate::export::copy_md_files(&output_dir, &dest)
+            crate::export::copy_md_files(&main_dir, &dest)
                 .map_err(|e| format!("Export failed: {}", e))?;
         }
         crate::export::ExportFormat::PdfFiles => {
-            crate::export::export_pdf_files(&output_dir, &dest)
+            crate::export::export_pdf_files(&main_dir, &dest)
                 .map_err(|e| format!("PDF export failed: {}", e))?;
         }
         crate::export::ExportFormat::MergedMd => {
             let out_file = dest.join(format!("{}-merged.md", job_id));
-            crate::export::merge_md_files(&output_dir, &out_file)
+            crate::export::merge_md_files(&main_dir, &out_file)
                 .map_err(|e| format!("Export failed: {}", e))?;
         }
         crate::export::ExportFormat::MergedPdf => {
             let out_file = dest.join(format!("{}-merged.pdf", job_id));
-            crate::export::export_merged_pdf(&output_dir, &out_file)
+            crate::export::export_merged_pdf(&main_dir, &out_file)
                 .map_err(|e| format!("PDF export failed: {}", e))?;
         }
     }
@@ -554,9 +562,14 @@ pub async fn export_job_zip(
         return Err("Output directory does not exist".into());
     }
 
-    let zip_dir = output_dir.parent()
-        .ok_or_else(|| "Output directory has no parent: cannot place zip file".to_string())?;
-    let zip_path = zip_dir.join(format!("{}-export.zip", job_id));
+    let main_dir = output_dir.join("main");
+    if !main_dir.exists() {
+        return Err("Output directory does not contain main/ subfolder".into());
+    }
+
+    let zip_dir = output_dir.join("zip");
+    std::fs::create_dir_all(&zip_dir).map_err(|e| e.to_string())?;
+    let zip_path = zip_dir.join(format!("{}.zip", job_id));
 
     let file = File::create(&zip_path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
@@ -589,7 +602,7 @@ pub async fn export_job_zip(
         Ok(())
     }
 
-    add_dir_to_zip(&mut zip, &output_dir, &output_dir, options)
+    add_dir_to_zip(&mut zip, &main_dir, &main_dir, options)
         .map_err(|e| e.to_string())?;
 
     zip.finish().map_err(|e| e.to_string())?;

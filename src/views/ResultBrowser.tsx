@@ -56,7 +56,8 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
 
   const handleOpenFolder = useCallback(async () => {
     try {
-      await invoke('open_output_folder', { path: job.config.outputDir });
+      const mainDir = job.config.outputDir ? `${job.config.outputDir}/main` : job.config.outputDir;
+      await invoke('open_output_folder', { path: mainDir });
     } catch (err) {
       console.error('Open folder failed', err);
     }

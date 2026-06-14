@@ -338,7 +338,7 @@ Full configuration form:
 - **Max Depth** (1-10)
 - **Page Limit** (1-1000)
 - **Stay Within Domain** toggle
-- **Output Directory** native folder picker (empty = auto-organized `{domain}/{date}-{id}` subfolder)
+- **Output Directory** is configured globally in Settings (per-crawl picker removed); crawls auto-create `{outputDir}/{domain}/main/`, `zip/`, and `formats/` subfolders
 - **Concurrency** slider
 - **Concurrency** slider
 - **Live Monitor** panel with real-time colored log stream
@@ -391,8 +391,10 @@ Full configuration form:
 
 **Backend Command:**
 ```
-export_job_v2(job_id: String, format: ExportFormat, destination: String) → Result<String, String>
+export_job_v2(job_id: String, format: ExportFormat, destination: Option<String>) → Result<String, String>
 ```
+
+`destination` is optional — when `None` or empty, exports auto-save to `{outputDir}/formats/`.
 
 **ExportFormat Enum:**
 ```rust
@@ -407,10 +409,10 @@ pub enum ExportFormat {
 ```
 
 **Strategy:**
-- `MdFiles` → walks output_dir, copies all `.md` to destination
-- `PdfFiles` → for each `.md`: converts MD→HTML via `pulldown-cmark`, opens headless Chrome, prints to PDF
-- `MergedMd` → reads all `.md` in sorted order, concatenates with `\n\n---\n\n`
-- `MergedPdf` → builds one HTML document from all pages, headless Chrome → single PDF
+- `MdFiles` → walks `{outputDir}/main/`, copies all `.md` to `{outputDir}/formats/`
+- `PdfFiles` → for each `.md` in `main/`: converts MD→HTML via `pulldown-cmark`, opens headless Chrome, prints to PDF in `formats/`
+- `MergedMd` → reads all `.md` in `main/` sorted, concatenates with `\n\n---\n\n`, writes to `formats/`
+- `MergedPdf` → builds one HTML document from all pages in `main/`, headless Chrome → single PDF in `formats/`
 
 **PDF Dependencies:**
 - Headless Chrome (feature-gated: `#[cfg(feature = "headless")]`)
@@ -418,9 +420,9 @@ pub enum ExportFormat {
 - `check_headless_support` command for runtime detection in frontend
 
 **Frontend:**
-- `ExportModal` component with format radio group, destination picker, progress state
+- `ExportModal` component with format radio group, auto-destination (no manual picker), progress state
 - PDF options grayed out + tooltip when headless unavailable
-- ZIP export kept for backward compatibility
+- ZIP export sends to `{outputDir}/zip/`; format exports to `{outputDir}/formats/`
 
 ### Error Cases
 

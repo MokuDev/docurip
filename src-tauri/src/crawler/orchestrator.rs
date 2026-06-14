@@ -19,14 +19,12 @@ use crate::converter::html_to_md::HtmlToMarkdown;
 use crate::settings::config::{AppSettings, CrawlConfig};
 use crate::writer::fs::FsWriter;
 
-pub fn resolve_output_dir(base_dir: &str, url: &str, job_id: &str) -> String {
+pub fn resolve_output_dir(base_dir: &str, url: &str) -> String {
     let domain = Url::parse(url)
         .ok()
         .and_then(|u| u.host_str().map(|h| h.to_string()))
         .unwrap_or_else(|| "unknown".to_string());
-    let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
-    let id_short = &job_id[..job_id.len().min(8)];
-    format!("{}/{}/{}-{}", base_dir, domain, date, id_short)
+    format!("{}/{}", base_dir, domain)
 }
 
 #[derive(Clone)]
@@ -108,7 +106,7 @@ impl Orchestrator {
         settings: AppSettings,
         handle: CrawlHandle,
         headless_fetcher: Option<HeadlessFetcher>,
-        job_id: &str,
+        _job_id: &str,
     ) -> anyhow::Result<Self> {
         if !is_valid_url(start_url) {
             anyhow::bail!("Invalid or unsupported URL scheme: {}", start_url);
@@ -118,16 +116,21 @@ impl Orchestrator {
         let fetcher = HttpFetcher::new(timeout_secs);
         let parser = DomParser::new();
         let converter = HtmlToMarkdown::new();
-        let writer_base = if config.output_dir.is_empty() {
-            resolve_output_dir(&settings.output_dir, start_url, job_id)
+        let base_output = if config.output_dir.is_empty() {
+            resolve_output_dir(&settings.output_dir, start_url)
         } else {
             config.output_dir.clone()
         };
-        if let Err(e) = std::fs::create_dir_all(&writer_base) {
-            anyhow::bail!("Failed to create output directory {}: {}", writer_base, e);
+        let main_dir = format!("{}/main", base_output);
+        let zip_dir = format!("{}/zip", base_output);
+        let formats_dir = format!("{}/formats", base_output);
+        for dir in [&main_dir, &zip_dir, &formats_dir] {
+            if let Err(e) = std::fs::create_dir_all(dir) {
+                anyhow::bail!("Failed to create output directory {}: {}", dir, e);
+            }
         }
-        let writer = FsWriter::new(&writer_base);
-        let resolved_config = CrawlConfig { output_dir: writer_base.clone(), ..config };
+        let writer = FsWriter::new(&main_dir);
+        let resolved_config = CrawlConfig { output_dir: base_output.clone(), ..config };
         let exclude_set = if resolved_config.exclude_patterns.is_empty() {
             None
         } else {

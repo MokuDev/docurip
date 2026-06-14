@@ -7,8 +7,15 @@
 - **targetName extraction**: the subfolder name is derived from the crawl URL's domain (e.g. `docs.example.com`), keeping results organized by site.
 - **Simplified ExportModal**: export destination is now fully automatic — the format picker is all you need. ZIP exports land in the job's `zip/` subfolder; all other formats (Markdown files, PDF files, merged MD, merged PDF) land in the `formats/` subfolder. No more manual folder picker step.
 - **"Open folder" opens main/ subfolder**: History and ResultBrowser "Open output folder" buttons now open the `main/` subfolder directly, showing the crawled content instead of the parent directory.
+- **Live dashboard stats**: dashboard stats (pages saved, total size, crawl velocity, fail rate) now update in real-time during active crawls, not just after completion.
+- **Animated stat counters**: stat cards use a smooth count-up animation with ease-out cubic interpolation when values change.
 
 ### Changed
+- **Dashboard stats cache removed**: the 30-second cache TTL that served stale zeros during active crawls has been eliminated. Stats are computed fresh on every 3-second poll.
+- **`collect_all_jobs` now async**: uses `.read().await` instead of `try_read()` on both `active_jobs` and `persisted_jobs` RwLocks, so active jobs are no longer silently skipped when the orchestrator holds a write lock.
+- **Crawl velocity includes active jobs**: velocity is now computed from wall-clock time (`Utc::now() - start_time`) for running jobs, falling back to `end_time - start_time` for completed jobs.
+- **Total size includes active job output**: `total_size_bytes` now sums output directories for all jobs (active + completed), not just completed ones.
+- **`compute_velocity` extracted**: velocity logic moved to a dedicated function that handles both running and completed jobs.
 - **Output directory setting moved to Settings only**: the per-crawl output directory picker in New Crawl has been removed. The output directory is configured once in Settings and applies to all crawls, reducing configuration friction and ensuring a consistent folder structure.
 - **Export commands use subfolder structure**: `export_job` and `export_job_zip` now read crawled content from `{outputDir}/main/` and write ZIPs to `{outputDir}/zip/`. `export_job_v2` auto-derives the destination to `{outputDir}/formats/` when no explicit destination is provided, with the `destination` parameter becoming optional.
 - **`resolve_output_dir` simplified**: generates `{baseDir}/{domain}` (no date/id suffix), matching the cleaner subfolder structure.

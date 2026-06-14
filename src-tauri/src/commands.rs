@@ -1,7 +1,7 @@
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use zip::write::FileOptions;
 use serde::{Deserialize, Serialize};
@@ -188,15 +188,8 @@ pub struct DashboardStats {
     pub fail_rate: f32,
 }
 
-const STATS_CACHE_TTL: Duration = Duration::from_secs(30);
 const SIZE_SCAN_FILE_CAP: usize = 1000;
 const SIZE_SCAN_TIME_CAP: Duration = Duration::from_secs(5);
-
-static STATS_CACHE: OnceLock<Mutex<Option<(Instant, DashboardStats)>>> = OnceLock::new();
-
-fn stats_cache() -> &'static Mutex<Option<(Instant, DashboardStats)>> {
-    STATS_CACHE.get_or_init(|| Mutex::new(None))
-}
 
 fn dir_size_capped(path: &Path) -> u64 {
     let start = Instant::now();
@@ -238,20 +231,21 @@ fn parse_rfc3339(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
-fn collect_all_jobs(state: &AppState) -> Vec<CrawlJob> {
+async fn collect_all_jobs(state: &AppState) -> Vec<CrawlJob> {
     let mut result = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
-    if let Ok(active) = state.active_jobs.try_read() {
+    {
+        let active = state.active_jobs.read().await;
         for (_, handle) in active.iter() {
-            if let Ok(job) = handle.job.try_read() {
-                seen.insert(job.id.clone());
-                result.push(job.clone());
-            }
+            let job = handle.job.read().await;
+            seen.insert(job.id.clone());
+            result.push(job.clone());
         }
     }
 
-    if let Ok(persisted) = state.persisted_jobs.try_read() {
+    {
+        let persisted = state.persisted_jobs.read().await;
         for (_, job) in persisted.iter() {
             if !seen.contains(&job.id) {
                 result.push(job.clone());
@@ -262,8 +256,22 @@ fn collect_all_jobs(state: &AppState) -> Vec<CrawlJob> {
     result
 }
 
-fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
-    let jobs = collect_all_jobs(state);
+fn output_dir_for_job(job: &CrawlJob) -> Option<std::path::PathBuf> {
+    let out = Path::new(&job.config.output_dir);
+    if out.as_os_str().is_empty() {
+        let settings = crate::settings::config::AppSettings::default();
+        let default_out = PathBuf::from(&settings.output_dir);
+        if default_out.exists() {
+            return Some(default_out);
+        }
+    } else if out.exists() {
+        return Some(out.to_path_buf());
+    }
+    None
+}
+
+async fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
+    let jobs = collect_all_jobs(state).await;
     let total = jobs.len();
     let failed = jobs.iter().filter(|j| j.status == JobStatus::Failed).count();
 
@@ -271,53 +279,45 @@ fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
 
     let mut total_size_bytes: u64 = 0;
     let mut latest_completed: Option<&CrawlJob> = None;
+    let mut latest_running: Option<&CrawlJob> = None;
+
     for job in &jobs {
-        if job.status != JobStatus::Completed {
-            continue;
+        // Include output size for ALL jobs (active + completed)
+        if let Some(out) = output_dir_for_job(job) {
+            total_size_bytes = total_size_bytes.saturating_add(dir_size_capped(&out));
         }
-        let out = Path::new(&job.config.output_dir);
-        if out.as_os_str().is_empty() {
-            let settings = crate::settings::config::AppSettings::default();
-            let default_out = Path::new(&settings.output_dir);
-            if default_out.exists() {
-                total_size_bytes = total_size_bytes.saturating_add(dir_size_capped(default_out));
+
+        // Track latest completed job for velocity fallback
+        if job.status == JobStatus::Completed {
+            let is_newer = match &latest_completed {
+                Some(prev) => match (&prev.end_time, &job.end_time) {
+                    (Some(p), Some(j)) => j.as_str() > p.as_str(),
+                    _ => false,
+                },
+                None => true,
+            };
+            if is_newer {
+                latest_completed = Some(job);
             }
-        } else if out.exists() {
-            total_size_bytes = total_size_bytes.saturating_add(dir_size_capped(out));
         }
-        let is_newer = match &latest_completed {
-            Some(prev) => match (&prev.end_time, &job.end_time) {
-                (Some(p), Some(j)) => j.as_str() > p.as_str(),
-                _ => false,
-            },
-            None => true,
-        };
-        if is_newer {
-            latest_completed = Some(job);
+
+        // Track latest running job for live velocity
+        if job.status == JobStatus::Running {
+            let is_newer = match &latest_running {
+                Some(prev) => match (&prev.start_time, &job.start_time) {
+                    (Some(p), Some(j)) => j.as_str() > p.as_str(),
+                    _ => false,
+                },
+                None => true,
+            };
+            if is_newer {
+                latest_running = Some(job);
+            }
         }
     }
 
-    let crawl_velocity: f32 = match latest_completed {
-        Some(j) => {
-            let pages = j.results.len() as f32;
-            if pages <= 0.0 {
-                0.0
-            } else {
-                let (start, end) = match (&j.start_time, &j.end_time) {
-                    (Some(s), Some(e)) => (parse_rfc3339(s), parse_rfc3339(e)),
-                    _ => (None, None),
-                };
-                match (start, end) {
-                    (Some(s), Some(e)) => {
-                        let secs = (e - s).num_seconds().max(1) as f32;
-                        pages / (secs / 60.0)
-                    }
-                    _ => 0.0,
-                }
-            }
-        }
-        None => 0.0,
-    };
+    // Prefer active job for velocity, fall back to latest completed
+    let crawl_velocity = compute_velocity(latest_running.or(latest_completed));
 
     let fail_rate: f32 = if total == 0 {
         0.0
@@ -333,19 +333,41 @@ fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
     }
 }
 
-#[tauri::command]
-pub async fn get_dashboard_stats(state: State<'_, Arc<AppState>>) -> Result<DashboardStats, String> {
-    if let Some((ts, cached)) = stats_cache().lock().map(|g| g.clone()).unwrap_or(None) {
-        if ts.elapsed() < STATS_CACHE_TTL {
-            return Ok(cached);
-        }
+fn compute_velocity(job: Option<&CrawlJob>) -> f32 {
+    let Some(j) = job else { return 0.0 };
+    let pages = j.results.len() as f32;
+    if pages <= 0.0 {
+        return 0.0;
     }
 
-    let stats = compute_dashboard_stats(state.inner().as_ref());
-    if let Ok(mut g) = stats_cache().lock() {
-        *g = Some((Instant::now(), stats.clone()));
-    }
-    Ok(stats)
+    let start = match &j.start_time {
+        Some(s) => match parse_rfc3339(s) {
+            Some(dt) => dt,
+            None => return 0.0,
+        },
+        None => return 0.0,
+    };
+
+    let elapsed = match (&j.status, &j.end_time) {
+        (JobStatus::Running, _) => {
+            let now = chrono::Utc::now();
+            (now - start).num_seconds().max(1) as f32
+        }
+        (_, Some(e)) => {
+            match parse_rfc3339(e) {
+                Some(end) => (end - start).num_seconds().max(1) as f32,
+                None => return 0.0,
+            }
+        }
+        _ => return 0.0,
+    };
+
+    pages / (elapsed / 60.0)
+}
+
+#[tauri::command]
+pub async fn get_dashboard_stats(state: State<'_, Arc<AppState>>) -> Result<DashboardStats, String> {
+    Ok(compute_dashboard_stats(state.inner().as_ref()).await)
 }
 
 #[tauri::command]

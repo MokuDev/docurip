@@ -10,6 +10,7 @@ import {
   Archive,
 } from '@phosphor-icons/react';
 import { StatusIcon, StatusBadge } from '../components/StatusBadge';
+import { AnimatedCounter } from '../components/AnimatedCounter';
 import type { CrawlJob, DashboardStats, RecentExport } from '../types';
 
 export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) => void }) {
@@ -89,22 +90,22 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
         <StatCard
           icon={<FileText size={20} className="text-cyberBlue" />}
           label="Pages Saved"
-          value={stats.pagesSaved}
+          value={<AnimatedCounter value={stats.pagesSaved} />}
         />
         <StatCard
           icon={<HardDrive size={20} className="text-accentGreen" />}
           label="Total Size"
-          value={formatBytes(stats.totalSizeBytes)}
+          value={<AnimatedCounter value={stats.totalSizeBytes} formatValue={formatBytes} />}
         />
         <StatCard
           icon={<Lightning size={20} className="text-amber" />}
           label="Crawl Velocity"
-          value={`${(stats.crawlVelocity ?? 0).toFixed(1)} pages/min`}
+          value={<AnimatedCounter value={stats.crawlVelocity} formatValue={(v) => `${v.toFixed(1)} pages/min`} />}
         />
         <StatCard
           icon={<Warning size={20} className="text-crimson" />}
           label="Fail Rate"
-          value={`${(stats.failRate ?? 0).toFixed(1)}%`}
+          value={<AnimatedCounter value={stats.failRate} formatValue={(v) => `${v.toFixed(1)}%`} />}
         />
       </div>
 
@@ -224,7 +225,7 @@ const StatCard = ({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string | number;
+  value: React.ReactNode;
 }) => (
   <div className="bg-surface/30 border border-abyssal/50 rounded-lg p-4">
     <div className="flex items-center justify-between mb-2">

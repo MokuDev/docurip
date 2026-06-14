@@ -10,12 +10,13 @@ import type { ExportFormat } from '../types';
 
 interface ExportModalProps {
   jobId: string;
+  defaultDestination?: string;
   onClose: () => void;
 }
 
-export function ExportModal({ jobId, onClose }: ExportModalProps) {
+export function ExportModal({ jobId, defaultDestination, onClose }: ExportModalProps) {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('md_files');
-  const [destination, setDestination] = useState('');
+  const [destination, setDestination] = useState(defaultDestination || '');
   const [headlessSupported, setHeadlessSupported] = useState(false);
   const [exporting, setExporting] = useState(false);
   const { pushToast } = useToasts();

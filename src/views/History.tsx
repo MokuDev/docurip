@@ -26,6 +26,7 @@ export function HistoryView() {
   const [selectedJob, setSelectedJob] = useState<CrawlJob | null>(null);
   const [browserJob, setBrowserJob] = useState<CrawlJob | null>(null);
   const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const [exportOutputDir, setExportOutputDir] = useState('');
 
   useEffect(() => {
     loadJobs(true);
@@ -54,8 +55,9 @@ export function HistoryView() {
     }
   };
 
-  const handleExport = (jobId: string) => {
-    setExportJobId(jobId);
+  const handleExport = (job: CrawlJob) => {
+    setExportJobId(job.id);
+    setExportOutputDir(job.config.outputDir || '');
   };
 
   const handleOpenFolder = async (outputDir: string) => {
@@ -187,7 +189,7 @@ export function HistoryView() {
                     </button>
                     {job.status === 'completed' && (
                       <button
-                        onClick={() => handleExport(job.id)}
+                        onClick={() => handleExport(job)}
                         className="p-1.5 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"
                         title="Export"
                       >
@@ -370,6 +372,7 @@ export function HistoryView() {
       {exportJobId && (
         <ExportModal
           jobId={exportJobId}
+          defaultDestination={exportOutputDir}
           onClose={() => setExportJobId(null)}
         />
       )}

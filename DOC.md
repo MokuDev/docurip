@@ -338,7 +338,7 @@ Full configuration form:
 - **Max Depth** (1-10)
 - **Page Limit** (1-1000)
 - **Stay Within Domain** toggle
-- **Output Directory** picker
+- **Output Directory** native folder picker (empty = auto-organized `{domain}/{date}-{id}` subfolder)
 - **Concurrency** slider
 - **Concurrency** slider
 - **Live Monitor** panel with real-time colored log stream
@@ -354,7 +354,7 @@ Full configuration form:
 
 ### Settings (`views/Settings.tsx`)
 
-- **Output Directory** (with folder picker)
+- **Output Directory** native folder picker (default: `~/.docurip`)
 - **Concurrency** (1-20)
 - **Request Delay** (0-30000 ms)
 - **Timeout** (1000-120000 ms)

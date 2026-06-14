@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
-  Folder,
+  FolderOpen,
   FloppyDisk,
   ArrowClockwise,
   CheckCircle,
@@ -136,20 +137,31 @@ export function SettingsView() {
               <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
                 Default Output Directory
               </label>
-              <div className="relative">
-                <Folder
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-charcoal"
-                />
-                <input
-                  type="text"
-                  value={settings.outputDir}
-                  onChange={(e) =>
-                    setSettings({ ...settings, outputDir: e.target.value })
-                  }
-                  placeholder="e.g. C:\\Users\\You\\Documents\\Docurip"
-                  className="w-full bg-surface/50 border border-abyssal rounded-md pl-9 pr-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 transition-all"
-                />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const selected = await open({ directory: true, multiple: false, title: 'Select Default Output Directory' });
+                      if (selected) setSettings({ ...settings, outputDir: selected });
+                    } catch (err) {
+                      console.error('Failed to open directory picker', err);
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm hover:border-accentGreen/50 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all flex-1"
+                >
+                  <FolderOpen className="w-4 h-4 text-charcoal" />
+                  <span>{settings.outputDir || 'Default (~/.docurip)'}</span>
+                </button>
+                {settings.outputDir && (
+                  <button
+                    type="button"
+                    onClick={() => setSettings({ ...settings, outputDir: '' })}
+                    className="text-charcoal hover:text-ghost text-xs transition-colors"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
             </div>
           </div>

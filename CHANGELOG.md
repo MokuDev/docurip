@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.2 (2026-06-14)
+
+### Added
+- **Auto-organized output folders**: crawls now create `{domain}/{YYYY-MM-DD}-{job_id}/` subfolders under the global output directory by default, keeping crawl results organized without manual intervention
+- **Native folder pickers**: NewCrawl and Settings views use native OS directory pickers instead of text inputs for output directory selection
+- **ExportModal pre-fill**: export destination now auto-fills from the job's output directory, eliminating the manual folder picker step for most exports
+
+
 ## v0.3.1 (2026-06-14)
 
 ### Added

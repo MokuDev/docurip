@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
   Play,
   Stop,
@@ -10,6 +11,7 @@ import {
   CheckCircle,
   SpinnerGap,
   Pause,
+  FolderOpen,
 } from '@phosphor-icons/react';
 import type { CrawlConfig, CrawlJob } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -188,14 +190,33 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
             <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
               Output Directory
             </label>
-            <input
-              type="text"
-              value={config.outputDir}
-              onChange={(e) => setConfig({ ...config, outputDir: e.target.value })}
-              placeholder="Leave empty for default"
-              disabled={!!activeJob}
-              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all"
-            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const selected = await open({ directory: true, multiple: false, title: 'Select Output Directory' });
+                    if (selected) setConfig({ ...config, outputDir: selected });
+                  } catch (err) {
+                    console.error('Failed to open directory picker', err);
+                  }
+                }}
+                disabled={!!activeJob}
+                className="flex items-center gap-2 bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm hover:border-accentGreen/50 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FolderOpen className="w-4 h-4 text-charcoal" />
+                <span>{config.outputDir || 'Auto-organized (domain/date-id)'}</span>
+              </button>
+              {config.outputDir && !activeJob && (
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, outputDir: '' })}
+                  className="text-charcoal hover:text-ghost text-xs transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Limits */}

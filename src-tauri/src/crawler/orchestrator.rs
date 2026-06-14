@@ -19,6 +19,16 @@ use crate::converter::html_to_md::HtmlToMarkdown;
 use crate::settings::config::{AppSettings, CrawlConfig};
 use crate::writer::fs::FsWriter;
 
+pub fn resolve_output_dir(base_dir: &str, url: &str, job_id: &str) -> String {
+    let domain = Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.to_string()))
+        .unwrap_or_else(|| "unknown".to_string());
+    let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let id_short = &job_id[..job_id.len().min(8)];
+    format!("{}/{}/{}-{}", base_dir, domain, date, id_short)
+}
+
 #[derive(Clone)]
 pub struct CrawlHandle {
     pub job: Arc<RwLock<CrawlJob>>,
@@ -98,6 +108,7 @@ impl Orchestrator {
         settings: AppSettings,
         handle: CrawlHandle,
         headless_fetcher: Option<HeadlessFetcher>,
+        job_id: &str,
     ) -> anyhow::Result<Self> {
         if !is_valid_url(start_url) {
             anyhow::bail!("Invalid or unsupported URL scheme: {}", start_url);
@@ -108,7 +119,7 @@ impl Orchestrator {
         let parser = DomParser::new();
         let converter = HtmlToMarkdown::new();
         let writer_base = if config.output_dir.is_empty() {
-            settings.output_dir.clone()
+            resolve_output_dir(&settings.output_dir, start_url, job_id)
         } else {
             config.output_dir.clone()
         };
@@ -116,11 +127,7 @@ impl Orchestrator {
             anyhow::bail!("Failed to create output directory {}: {}", writer_base, e);
         }
         let writer = FsWriter::new(&writer_base);
-        let resolved_config = if config.output_dir.is_empty() {
-            CrawlConfig { output_dir: settings.output_dir.clone(), ..config }
-        } else {
-            config
-        };
+        let resolved_config = CrawlConfig { output_dir: writer_base.clone(), ..config };
         let exclude_set = if resolved_config.exclude_patterns.is_empty() {
             None
         } else {
@@ -178,7 +185,7 @@ impl Orchestrator {
                 None
             };
 
-            match Self::new(&start_url, config, settings, handle.clone(), headless) {
+            match Self::new(&start_url, config, settings, handle.clone(), headless, &job_id) {
                 Ok(mut orch) => {
                     orch.app_state = app_state;
                     let result = orch.run(&start_url).await;
@@ -246,6 +253,7 @@ impl Orchestrator {
             let mut job = self.handle.job.write().await;
             job.status = JobStatus::Running;
             job.start_time = Some(chrono::Utc::now().to_rfc3339());
+            job.config.output_dir = self.config.output_dir.clone();
             let job_id = job.id.clone();
             drop(job);
             self.handle.event_bus.emit(CrawlEvent::JobStatusChanged {

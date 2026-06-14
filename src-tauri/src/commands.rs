@@ -270,7 +270,13 @@ fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
             continue;
         }
         let out = Path::new(&job.config.output_dir);
-        if out.exists() {
+        if out.as_os_str().is_empty() {
+            let settings = crate::settings::config::AppSettings::default();
+            let default_out = Path::new(&settings.output_dir);
+            if default_out.exists() {
+                total_size_bytes = total_size_bytes.saturating_add(dir_size_capped(default_out));
+            }
+        } else if out.exists() {
             total_size_bytes = total_size_bytes.saturating_add(dir_size_capped(out));
         }
         let is_newer = match &latest_completed {

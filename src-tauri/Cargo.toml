@@ -25,6 +25,7 @@ anyhow = "1"
 url = "2"
 time = "=0.3.35"
 chrono = { version = "0.4", features = ["serde"] }
+dirs = "5"
 html2md = "0.2"
 headless_chrome = { version = "1", optional = true }
 open = "5"

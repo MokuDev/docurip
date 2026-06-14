@@ -30,6 +30,8 @@ export function HistoryView() {
 
   useEffect(() => {
     loadJobs();
+    const interval = setInterval(loadJobs, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadJobs = async () => {

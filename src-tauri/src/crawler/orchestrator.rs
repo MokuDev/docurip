@@ -108,6 +108,9 @@ impl Orchestrator {
         } else {
             config.output_dir.clone()
         };
+        if let Err(e) = std::fs::create_dir_all(&writer_base) {
+            anyhow::bail!("Failed to create output directory {}: {}", writer_base, e);
+        }
         let writer = FsWriter::new(&writer_base);
         let resolved_config = if config.output_dir.is_empty() {
             CrawlConfig { output_dir: settings.output_dir.clone(), ..config }

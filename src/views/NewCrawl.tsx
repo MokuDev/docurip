@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { useCrawlEvents } from '../hooks/useCrawlEvents';
 import {
   Play,
   Stop,
@@ -12,7 +11,7 @@ import {
   SpinnerGap,
   Pause,
 } from '@phosphor-icons/react';
-import type { CrawlConfig, CrawlJob, PageResult } from '../types';
+import type { CrawlConfig, CrawlJob } from '../types';
 
 const DEFAULT_CONFIG: CrawlConfig = {
   url: '',
@@ -33,7 +32,6 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   const [isStarting, setIsStarting] = useState(false);
   const [urlError, setUrlError] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
-  const prevEventCountRef = useRef(0);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -50,54 +48,16 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     }
   }, [prefillUrl]);
 
-  const { events, error, clearError } = useCrawlEvents();
-
-  // React to global events for the active job
   useEffect(() => {
     if (!activeJob) return;
-    const jobEvents = events.filter((e) => e.jobId === activeJob.id);
-    if (jobEvents.length === 0) return;
-
-    const prevLen = prevEventCountRef.current;
-    if (jobEvents.length <= prevLen) return;
-
-    const newEvents = jobEvents.slice(prevLen);
-    prevEventCountRef.current = jobEvents.length;
-
-    let jobChanged = false;
-
-    for (const latest of newEvents) {
-      if (latest.type === 'log') {
-        setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} ${latest.message || ''}`]);
-      } else if (latest.type === 'progress') {
-        prevEventCountRef.current; // keep tracking
-      } else if (latest.type === 'pageComplete') {
-        jobChanged = true;
-      } else if (latest.type === 'jobStatusChanged') {
-        jobChanged = true;
-      }
-    }
-
-    if (jobChanged || newEvents.some((e) => e.type === 'progress' || e.type === 'pageComplete' || e.type === 'jobStatusChanged')) {
-      setActiveJob((prev) => {
-        if (!prev) return prev;
-        const updated = { ...prev };
-        const latestProgress = newEvents.filter((e) => e.type === 'progress').pop()?.progress;
-        if (latestProgress) {
-          updated.progress = latestProgress;
-        }
-        const latestPage = newEvents.filter((e) => e.type === 'pageComplete').map((e) => e.page).filter(Boolean) as PageResult[];
-        if (latestPage.length > 0) {
-          updated.results = [...prev.results, ...latestPage];
-        }
-        const latestStatus = newEvents.filter((e) => e.type === 'jobStatusChanged').pop()?.status;
-        if (latestStatus) {
-          updated.status = latestStatus;
-        }
-        return updated;
-      });
-    }
-  }, [events, activeJob?.id]);
+    const id = setInterval(async () => {
+      try {
+        const job: CrawlJob = await invoke('get_job', { jobId: activeJob.id });
+        setActiveJob(job);
+      } catch {}
+    }, 2000);
+    return () => clearInterval(id);
+  }, [activeJob?.id]);
 
   const validateUrl = (url: string): boolean => {
     try {
@@ -109,7 +69,6 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   };
 
   const handleStart = async () => {
-    clearError();
     if (!validateUrl(config.url)) {
       setUrlError('Please enter a valid URL (e.g., https://example.com)');
       return;
@@ -125,12 +84,12 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
           maxDepth: config.maxDepth,
           pageLimit: config.pageLimit,
           downloadAssets: config.downloadAssets,
-              headlessStrategy: config.headlessStrategy,
-              contentSelectors: config.contentSelectors.filter(Boolean),
-              excludePatterns: config.excludePatterns.filter(Boolean),
-              respectRobotsTxt: config.respectRobotsTxt,
-              outputDir: config.outputDir,
-            },
+          headlessStrategy: config.headlessStrategy,
+          contentSelectors: config.contentSelectors.filter(Boolean),
+          excludePatterns: config.excludePatterns.filter(Boolean),
+          respectRobotsTxt: config.respectRobotsTxt,
+          outputDir: config.outputDir,
+        },
       });
 
       const job: CrawlJob = await invoke('get_job', { jobId });
@@ -386,12 +345,6 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
 
       {/* Right: Live Monitor */}
       <div className="flex-1 flex flex-col bg-[#050a0f]">
-        {error && (
-          <div className="bg-crimson/10 border-l-4 border-crimson text-crimson px-4 py-3 m-4 mb-0 rounded flex justify-between items-center">
-            <span className="text-sm">{error}</span>
-            <button onClick={clearError} className="font-bold text-crimson hover:text-ghost ml-2">&times;</button>
-          </div>
-        )}
         <div className="h-14 flex items-center px-5 border-b border-abyssal/50">
           <h2 className="text-ghost font-semibold text-base flex items-center">
             <FileText weight="fill" size={18} className="text-accentGreen mr-2" />

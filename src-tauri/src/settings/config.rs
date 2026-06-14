@@ -1,3 +1,4 @@
+use dirs::home_dir;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,8 +18,11 @@ pub struct AppSettings {
 
 impl Default for AppSettings {
     fn default() -> Self {
+        let output_dir = home_dir()
+            .map(|h| h.join(".docurip").to_string_lossy().to_string())
+            .unwrap_or_else(|| String::from("./output"));
         Self {
-            output_dir: String::from("./output"),
+            output_dir,
             concurrency: 3,
             request_delay: 1000,
             timeout: 30000,

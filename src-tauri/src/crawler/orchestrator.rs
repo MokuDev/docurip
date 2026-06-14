@@ -120,7 +120,17 @@ impl Orchestrator {
         let exclude_set = if resolved_config.exclude_patterns.is_empty() {
             None
         } else {
-            RegexSet::new(&resolved_config.exclude_patterns).ok()
+            let patterns: Vec<&str> = resolved_config.exclude_patterns
+                .iter()
+                .filter(|p| !p.is_empty())
+                .map(|p| p.as_str())
+                .collect();
+            if patterns.is_empty() {
+                None
+            } else {
+                Some(RegexSet::new(&patterns)
+                    .map_err(|e| anyhow::anyhow!("Invalid exclude pattern: {}", e))?)
+            }
         };
 
     Ok(Self {

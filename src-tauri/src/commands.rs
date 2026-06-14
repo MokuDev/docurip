@@ -31,6 +31,12 @@ fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
     if config.headless_strategy.is_empty() {
         return Err("headless_strategy must not be empty".to_string());
     }
+    for pattern in &config.exclude_patterns {
+        if !pattern.is_empty() {
+            regex::Regex::new(pattern)
+                .map_err(|e| format!("Invalid exclude pattern '{}': {}", pattern, e))?;
+        }
+    }
     Ok(())
 }
 

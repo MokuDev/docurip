@@ -1,3 +1,4 @@
+use std::sync::{LazyLock, Mutex};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -8,8 +9,10 @@ pub struct SystemStats {
     pub mem_total_mb: u64,
 }
 
+static SYS: LazyLock<Mutex<sysinfo::System>> = LazyLock::new(|| Mutex::new(sysinfo::System::new_all()));
+
 pub fn collect() -> SystemStats {
-    let mut sys = sysinfo::System::new_all();
+    let mut sys = SYS.lock().unwrap();
     sys.refresh_all();
     let cpu = sys.global_cpu_usage();
     let mem_used = sys.used_memory() / 1024 / 1024;

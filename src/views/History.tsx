@@ -4,8 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
   Clock,
-  CheckCircle,
-  Warning,
   FolderOpen,
   Trash,
   MagnifyingGlass,
@@ -17,6 +15,7 @@ import {
 } from '@phosphor-icons/react';
 import { ResultBrowser } from './ResultBrowser';
 import { ExportModal } from '../components/ExportModal';
+import { StatusIcon, StatusBadge } from '../components/StatusBadge';
 import type { CrawlJob } from '../types';
 
 export function HistoryView() {
@@ -29,20 +28,20 @@ export function HistoryView() {
   const [exportJobId, setExportJobId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadJobs();
-    const interval = setInterval(loadJobs, 3000);
+    loadJobs(true);
+    const interval = setInterval(() => loadJobs(false), 3000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadJobs = async () => {
-    setLoading(true);
+  const loadJobs = async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     try {
       const data: CrawlJob[] = await invoke('list_jobs');
       setJobs(data || []);
     } catch (err) {
       console.error('Failed to load jobs', err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
@@ -377,34 +376,3 @@ export function HistoryView() {
     </div>
   );
 }
-
-const StatusIcon = ({ status }: { status: string }) => {
-  switch (status) {
-    case 'completed':
-      return <CheckCircle weight="fill" size={16} className="text-brightGreen" />;
-    case 'running':
-      return <FileText weight="fill" size={16} className="text-accentGreen" />;
-    case 'failed':
-      return <Warning weight="fill" size={16} className="text-crimson" />;
-    default:
-      return <Clock size={16} className="text-charcoal" />;
-  }
-};
-
-const StatusBadge = ({ status }: { status: string }) => {
-  const styles: Record<string, string> = {
-    queued: 'bg-amber/10 text-amber',
-    running: 'bg-accentGreen/10 text-accentGreen',
-    paused: 'bg-cyberBlue/10 text-cyberBlue',
-    completed: 'bg-brightGreen/10 text-brightGreen',
-    failed: 'bg-crimson/10 text-crimson',
-  };
-
-  return (
-    <span
-      className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded ${styles[status] || 'text-charcoal'}`}
-    >
-      {status}
-    </span>
-  );
-};

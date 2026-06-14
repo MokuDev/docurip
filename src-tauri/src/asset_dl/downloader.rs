@@ -1,6 +1,7 @@
 use crate::fetcher::http::HttpFetcher;
 use crate::writer::fs::FsWriter;
 
+#[derive(Clone)]
 pub struct AssetDownloader {
     fetcher: HttpFetcher,
     writer: FsWriter,

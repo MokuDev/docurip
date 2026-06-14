@@ -7,6 +7,8 @@ export interface CrawlConfig {
   contentSelectors: string[];
   excludePatterns: string[];
   respectRobotsTxt: boolean;
+  stayWithinDomain: boolean;
+  ssrfProtection: boolean;
   outputDir: string;
 }
 
@@ -48,6 +50,11 @@ export interface AppSettings {
   userAgent: string;
   defaultMaxDepth: number;
   defaultPageLimit: number;
+  defaultDownloadAssets: boolean;
+  defaultHeadlessStrategy: string;
+  defaultRespectRobotsTxt: boolean;
+  defaultStayWithinDomain: boolean;
+  defaultSsrfProtection: boolean;
 }
 
 export interface CrawlEvent {

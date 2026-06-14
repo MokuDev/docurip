@@ -12,20 +12,20 @@ pub struct HttpFetcher {
 
 impl Default for HttpFetcher {
     fn default() -> Self {
-        Self::new()
+        Self::new(30)
     }
 }
 
 impl HttpFetcher {
-    pub fn new() -> Self {
+    pub fn new(timeout_secs: u64) -> Self {
         let client = Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(timeout_secs))
             .pool_idle_timeout(Duration::from_secs(90))
             .build()
             .expect("build reqwest client");
         Self {
             client,
-            user_agent: String::from("Docurip/0.1.0 (+https://github.com/docurip)"),
+            user_agent: String::from("Docurip/0.3.1 (+https://github.com/docurip)"),
             max_retries: 3,
             base_delay_ms: 1000,
         }
@@ -106,6 +106,12 @@ impl HttpFetcher {
         if !status.is_success() {
             anyhow::bail!("HTTP {} for {}", status, url);
         }
+        if let Some(len) = resp.content_length() {
+            const MAX_ASSET_BYTES: u64 = 50 * 1024 * 1024;
+            if len > MAX_ASSET_BYTES {
+                anyhow::bail!("Asset too large ({} MB limit) for {}", MAX_ASSET_BYTES / 1024 / 1024, url);
+            }
+        }
         let bytes = resp.bytes().await?.to_vec();
         Ok(bytes)
     }
@@ -179,7 +185,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let fetcher = HttpFetcher::new();
+        let fetcher = HttpFetcher::new(30);
         let result = fetcher.fetch(&format!("{}/hello", mock_server.uri())).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "Hello, World!");
@@ -199,7 +205,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let fetcher = HttpFetcher::new();
+        let fetcher = HttpFetcher::new(30);
         let result = fetcher.fetch(&format!("{}/flaky", mock_server.uri())).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "Success after retries");
@@ -220,7 +226,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let fetcher = HttpFetcher::new();
+        let fetcher = HttpFetcher::new(30);
         let result = fetcher.fetch(&format!("{}/not-found", mock_server.uri())).await;
         assert!(result.is_err());
         assert_eq!(call_count.load(Ordering::SeqCst), 1);

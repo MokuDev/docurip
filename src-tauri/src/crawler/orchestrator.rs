@@ -9,6 +9,8 @@ use regex::RegexSet;
 use crate::asset_dl::downloader::AssetDownloader;
 use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus, PageResult};
 use crate::crawler::is_valid_url;
+use crate::crawler::robots::{self, RobotsTxt};
+use crate::crawler::ssrf;
 use crate::events::bus::{CrawlEvent, EventBus};
 use crate::fetcher::headless::HeadlessFetcher;
 use crate::fetcher::http::HttpFetcher;
@@ -83,6 +85,7 @@ pub struct Orchestrator {
     converter: HtmlToMarkdown,
     writer: FsWriter,
     exclude_set: Option<RegexSet>,
+    robots: RobotsTxt,
     config: CrawlConfig,
     settings: AppSettings,
     app_state: Option<Arc<crate::state::AppState>>,
@@ -100,7 +103,8 @@ impl Orchestrator {
             anyhow::bail!("Invalid or unsupported URL scheme: {}", start_url);
         }
         let base_url = Url::parse(start_url)?;
-        let fetcher = HttpFetcher::new();
+        let timeout_secs = ((settings.timeout / 1000).max(1)) as u64;
+        let fetcher = HttpFetcher::new(timeout_secs);
         let parser = DomParser::new();
         let converter = HtmlToMarkdown::new();
         let writer_base = if config.output_dir.is_empty() {
@@ -142,6 +146,7 @@ impl Orchestrator {
         converter,
         writer,
         exclude_set,
+        robots: RobotsTxt::default(),
         config: resolved_config,
         settings,
         app_state: None,
@@ -210,6 +215,24 @@ impl Orchestrator {
     }
 
     async fn run(&mut self, start_url: &str) -> anyhow::Result<()> {
+        if self.config.respect_robots_txt {
+            let job_id = self.handle.job.read().await.id.clone();
+            self.handle.event_bus.emit(CrawlEvent::Log {
+                job_id,
+                level: "INFO".into(),
+                message: "Fetching robots.txt...".into(),
+            });
+            self.robots = robots::fetch_robots_txt(&self.base_url, &self.settings.user_agent).await;
+            if self.robots.was_fetched() {
+                let job_id = self.handle.job.read().await.id.clone();
+                self.handle.event_bus.emit(CrawlEvent::Log {
+                    job_id,
+                    level: "INFO".into(),
+                    message: "robots.txt loaded".into(),
+                });
+            }
+        }
+
         let mut queue: VecDeque<(String, u32)> = VecDeque::new();
         let mut visited: HashSet<String> = HashSet::new();
 
@@ -296,16 +319,17 @@ impl Orchestrator {
                 while let Some(_) = pending.join_next().await {}
                 {
                     let mut job = self.handle.job.write().await;
-                    job.status = JobStatus::Paused;
+                    job.status = JobStatus::Failed;
+                    job.error = Some("Crawl cancelled by user".to_string());
                     let job_id = job.id.clone();
                     drop(job);
                     self.handle.event_bus.emit(CrawlEvent::JobStatusChanged {
                         job_id: job_id.clone(),
-                        status: JobStatus::Paused,
+                        status: JobStatus::Failed,
                     });
                     self.handle.event_bus.emit(CrawlEvent::Log {
                         job_id,
-                        level: "INFO".into(),
+                        level: "WARN".into(),
                         message: "Crawl cancelled by user".into(),
                     });
                 }
@@ -481,10 +505,19 @@ impl Orchestrator {
         if self.config.download_assets {
             let asset_downloader =
                 AssetDownloader::new(self.fetcher.clone(), self.writer.clone());
+            let mut download_tasks = tokio::task::JoinSet::new();
             for asset_url in &assets {
-                match asset_downloader.download(asset_url).await {
+                let dl = asset_downloader.clone();
+                let url = asset_url.clone();
+                download_tasks.spawn(async move { (url.clone(), dl.download(&url).await) });
+            }
+            while let Some(result) = download_tasks.join_next().await {
+                let (asset_url, dl_result) = result.unwrap_or_else(|e| {
+                    ("?".into(), Err(anyhow::anyhow!("Task join error: {}", e)))
+                });
+                match dl_result {
                     Ok(rel_path) => {
-                        asset_map.insert(asset_url.clone(), rel_path);
+                        asset_map.insert(asset_url, rel_path);
                     }
                     Err(e) => {
                         let err_msg = format!("Asset download failed for {}: {}", asset_url, e);
@@ -512,6 +545,7 @@ impl Orchestrator {
                                     err_msg
                                 ),
                             });
+                            download_tasks.abort_all();
                             return;
                         }
                     }
@@ -595,8 +629,30 @@ impl Orchestrator {
         }
 
         if depth < max_depth {
+            let base_host = self.base_url.host_str();
             for link in links {
                 if !visited.contains(&link) && is_valid_url(&link) {
+                    if self.config.ssrf_protection && ssrf::is_private_target(&link) {
+                        let job_id = self.handle.job.read().await.id.clone();
+                        let _ = self.handle.event_bus.emit(CrawlEvent::Log {
+                            job_id,
+                            level: "WARN".into(),
+                            message: format!("SSRF blocked: {} resolves to a private/internal address", link),
+                        });
+                        continue;
+                    }
+                    if self.config.respect_robots_txt && !self.robots.is_allowed(&link) {
+                        continue;
+                    }
+                    if self.config.stay_within_domain {
+                        if let Ok(parsed) = Url::parse(&link) {
+                            if parsed.host_str() != base_host {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
+                    }
                     if let Some(ref set) = self.exclude_set {
                         if set.is_match(&link) {
                             continue;

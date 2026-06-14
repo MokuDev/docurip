@@ -179,4 +179,25 @@ mod tests {
         assert_eq!(FsWriter::sanitize_segment("."), None);
         assert_eq!(FsWriter::sanitize_segment(""), None);
     }
+
+    #[test]
+    fn test_url_with_query_string_stripped() {
+        let writer = FsWriter::new("/output");
+        let path = writer.url_to_page_path("https://example.com/docs?page=1&lang=en");
+        assert_eq!(path, PathBuf::from("/output/example.com/docs.md"));
+    }
+
+    #[test]
+    fn test_url_with_fragment_stripped() {
+        let writer = FsWriter::new("/output");
+        let path = writer.url_to_page_path("https://example.com/guide#section-2");
+        assert_eq!(path, PathBuf::from("/output/example.com/guide.md"));
+    }
+
+    #[test]
+    fn test_asset_url_with_query_string() {
+        let writer = FsWriter::new("/output");
+        let path = writer.url_to_asset_path("https://example.com/img/logo.png?v=2");
+        assert_eq!(path, PathBuf::from("/output/example.com/img/logo.png"));
+    }
 }

@@ -1,5 +1,7 @@
 pub mod job;
 pub mod orchestrator;
+pub mod robots;
+pub mod ssrf;
 
 /// Validate that a URL uses HTTP or HTTPS scheme only.
 pub fn is_valid_url(url: &str) -> bool {

@@ -17,6 +17,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   userAgent: 'Docurip/0.1.0 (Documentation Crawler)',
   defaultMaxDepth: 2,
   defaultPageLimit: 50,
+  defaultDownloadAssets: false,
+  defaultHeadlessStrategy: 'auto',
+  defaultRespectRobotsTxt: true,
+  defaultStayWithinDomain: true,
+  defaultSsrfProtection: true,
 };
 
 export function SettingsView() {

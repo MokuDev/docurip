@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  Play,
   Download,
-  Globe,
   FileText,
-  CheckCircle,
   Warning,
   ArrowRight,
   HardDrive,
   Lightning,
   Archive,
 } from '@phosphor-icons/react';
+import { StatusIcon, StatusBadge } from '../components/StatusBadge';
 import type { CrawlJob, DashboardStats, RecentExport } from '../types';
 
 export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) => void }) {
@@ -27,28 +25,22 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
 
   useEffect(() => {
     loadRecentJobs();
-    const jobsInterval = setInterval(loadRecentJobs, 3000);
-    return () => clearInterval(jobsInterval);
-  }, []);
-
-  useEffect(() => {
     loadStats();
-    const statsInterval = setInterval(loadStats, 3000);
-    return () => clearInterval(statsInterval);
-  }, []);
-
-  useEffect(() => {
     loadRecentExports();
-    const exportsInterval = setInterval(loadRecentExports, 5000);
-    return () => clearInterval(exportsInterval);
+    const interval = setInterval(() => {
+      loadRecentJobs();
+      loadStats();
+      loadRecentExports();
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadRecentJobs = async () => {
     try {
       const jobs: CrawlJob[] = await invoke('list_jobs');
       setRecentJobs((jobs || []).slice(-5).reverse());
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('[Dashboard] Failed to load recent jobs:', err);
     }
   };
 
@@ -75,8 +67,8 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
     try {
       const list: RecentExport[] = await invoke('list_exports', { limit: 5 });
       setRecentExports(list || []);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('[Dashboard] Failed to load recent exports:', err);
     }
   };
 
@@ -251,34 +243,3 @@ function formatBytes(bytes: number): string {
   const v = bytes / Math.pow(k, i);
   return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${sizes[i]}`;
 }
-
-const StatusIcon = ({ status }: { status: string }) => {
-  switch (status) {
-    case 'completed':
-      return <CheckCircle weight="fill" size={16} className="text-brightGreen" />;
-    case 'running':
-      return <Play weight="fill" size={16} className="text-accentGreen" />;
-    case 'failed':
-      return <Warning weight="fill" size={16} className="text-crimson" />;
-    default:
-      return <Globe size={16} className="text-charcoal" />;
-  }
-};
-
-const StatusBadge = ({ status }: { status: string }) => {
-  const styles: Record<string, string> = {
-    queued: 'bg-amber/10 text-amber',
-    running: 'bg-accentGreen/10 text-accentGreen',
-    paused: 'bg-cyberBlue/10 text-cyberBlue',
-    completed: 'bg-brightGreen/10 text-brightGreen',
-    failed: 'bg-crimson/10 text-crimson',
-  };
-
-  return (
-    <span
-      className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded ${styles[status] || 'text-charcoal'}`}
-    >
-      {status}
-    </span>
-  );
-};

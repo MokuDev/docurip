@@ -12,6 +12,9 @@ import {
   Pause,
 } from '@phosphor-icons/react';
 import type { CrawlConfig, CrawlJob } from '../types';
+import { StatusBadge } from '../components/StatusBadge';
+
+const MAX_LOGS = 500;
 
 const DEFAULT_CONFIG: CrawlConfig = {
   url: '',
@@ -22,6 +25,8 @@ const DEFAULT_CONFIG: CrawlConfig = {
   contentSelectors: ['main', 'article', '.content'],
   excludePatterns: [],
   respectRobotsTxt: true,
+  stayWithinDomain: true,
+  ssrfProtection: true,
   outputDir: '',
 };
 
@@ -34,6 +39,10 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   const logEndRef = useRef<HTMLDivElement>(null);
   const consecutiveErrors = useRef(0);
 
+  const appendLog = (msg: string) => {
+    setLogs((prev) => [...prev.slice(-(MAX_LOGS - 1)), msg]);
+  };
+
   // Auto-scroll logs
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -42,10 +51,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   // Prefill URL from quick start
   useEffect(() => {
     if (prefillUrl) {
-      setConfig(prev => {
-        if (prev.url) return prev;
-        return { ...prev, url: prefillUrl };
-      });
+      setConfig((prev) => ({ ...prev, url: prefillUrl }));
     }
   }, [prefillUrl]);
 
@@ -98,15 +104,17 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
           contentSelectors: config.contentSelectors.filter(Boolean),
           excludePatterns: config.excludePatterns.filter(Boolean),
           respectRobotsTxt: config.respectRobotsTxt,
+          stayWithinDomain: config.stayWithinDomain,
+          ssrfProtection: config.ssrfProtection,
           outputDir: config.outputDir,
         },
       });
 
       const job: CrawlJob = await invoke('get_job', { jobId });
       setActiveJob(job);
-      setLogs((prev) => [...prev, `Started crawl: ${jobId}`]);
+      appendLog(`Started crawl: ${jobId}`);
     } catch (err) {
-      setLogs((prev) => [...prev, `Error starting crawl: ${String(err)}`]);
+      appendLog(`Error starting crawl: ${String(err)}`);
     } finally {
       setIsStarting(false);
     }
@@ -125,9 +133,9 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     if (!activeJob) return;
     try {
       await invoke('pause_crawl', { jobId: activeJob.id });
-      setLogs((prev) => [...prev, `Paused crawl: ${activeJob.id}`]);
+      appendLog(`Paused crawl: ${activeJob.id}`);
     } catch (err) {
-      setLogs((prev) => [...prev, `Error pausing crawl: ${String(err)}`]);
+      appendLog(`Error pausing crawl: ${String(err)}`);
     }
   };
 
@@ -135,9 +143,9 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     if (!activeJob) return;
     try {
       await invoke('resume_crawl', { jobId: activeJob.id });
-      setLogs((prev) => [...prev, `Resumed crawl: ${activeJob.id}`]);
+      appendLog(`Resumed crawl: ${activeJob.id}`);
     } catch (err) {
-      setLogs((prev) => [...prev, `Error resuming crawl: ${String(err)}`]);
+      appendLog(`Error resuming crawl: ${String(err)}`);
     }
   };
 
@@ -244,6 +252,28 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
                 className="w-4 h-4 rounded border-abyssal bg-surface text-accentGreen focus:ring-accentGreen/20"
               />
               <span className="text-sm text-secondary">Respect robots.txt</span>
+            </label>
+
+            <label className="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={config.stayWithinDomain}
+                onChange={(e) => setConfig({ ...config, stayWithinDomain: e.target.checked })}
+                disabled={!!activeJob}
+                className="w-4 h-4 rounded border-abyssal bg-surface text-accentGreen focus:ring-accentGreen/20"
+              />
+              <span className="text-sm text-secondary">Stay within domain</span>
+            </label>
+
+            <label className="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={config.ssrfProtection}
+                onChange={(e) => setConfig({ ...config, ssrfProtection: e.target.checked })}
+                disabled={!!activeJob}
+                className="w-4 h-4 rounded border-abyssal bg-surface text-accentGreen focus:ring-accentGreen/20"
+              />
+              <span className="text-sm text-secondary">SSRF protection</span>
             </label>
           </div>
 
@@ -445,24 +475,6 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     </div>
   );
 }
-
-const StatusBadge = ({ status }: { status: string }) => {
-  const styles: Record<string, string> = {
-    queued: 'bg-amber/10 text-amber',
-    running: 'bg-accentGreen/10 text-accentGreen',
-    paused: 'bg-cyberBlue/10 text-cyberBlue',
-    completed: 'bg-brightGreen/10 text-brightGreen',
-    failed: 'bg-crimson/10 text-crimson',
-  };
-
-  return (
-    <span
-      className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded ${styles[status] || 'text-charcoal'}`}
-    >
-      {status}
-    </span>
-  );
-};
 
 const StatBox = ({
   icon,

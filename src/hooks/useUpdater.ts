@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { check } from '@tauri-apps/plugin-updater';
+import { useEffect, useRef, useState } from 'react';
+import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 
 interface UpdateInfo {
@@ -11,6 +11,7 @@ export function useUpdater() {
   const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const updateRef = useRef<Update | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -19,6 +20,7 @@ export function useUpdater() {
       try {
         const update = await check();
         if (update && !cancelled) {
+          updateRef.current = update;
           setUpdateAvailable({
             version: update.version,
             body: update.body ?? '',
@@ -37,13 +39,25 @@ export function useUpdater() {
   }, []);
 
   const installUpdate = async () => {
+    const update = updateRef.current;
+    if (!update) {
+      const fresh = await check();
+      if (!fresh) return;
+      setDownloading(true);
+      try {
+        await fresh.downloadAndInstall();
+        await relaunch();
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setDownloading(false);
+      }
+      return;
+    }
     setDownloading(true);
     try {
-      const update = await check();
-      if (update) {
-        await update.downloadAndInstall();
-        await relaunch();
-      }
+      await update.downloadAndInstall();
+      await relaunch();
     } catch (err) {
       setError(String(err));
     } finally {

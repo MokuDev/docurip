@@ -14,6 +14,8 @@ pub struct AppSettings {
     pub default_download_assets: bool,
     pub default_headless_strategy: String,
     pub default_respect_robots_txt: bool,
+    pub default_stay_within_domain: bool,
+    pub default_ssrf_protection: bool,
 }
 
 impl Default for AppSettings {
@@ -26,12 +28,14 @@ impl Default for AppSettings {
             concurrency: 3,
             request_delay: 1000,
             timeout: 30000,
-            user_agent: String::from("Docurip/0.1.0 (Documentation Crawler)"),
+            user_agent: String::from("Docurip/0.3.1 (Documentation Crawler)"),
             default_max_depth: 2,
             default_page_limit: 50,
             default_download_assets: false,
             default_headless_strategy: String::from("auto"),
             default_respect_robots_txt: true,
+            default_stay_within_domain: true,
+            default_ssrf_protection: true,
         }
     }
 }
@@ -47,4 +51,12 @@ pub struct CrawlConfig {
     pub content_selectors: Vec<String>,
     pub exclude_patterns: Vec<String>,
     pub respect_robots_txt: bool,
+    #[serde(default = "default_true")]
+    pub stay_within_domain: bool,
+    #[serde(default = "default_true")]
+    pub ssrf_protection: bool,
+}
+
+fn default_true() -> bool {
+    true
 }

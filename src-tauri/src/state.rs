@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
+use tokio::fs;
 use tokio::sync::{Notify, RwLock};
 use uuid::Uuid;
 
@@ -27,7 +28,8 @@ pub struct AppState {
 
 impl AppState {
     pub fn init(persist_dir: PathBuf) -> anyhow::Result<Self> {
-        let all_jobs = Self::load_all_jobs(&persist_dir)?;
+        let rt = tokio::runtime::Handle::current();
+        let all_jobs = rt.block_on(Self::load_all_jobs(&persist_dir))?;
         let persisted_jobs: HashMap<String, CrawlJob> =
             all_jobs.into_iter().map(|job| (job.id.clone(), job)).collect();
 
@@ -44,29 +46,29 @@ impl AppState {
         self.start_time.elapsed().as_secs()
     }
 
-    pub fn save_job_to_disk(dir: &Path, job: &CrawlJob) -> anyhow::Result<()> {
-        std::fs::create_dir_all(dir)?;
+    pub async fn save_job_to_disk(dir: &Path, job: &CrawlJob) -> anyhow::Result<()> {
+        fs::create_dir_all(dir).await?;
         let path = dir.join(format!("{}.json", job.id));
         let json = serde_json::to_string_pretty(job)?;
-        std::fs::write(path, json)?;
+        fs::write(path, json).await?;
         Ok(())
     }
 
-    pub fn load_job_from_disk(dir: &Path, job_id: &str) -> anyhow::Result<CrawlJob> {
+    pub async fn load_job_from_disk(dir: &Path, job_id: &str) -> anyhow::Result<CrawlJob> {
         let path = dir.join(format!("{}.json", job_id));
-        let contents = std::fs::read_to_string(path)?;
+        let contents = fs::read_to_string(path).await?;
         let job = serde_json::from_str(&contents)?;
         Ok(job)
     }
 
-    pub fn load_all_jobs(dir: &Path) -> anyhow::Result<Vec<CrawlJob>> {
-        std::fs::create_dir_all(dir)?;
+    pub async fn load_all_jobs(dir: &Path) -> anyhow::Result<Vec<CrawlJob>> {
+        fs::create_dir_all(dir).await?;
         let mut jobs = Vec::new();
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
+        let mut entries = fs::read_dir(dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                let contents = std::fs::read_to_string(&path)?;
+                let contents = fs::read_to_string(&path).await?;
                 let job: CrawlJob = serde_json::from_str(&contents)?;
                 jobs.push(job);
             }
@@ -74,23 +76,23 @@ impl AppState {
         Ok(jobs)
     }
 
-    pub fn delete_job_from_disk(dir: &Path, job_id: &str) -> anyhow::Result<()> {
+    pub async fn delete_job_from_disk(dir: &Path, job_id: &str) -> anyhow::Result<()> {
         let path = dir.join(format!("{}.json", job_id));
         if path.exists() {
-            std::fs::remove_file(path)?;
+            fs::remove_file(path).await?;
         }
         Ok(())
     }
 
     pub async fn persist_job(&self, job: &CrawlJob) -> anyhow::Result<()> {
-        Self::save_job_to_disk(&self.persist_dir, job)?;
+        Self::save_job_to_disk(&self.persist_dir, job).await?;
         let mut persisted = self.persisted_jobs.write().await;
         persisted.insert(job.id.clone(), job.clone());
         Ok(())
     }
 
     pub async fn remove_persisted_job(&self, job_id: &str) -> anyhow::Result<()> {
-        Self::delete_job_from_disk(&self.persist_dir, job_id)?;
+        Self::delete_job_from_disk(&self.persist_dir, job_id).await?;
         let mut persisted = self.persisted_jobs.write().await;
         persisted.remove(job_id);
         Ok(())
@@ -116,6 +118,8 @@ mod tests {
                 content_selectors: vec![],
                 exclude_patterns: vec![],
                 respect_robots_txt: true,
+                stay_within_domain: true,
+                ssrf_protection: true,
             },
             results: vec![],
             progress: crate::crawler::job::CrawlProgress {
@@ -137,8 +141,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let job = create_test_job("job-1");
 
-        AppState::save_job_to_disk(temp_dir.path(), &job).unwrap();
-        let loaded = AppState::load_job_from_disk(temp_dir.path(), "job-1").unwrap();
+        AppState::save_job_to_disk(temp_dir.path(), &job).await.unwrap();
+        let loaded = AppState::load_job_from_disk(temp_dir.path(), "job-1").await.unwrap();
 
         assert_eq!(loaded.id, job.id);
         assert_eq!(loaded.url, job.url);
@@ -150,10 +154,10 @@ mod tests {
         let job1 = create_test_job("job-1");
         let job2 = create_test_job("job-2");
 
-        AppState::save_job_to_disk(temp_dir.path(), &job1).unwrap();
-        AppState::save_job_to_disk(temp_dir.path(), &job2).unwrap();
+        AppState::save_job_to_disk(temp_dir.path(), &job1).await.unwrap();
+        AppState::save_job_to_disk(temp_dir.path(), &job2).await.unwrap();
 
-        let jobs = AppState::load_all_jobs(temp_dir.path()).unwrap();
+        let jobs = AppState::load_all_jobs(temp_dir.path()).await.unwrap();
         assert_eq!(jobs.len(), 2);
     }
 
@@ -162,10 +166,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let job = create_test_job("job-1");
 
-        AppState::save_job_to_disk(temp_dir.path(), &job).unwrap();
+        AppState::save_job_to_disk(temp_dir.path(), &job).await.unwrap();
         assert!(temp_dir.path().join("job-1.json").exists());
 
-        AppState::delete_job_from_disk(temp_dir.path(), "job-1").unwrap();
+        AppState::delete_job_from_disk(temp_dir.path(), "job-1").await.unwrap();
         assert!(!temp_dir.path().join("job-1.json").exists());
     }
 }

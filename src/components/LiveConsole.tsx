@@ -23,38 +23,47 @@ export function LiveConsole({ onClose }: { onClose: () => void }) {
   const logIdCounter = useRef(0);
   const { events } = useCrawlEvents();
 
+  const lastProcessedIdx = useRef(-1);
+
   useEffect(() => {
     if (events.length === 0) return;
-    const latest = events[events.length - 1];
-    const level: LogEntry['level'] =
-      latest.type === 'error'
-        ? 'error'
-        : latest.type === 'pageComplete'
-          ? 'success'
-          : 'info';
+    const startIdx = lastProcessedIdx.current + 1;
+    if (startIdx >= events.length) return;
+    lastProcessedIdx.current = events.length - 1;
 
-    const message =
-      latest.type === 'progress'
-        ? `Crawling ${latest.progress?.currentUrl || '...'} (depth ${latest.progress?.depth ?? 0}/${latest.progress?.maxDepth ?? 0})`
-        : latest.type === 'pageComplete'
-          ? `Completed: ${latest.page?.url} (${latest.page?.title || 'no title'})`
-          : latest.type === 'error'
-            ? `Error: ${latest.message || 'Unknown error'}`
-            : latest.type === 'log'
-              ? latest.message || ''
-              : latest.type === 'jobStatusChanged'
-                ? `Job status: ${latest.status || ''}`
-                : 'Unknown event';
+    const newEntries: LogEntry[] = [];
+    for (let i = startIdx; i < events.length; i++) {
+      const ev = events[i];
+      const level: LogEntry['level'] =
+        ev.type === 'error'
+          ? 'error'
+          : ev.type === 'pageComplete'
+            ? 'success'
+            : 'info';
 
-    const entry: LogEntry = {
-      id: logIdCounter.current++,
-      timestamp: new Date().toLocaleTimeString(),
-      level,
-      message,
-      jobId: latest.jobId,
-    };
+      const message =
+        ev.type === 'progress'
+          ? `Crawling ${ev.progress?.currentUrl || '...'} (depth ${ev.progress?.depth ?? 0}/${ev.progress?.maxDepth ?? 0})`
+          : ev.type === 'pageComplete'
+            ? `Completed: ${ev.page?.url} (${ev.page?.title || 'no title'})`
+            : ev.type === 'error'
+              ? `Error: ${ev.message || 'Unknown error'}`
+              : ev.type === 'log'
+                ? ev.message || ''
+                : ev.type === 'jobStatusChanged'
+                  ? `Job status: ${ev.status || ''}`
+                  : 'Unknown event';
 
-    setLogs((prev) => [...prev, entry].slice(-500));
+      newEntries.push({
+        id: logIdCounter.current++,
+        timestamp: new Date().toLocaleTimeString(),
+        level,
+        message,
+        jobId: ev.jobId,
+      });
+    }
+
+    setLogs((prev) => [...prev, ...newEntries].slice(-500));
   }, [events]);
 
   useEffect(() => {

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.1 (2026-06-28)
+
+### Added
+- **Queue backpressure**: `MAX_QUEUE_SIZE = 50_000` limit with warning event when queue reaches capacity — prevents unbounded memory growth during aggressive crawls.
+
+### Fixed
+- **Phosphor icon `title` prop removed**: `title` attribute is not supported by `@phosphor-icons/react` — removed from all icon instances in `LiveConsole.tsx` to fix TypeScript build error.
+
 ## v0.4.0 (2026-06-28)
 
 ### Added

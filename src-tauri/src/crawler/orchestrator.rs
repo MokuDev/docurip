@@ -665,6 +665,7 @@ impl Orchestrator {
 
         if depth < max_depth {
             let base_host = self.base_url.host_str();
+            const MAX_QUEUE_SIZE: usize = 50_000;
             for link in links {
                 if !visited.contains(&link) && is_valid_url(&link) {
                     if self.config.ssrf_protection && ssrf::is_private_target(&link) {
@@ -692,6 +693,15 @@ impl Orchestrator {
                         if set.is_match(&link) {
                             continue;
                         }
+                    }
+                    if queue.len() >= MAX_QUEUE_SIZE {
+                        let job_id = self.handle.job.read().await.id.clone();
+                        let _ = self.handle.event_bus.emit(CrawlEvent::Log {
+                            job_id,
+                            level: "WARN".into(),
+                            message: format!("Queue at capacity ({} URLs), skipping new links from {}", MAX_QUEUE_SIZE, url),
+                        });
+                        continue;
                     }
                     visited.insert(link.clone());
                     queue.push_back((link, depth + 1));

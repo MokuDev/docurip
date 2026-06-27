@@ -181,16 +181,16 @@ function ErrorKindIcon({ kind }: { kind: LogEntry['kind'] }) {
   if (!kind) return null;
   switch (kind) {
     case 'network':
-      return <Cloud size={14} className="text-amber flex-shrink-0" title="Network error" />;
+      return <Cloud size={14} className="text-amber flex-shrink-0" />;
     case 'disk':
-      return <HardDrives size={14} className="text-crimson flex-shrink-0" title="Disk error" />;
+      return <HardDrives size={14} className="text-crimson flex-shrink-0" />;
     case 'parse':
-      return <FileX size={14} className="text-amber flex-shrink-0" title="Parse error" />;
+      return <FileX size={14} className="text-amber flex-shrink-0" />;
     case 'robotsBlocked':
-      return <Stop size={14} className="text-amber flex-shrink-0" title="Blocked by robots.txt" />;
+      return <Stop size={14} className="text-amber flex-shrink-0" />;
     case 'cancelled':
       return null;
     default:
-      return <Warning size={14} className="text-charcoal flex-shrink-0" title="Unknown error" />;
+      return <Warning size={14} className="text-charcoal flex-shrink-0" />;
   }
 }

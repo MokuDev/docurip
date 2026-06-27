@@ -61,6 +61,7 @@ pub fn run() {
             commands::export_job,
             commands::export_job_v2,
             commands::check_headless_support,
+            commands::read_page_content,
             commands::search_job_results,
             commands::export_job_zip,
             commands::list_exports,

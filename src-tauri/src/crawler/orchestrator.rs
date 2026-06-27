@@ -7,7 +7,8 @@ use url::Url;
 use regex::RegexSet;
 
 use crate::asset_dl::downloader::AssetDownloader;
-use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus, PageResult};
+use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus, PageMeta};
+use crate::events::bus::ErrorKind;
 use crate::crawler::is_valid_url;
 use crate::crawler::robots::{self, RobotsTxt};
 use crate::crawler::ssrf;
@@ -205,6 +206,7 @@ impl Orchestrator {
                         handle.event_bus.emit(CrawlEvent::Error {
                             job_id,
                             message: format!("{}", e),
+                            kind: ErrorKind::Unknown,
                         });
                     }
                 }
@@ -218,6 +220,7 @@ impl Orchestrator {
                     handle.event_bus.emit(CrawlEvent::Error {
                         job_id,
                         message: format!("{}", e),
+                        kind: ErrorKind::Unknown,
                     });
                 }
             }
@@ -266,6 +269,12 @@ impl Orchestrator {
         }
 
         let mut processed = 0usize;
+        let mut pages_since_persist: usize = 0;
+        const PERSIST_EVERY_N: usize = 50;
+        let mut persist_interval = tokio::time::interval(Duration::from_secs(10));
+        persist_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // Consume the immediate first tick so it doesn't fire right away.
+        persist_interval.tick().await;
 
         let semaphore = Arc::new(Semaphore::new(self.settings.concurrency as usize));
         let mut pending = tokio::task::JoinSet::new();
@@ -285,7 +294,23 @@ impl Orchestrator {
                     Ok(Err(e)) => (Err(e), String::new(), 0),
                     Err(join_err) => (Err(anyhow::anyhow!("Task panicked: {}", join_err)), String::new(), 0),
                 };
-                let _ = self.handle_task_result(result, &url, depth, max_depth, &mut processed, page_limit, &mut queue, &mut visited).await;
+                let advanced = self.handle_task_result(result, &url, depth, max_depth, &mut processed, page_limit, &mut queue, &mut visited).await.unwrap_or(false);
+                if advanced {
+                    pages_since_persist += 1;
+                }
+            }
+
+            // Throttled persist: every 10s OR every 50 pages, whichever comes first.
+            let time_tick = tokio::select! {
+                _ = persist_interval.tick() => true,
+                else => false,
+            };
+            if time_tick || pages_since_persist >= PERSIST_EVERY_N {
+                if let Some(ref app_state) = self.app_state {
+                    let job = self.handle.job.read().await.clone();
+                    let _ = app_state.persist_job(&job).await;
+                }
+                pages_since_persist = 0;
             }
 
             if self.handle.should_pause.load(Ordering::Relaxed) {
@@ -330,17 +355,17 @@ impl Orchestrator {
                 while let Some(_) = pending.join_next().await {}
                 {
                     let mut job = self.handle.job.write().await;
-                    job.status = JobStatus::Failed;
-                    job.error = Some("Crawl cancelled by user".to_string());
+                    job.status = JobStatus::Cancelled;
+                    job.error = None;
                     let job_id = job.id.clone();
                     drop(job);
                     self.handle.event_bus.emit(CrawlEvent::JobStatusChanged {
                         job_id: job_id.clone(),
-                        status: JobStatus::Failed,
+                        status: JobStatus::Cancelled,
                     });
                     self.handle.event_bus.emit(CrawlEvent::Log {
                         job_id,
-                        level: "WARN".into(),
+                        level: "INFO".into(),
                         message: "Crawl cancelled by user".into(),
                     });
                 }
@@ -390,7 +415,10 @@ impl Orchestrator {
                             Ok(Err(e)) => (Err(e), String::new(), 0),
                             Err(join_err) => (Err(anyhow::anyhow!("Task panicked: {}", join_err)), String::new(), 0),
                         };
-                        let _ = self.handle_task_result(result, &url, depth, max_depth, &mut processed, page_limit, &mut queue, &mut visited).await;
+                        let advanced = self.handle_task_result(result, &url, depth, max_depth, &mut processed, page_limit, &mut queue, &mut visited).await.unwrap_or(false);
+                        if advanced {
+                            pages_since_persist += 1;
+                        }
                     }
                     None => {}
                 }
@@ -482,6 +510,7 @@ impl Orchestrator {
                 self.handle.event_bus.emit(CrawlEvent::Error {
                     job_id,
                     message: err_msg,
+                    kind: ErrorKind::Network,
                 });
                 Ok(false)
             }
@@ -556,6 +585,7 @@ impl Orchestrator {
                                     "Disk error: {}. Fix output path in Settings and resume.",
                                     err_msg
                                 ),
+                                kind: ErrorKind::Disk,
                             });
                             download_tasks.abort_all();
                             return;
@@ -575,9 +605,11 @@ impl Orchestrator {
             let is_disk = is_disk_error(&e);
             let err_msg = format!("Write error for {}: {}", url, e);
             let job_id = self.handle.job.read().await.id.clone();
+            let kind = if is_disk { ErrorKind::Disk } else { ErrorKind::Unknown };
             self.handle.event_bus.emit(CrawlEvent::Error {
                 job_id: job_id.clone(),
                 message: err_msg.clone(),
+                kind,
             });
             if is_disk {
                 {
@@ -596,23 +628,22 @@ impl Orchestrator {
                         "Disk error: {}. Fix output path in Settings and resume.",
                         err_msg
                     ),
+                    kind: ErrorKind::Disk,
                 });
                 return;
             }
         }
 
-        let page_result = PageResult {
+        let page_meta = PageMeta {
             url: url.clone(),
             title: title.clone(),
-            content: markdown,
-            links: links.clone(),
-            assets: assets.clone(),
             status: status_code,
+            links_count: links.len(),
         };
 
         {
             let mut job = self.handle.job.write().await;
-            job.results.push(page_result.clone());
+            job.results.push(page_meta.clone());
             *processed += 1;
             let start_time = job.start_time.clone();
             let progress = CrawlProgress {
@@ -628,17 +659,12 @@ impl Orchestrator {
             drop(job);
             self.handle.event_bus.emit(CrawlEvent::PageComplete {
                 job_id: job_id.clone(),
-                page: page_result,
+                page: page_meta,
             });
             self.handle.event_bus.emit(CrawlEvent::Progress {
                 job_id,
                 progress,
             });
-        }
-
-        if let Some(ref app_state) = self.app_state {
-            let job = self.handle.job.read().await.clone();
-            let _ = app_state.persist_job(&job).await;
         }
 
         if depth < max_depth {

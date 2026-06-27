@@ -44,7 +44,7 @@ impl FsWriter {
         }
     }
 
-    fn url_to_page_path(&self, url: &str) -> PathBuf {
+    pub fn url_to_page_path(&self, url: &str) -> PathBuf {
         let parsed =
             url::Url::parse(url).unwrap_or_else(|_| url::Url::parse("http://localhost/").unwrap());
         let host = parsed.host_str().unwrap_or("unknown");

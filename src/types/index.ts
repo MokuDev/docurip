@@ -12,6 +12,14 @@ export interface CrawlConfig {
   outputDir: string;
 }
 
+export interface PageMeta {
+  url: string;
+  title: string;
+  status: number;
+  linksCount: number;
+}
+
+/** Full page data returned only by read_page_content — not stored in CrawlJob. */
 export interface PageResult {
   url: string;
   title: string;
@@ -30,13 +38,17 @@ export interface CrawlProgress {
   startTime: string;
 }
 
+export type JobStatus = 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+
+export type ErrorKind = 'network' | 'disk' | 'parse' | 'robotsBlocked' | 'cancelled' | 'unknown';
+
 export interface CrawlJob {
   id: string;
   url: string;
-  status: 'queued' | 'running' | 'paused' | 'completed' | 'failed';
+  status: JobStatus;
   config: CrawlConfig;
   progress: CrawlProgress;
-  results: PageResult[];
+  results: PageMeta[];
   startTime?: string;
   endTime?: string;
   error?: string;
@@ -65,8 +77,9 @@ export interface CrawlEvent {
   message?: string;
   level?: string;
   progress?: CrawlProgress;
-  page?: PageResult;
-  status?: 'queued' | 'running' | 'paused' | 'completed' | 'failed';
+  page?: PageMeta;
+  status?: JobStatus;
+  kind?: ErrorKind;
 }
 
 export interface SearchMatch {

@@ -1,6 +1,6 @@
 [package]
 name = "docurip"
-version = "0.3.3"
+version = "0.3.4"
 description = "High-performance documentation site crawler"
 authors = ["moku"]
 edition = "2021"

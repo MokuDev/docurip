@@ -21,7 +21,7 @@
 
   <br />
 
-  [Website](https://docurip.moku.cx) · [Releases](https://github.com/MokuDev/docurip-src/releases) · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
+  [Website](https://docurip.moku.cx) · [Download](https://docurip.moku.cx/download.html) · [Changelog](https://docurip.moku.cx/changelog.html) · [Roadmap](ROADMAP.md)
 </div>
 
 ---
@@ -145,6 +145,14 @@ One click compiles your archive into separate Markdown files, a consolidated han
 ---
 
 ## Quick Start
+
+Download the latest installer — free, no account required:
+
+**[Download docurip v0.3.4](https://docurip.moku.cx/download.html)**
+
+---
+
+## Build from Source
 
 **Prerequisites:** Rust 1.95+, Node.js 22+, Windows with WebView2 (bundled with modern Windows)
 

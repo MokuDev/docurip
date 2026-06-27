@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::{Notify, RwLock, Semaphore};
+use std::time::Instant;
 use tokio::time::{sleep, Duration};
 use url::Url;
 use regex::RegexSet;
@@ -271,10 +272,8 @@ impl Orchestrator {
         let mut processed = 0usize;
         let mut pages_since_persist: usize = 0;
         const PERSIST_EVERY_N: usize = 50;
-        let mut persist_interval = tokio::time::interval(Duration::from_secs(10));
-        persist_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        // Consume the immediate first tick so it doesn't fire right away.
-        persist_interval.tick().await;
+        const PERSIST_INTERVAL: Duration = Duration::from_secs(10);
+        let mut last_persist = Instant::now();
 
         let semaphore = Arc::new(Semaphore::new(self.settings.concurrency as usize));
         let mut pending = tokio::task::JoinSet::new();
@@ -301,16 +300,13 @@ impl Orchestrator {
             }
 
             // Throttled persist: every 10s OR every 50 pages, whichever comes first.
-            let time_tick = tokio::select! {
-                _ = persist_interval.tick() => true,
-                else => false,
-            };
-            if time_tick || pages_since_persist >= PERSIST_EVERY_N {
+            if last_persist.elapsed() >= PERSIST_INTERVAL || pages_since_persist >= PERSIST_EVERY_N {
                 if let Some(ref app_state) = self.app_state {
                     let job = self.handle.job.read().await.clone();
                     let _ = app_state.persist_job(&job).await;
                 }
                 pages_since_persist = 0;
+                last_persist = Instant::now();
             }
 
             if self.handle.should_pause.load(Ordering::Relaxed) {

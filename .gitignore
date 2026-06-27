@@ -41,6 +41,7 @@ AGENTS.md
 .claude/
 .cursor/
 .codegraph/
+docs/
 
 # Internal / dev-only docs
 version-bumper.html

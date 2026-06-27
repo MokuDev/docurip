@@ -1,20 +1,16 @@
 # Changelog
 
-## v0.4.0 (unreleased)
+## v0.4.0 (2026-06-28)
 
 ### Changed
-- **`job.results` hält nur noch Metadaten im RAM**: `PageMeta` enthält URL, Titel, HTTP-Status und Link-Anzahl — kein Markdown-Content mehr im Heap. Eliminiert den O(n·content) RAM-Wachstum bei großen Crawls.
-- **Persist-Throttling**: `persist_job` wird nicht mehr nach jeder Seite aufgerufen, sondern maximal alle 50 Seiten oder alle 10 Sekunden — je nachdem was zuerst eintritt.
-- **`JobStatus::Cancelled` eingeführt**: Abgebrochene Jobs erhalten jetzt den Status `Cancelled` statt `Failed`.
-- **`ErrorKind` für typisierte Fehlererkennung**: `CrawlEvent::Error` liefert jetzt `kind: ErrorKind` (`Network` / `Disk` / `Unknown`) — Grundlage für differenzierte Fehlerdarstellung im Frontend.
+- **`job.results` keeps only metadata in RAM**: `PageMeta` now stores URL, title, HTTP status, and link count — Markdown content no longer sits on the heap. Eliminates O(n·content) RAM growth during large crawls.
+- **Persist throttling**: `persist_job` is no longer invoked after every page; it runs at most every 50 pages or 10 seconds, whichever comes first.
+- **Introduced `JobStatus::Cancelled`**: cancelled jobs now report status `Cancelled` instead of `Failed`.
+- **`ErrorKind` for typed error classification**: `CrawlEvent::Error` now carries `kind: ErrorKind` (`Network` / `Disk` / `Unknown`), laying the groundwork for differentiated error display in the frontend.
 
 ### Fixed
-- **Blocking `tokio::select!` in Crawl-Loop**: `select! { _ = persist_interval.tick() => true, else => false }` blockierte jede Loop-Iteration bis zu 10 Sekunden, weil `_ = future` immer matcht und `else` nie feuert. Ersetzt durch nicht-blockierenden `Instant::elapsed()`-Vergleich — behebt ~7× Throughput-Regression.
+- **Blocking `tokio::select!` in crawl loop**: `select! { _ = persist_interval.tick() => true, else => false }` blocked each loop iteration for up to 10 seconds because `_ = future` always matches and `else` never fires. Replaced with a non-blocking `Instant::elapsed()` check — resolves a ~7× throughput regression.
 
-### Planned (P1 — noch offen)
-- Queue-Größenlimit (`MAX_QUEUE_SIZE = 50_000`) + Warning-Event wenn Queue voll
-- Tests: `orchestrator.rs` core paths (`resolve_output_dir`, page_limit enforcement, queue backpressure)
-- Tests: `crawler/robots` und `crawler/ssrf`
 
 ## v0.3.4 (2026-06-27)
 

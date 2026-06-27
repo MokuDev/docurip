@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useCrawlEvents } from '../hooks/useCrawlEvents';
 import {
   Download,
   FileText,
@@ -23,15 +24,27 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
     failRate: 0,
   });
   const [recentExports, setRecentExports] = useState<RecentExport[]>([]);
+  const { activeJobIds } = useCrawlEvents();
+  const activeJobsRef = useRef(activeJobIds);
+
+  useEffect(() => {
+    activeJobsRef.current = activeJobIds;
+  }, [activeJobIds]);
 
   useEffect(() => {
     loadRecentJobs();
     loadStats();
     loadRecentExports();
+    let tick = 0;
     const interval = setInterval(() => {
+      tick += 1;
       loadRecentJobs();
-      loadStats();
       loadRecentExports();
+      // Stats: live (every 3s) while crawls are active, else throttled to ~12s
+      const hasActiveJobs = activeJobsRef.current.size > 0;
+      if (hasActiveJobs || tick % 4 === 0) {
+        loadStats();
+      }
     }, 3000);
     return () => clearInterval(interval);
   }, []);

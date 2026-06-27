@@ -1,9 +1,7 @@
-use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use zip::write::FileOptions;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::RwLock;
@@ -21,6 +19,13 @@ fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
     let parsed = Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
         return Err("URL scheme must be http or https".to_string());
+    }
+    if config.ssrf_protection && crate::crawler::ssrf::is_private_target(url) {
+        return Err(format!(
+            "SSRF protection blocked the start URL '{}': resolves to a private/internal address. \
+             Disable 'SSRF protection' in the crawl config to allow internal targets.",
+            url
+        ));
     }
     if config.max_depth < 1 {
         return Err("max_depth must be at least 1".to_string());
@@ -594,41 +599,7 @@ pub async fn export_job_zip(
     std::fs::create_dir_all(&zip_dir).map_err(|e| e.to_string())?;
     let zip_path = zip_dir.join(format!("{}.zip", job_id));
 
-    let file = File::create(&zip_path).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipWriter::new(file);
-    let options = FileOptions::<()>::default()
-        .compression_method(zip::CompressionMethod::Deflated)
-        .unix_permissions(0o755);
-
-    fn add_dir_to_zip(
-        zip: &mut zip::ZipWriter<File>,
-        base: &std::path::Path,
-        current: &std::path::Path,
-        options: FileOptions<()>,
-    ) -> Result<(), String> {
-        for entry in std::fs::read_dir(current).map_err(|e| e.to_string())? {
-            let entry = entry.map_err(|e| e.to_string())?;
-            let path = entry.path();
-            let relative = path.strip_prefix(base).map_err(|e| e.to_string())?;
-
-            if path.is_file() {
-                let mut file = std::fs::File::open(&path).map_err(|e| e.to_string())?;
-                zip.start_file_from_path(relative, options.clone())
-                    .map_err(|e| e.to_string())?;
-                std::io::copy(&mut file, zip).map_err(|e| e.to_string())?;
-            } else if path.is_dir() {
-                zip.add_directory_from_path(relative, options.clone())
-                    .map_err(|e| e.to_string())?;
-                add_dir_to_zip(zip, base, &path, options.clone())?;
-            }
-        }
-        Ok(())
-    }
-
-    add_dir_to_zip(&mut zip, &main_dir, &main_dir, options)
-        .map_err(|e| e.to_string())?;
-
-    zip.finish().map_err(|e| e.to_string())?;
+    crate::export::zip_directory(&main_dir, &zip_path).map_err(|e| e.to_string())?;
     Ok(zip_path.to_string_lossy().to_string())
 }
 

@@ -30,7 +30,9 @@ pub fn copy_md_files(src_dir: &Path, dst_dir: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn walk_dir(dir: &Path) -> anyhow::Result<Vec<std::path::PathBuf>> {
+/// Recursively list every file (not directory) under `dir`.
+/// Returned paths are absolute. Order is unspecified — callers should sort if needed.
+pub fn walk_dir(dir: &Path) -> anyhow::Result<Vec<std::path::PathBuf>> {
     let mut result = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(current) = stack.pop() {

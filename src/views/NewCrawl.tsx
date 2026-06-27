@@ -33,20 +33,30 @@ const DEFAULT_CONFIG: CrawlConfig = {
 export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   const [config, setConfig] = useState<CrawlConfig>(DEFAULT_CONFIG);
   const [activeJob, setActiveJob] = useState<CrawlJob | null>(null);
-  const [logs, setLogs] = useState<string[]>([]);
+  const logsRef = useRef<string[]>([]);
+  const [logTick, setLogTick] = useState(0);
   const [isStarting, setIsStarting] = useState(false);
   const [urlError, setUrlError] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
   const consecutiveErrors = useRef(0);
+  const logs = logsRef.current;
 
   const appendLog = (msg: string) => {
-    setLogs((prev) => [...prev.slice(-(MAX_LOGS - 1)), msg]);
+    const arr = logsRef.current;
+    arr.push(msg);
+    if (arr.length > MAX_LOGS) arr.splice(0, arr.length - MAX_LOGS);
+    setLogTick((t) => t + 1);
+  };
+
+  const clearLogs = () => {
+    logsRef.current = [];
+    setLogTick((t) => t + 1);
   };
 
   // Auto-scroll logs
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+  }, [logTick]);
 
   // Prefill URL from quick start
   useEffect(() => {
@@ -91,7 +101,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     }
     setUrlError('');
     setIsStarting(true);
-    setLogs([]);
+    clearLogs();
 
     try {
       const jobId: string = await invoke('start_crawl', {
@@ -151,7 +161,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
 
   const handleReset = () => {
     setActiveJob(null);
-    setLogs([]);
+    clearLogs();
     setConfig(DEFAULT_CONFIG);
   };
 

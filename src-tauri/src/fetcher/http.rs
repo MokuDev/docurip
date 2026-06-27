@@ -25,7 +25,7 @@ impl HttpFetcher {
             .expect("build reqwest client");
         Self {
             client,
-            user_agent: String::from("Docurip/0.3.1 (+https://github.com/docurip)"),
+            user_agent: String::from("Docurip/0.3.3 (+https://github.com/docurip)"),
             max_retries: 3,
             base_delay_ms: 1000,
         }
@@ -37,7 +37,16 @@ impl HttpFetcher {
     }
 
     /// Determine if a network error is transient.
+    ///
+    /// Prefers typed inspection via `reqwest::Error`: `is_timeout()` and
+    /// `is_connect()` are reliable. Falls back to substring matching only for
+    /// non-reqwest errors that appear in the cause chain.
     fn is_transient_error(err: &anyhow::Error) -> bool {
+        for cause in err.chain() {
+            if let Some(rq) = cause.downcast_ref::<reqwest::Error>() {
+                return rq.is_timeout() || rq.is_connect() || rq.is_request();
+            }
+        }
         let err_str = err.to_string().to_lowercase();
         err_str.contains("timeout")
             || err_str.contains("timed out")
@@ -106,6 +115,15 @@ impl HttpFetcher {
         if !status.is_success() {
             anyhow::bail!("HTTP {} for {}", status, url);
         }
+        if let Some(ct) = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|h| h.to_str().ok())
+        {
+            if !is_allowed_asset_mime(ct) {
+                anyhow::bail!("Rejected asset MIME type '{}' for {}", ct, url);
+            }
+        }
         if let Some(len) = resp.content_length() {
             const MAX_ASSET_BYTES: u64 = 50 * 1024 * 1024;
             if len > MAX_ASSET_BYTES {
@@ -115,6 +133,31 @@ impl HttpFetcher {
         let bytes = resp.bytes().await?.to_vec();
         Ok(bytes)
     }
+}
+
+/// Allow asset MIME types: images, fonts, CSS, JS, plain text, JSON, PDF, common binaries.
+/// Reject HTML — those are usually error/login pages served instead of the asset.
+fn is_allowed_asset_mime(content_type: &str) -> bool {
+    let ct = content_type.split(';').next().unwrap_or("").trim().to_lowercase();
+    if ct.is_empty() {
+        return true;
+    }
+    if ct == "text/html" || ct == "application/xhtml+xml" {
+        return false;
+    }
+    ct.starts_with("image/")
+        || ct.starts_with("font/")
+        || ct.starts_with("text/")
+        || ct == "application/javascript"
+        || ct == "application/ecmascript"
+        || ct == "application/json"
+        || ct == "application/pdf"
+        || ct == "application/octet-stream"
+        || ct == "application/wasm"
+        || ct.starts_with("application/font")
+        || ct.starts_with("application/vnd.ms-fontobject")
+        || ct.starts_with("audio/")
+        || ct.starts_with("video/")
 }
 
 #[cfg(test)]
@@ -143,6 +186,28 @@ mod tests {
 
         let parse_err = anyhow::anyhow!("invalid json");
         assert!(!HttpFetcher::is_transient_error(&parse_err));
+    }
+
+    #[test]
+    fn test_is_allowed_asset_mime() {
+        // allowed
+        assert!(is_allowed_asset_mime("image/png"));
+        assert!(is_allowed_asset_mime("image/svg+xml"));
+        assert!(is_allowed_asset_mime("text/css"));
+        assert!(is_allowed_asset_mime("text/css; charset=utf-8"));
+        assert!(is_allowed_asset_mime("application/javascript"));
+        assert!(is_allowed_asset_mime("application/json"));
+        assert!(is_allowed_asset_mime("application/pdf"));
+        assert!(is_allowed_asset_mime("font/woff2"));
+        assert!(is_allowed_asset_mime("application/octet-stream"));
+        assert!(is_allowed_asset_mime("audio/mpeg"));
+        assert!(is_allowed_asset_mime("video/mp4"));
+        // empty/missing → allow
+        assert!(is_allowed_asset_mime(""));
+        // rejected
+        assert!(!is_allowed_asset_mime("text/html"));
+        assert!(!is_allowed_asset_mime("text/html; charset=utf-8"));
+        assert!(!is_allowed_asset_mime("application/xhtml+xml"));
     }
 
     use std::sync::atomic::{AtomicUsize, Ordering};

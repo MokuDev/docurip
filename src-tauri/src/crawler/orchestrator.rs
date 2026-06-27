@@ -531,6 +531,7 @@ impl Orchestrator {
                         asset_map.insert(asset_url, rel_path);
                     }
                     Err(e) => {
+                        let is_disk = is_disk_error(&e);
                         let err_msg = format!("Asset download failed for {}: {}", asset_url, e);
                         let job_id = self.handle.job.read().await.id.clone();
                         self.handle.event_bus.emit(CrawlEvent::Log {
@@ -538,7 +539,7 @@ impl Orchestrator {
                             level: "WARN".into(),
                             message: err_msg.clone(),
                         });
-                        if is_disk_error(&err_msg) {
+                        if is_disk {
                             {
                                 let mut job = self.handle.job.write().await;
                                 job.status = JobStatus::Paused;
@@ -571,13 +572,14 @@ impl Orchestrator {
         let markdown = self.converter.convert(&html_for_md);
 
         if let Err(e) = self.writer.write_page(&url, &markdown).await {
+            let is_disk = is_disk_error(&e);
             let err_msg = format!("Write error for {}: {}", url, e);
             let job_id = self.handle.job.read().await.id.clone();
             self.handle.event_bus.emit(CrawlEvent::Error {
                 job_id: job_id.clone(),
                 message: err_msg.clone(),
             });
-            if is_disk_error(&err_msg) {
+            if is_disk {
                 {
                     let mut job = self.handle.job.write().await;
                     job.status = JobStatus::Paused;
@@ -677,10 +679,29 @@ impl Orchestrator {
     }
 }
 
-/// Returns true if the given error message indicates a disk-related write
-/// failure (permission denied, no space, read-only filesystem, or the
-/// matching OS error codes for those conditions).
-pub fn is_disk_error(msg: &str) -> bool {
+/// Returns true if the given error indicates a disk-related write failure
+/// (permission denied, no space left, read-only filesystem).
+///
+/// Walks the anyhow error chain looking for a `std::io::Error` and classifies
+/// by `ErrorKind`. Falls back to substring matching on the formatted error
+/// only when no `io::Error` is present in the chain (e.g. for third-party
+/// errors that stringify without a source chain).
+pub fn is_disk_error(err: &anyhow::Error) -> bool {
+    use std::io::ErrorKind;
+    for cause in err.chain() {
+        if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
+            return matches!(
+                io_err.kind(),
+                ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem | ErrorKind::StorageFull
+            );
+        }
+    }
+    is_disk_error_str(&err.to_string())
+}
+
+/// Substring-based disk error detection. Used as a fallback when no
+/// `std::io::Error` is available in the cause chain.
+pub fn is_disk_error_str(msg: &str) -> bool {
     let lower = msg.to_lowercase();
     [
         "permission denied",
@@ -699,43 +720,72 @@ mod tests {
     use super::*;
 
     #[test]
-    fn disk_error_matches_permission_denied() {
-        assert!(is_disk_error("Permission denied (os error 5)"));
+    fn disk_error_str_matches_permission_denied() {
+        assert!(is_disk_error_str("Permission denied (os error 5)"));
     }
 
     #[test]
-    fn disk_error_matches_no_space_left() {
-        assert!(is_disk_error("No space left on device (os error 28)"));
+    fn disk_error_str_matches_no_space_left() {
+        assert!(is_disk_error_str("No space left on device (os error 28)"));
     }
 
     #[test]
-    fn disk_error_matches_read_only_filesystem() {
-        assert!(is_disk_error("Read-only file system (os error 30)"));
+    fn disk_error_str_matches_read_only_filesystem() {
+        assert!(is_disk_error_str("Read-only file system (os error 30)"));
     }
 
     #[test]
-    fn disk_error_matches_case_insensitively() {
-        assert!(is_disk_error("PERMISSION DENIED"));
-        assert!(is_disk_error("read-ONLY"));
+    fn disk_error_str_matches_case_insensitively() {
+        assert!(is_disk_error_str("PERMISSION DENIED"));
+        assert!(is_disk_error_str("read-ONLY"));
     }
 
     #[test]
-    fn disk_error_matches_bare_os_codes() {
-        assert!(is_disk_error("os error 5"));
-        assert!(is_disk_error("os error 28"));
-        assert!(is_disk_error("os error 30"));
+    fn disk_error_str_matches_bare_os_codes() {
+        assert!(is_disk_error_str("os error 5"));
+        assert!(is_disk_error_str("os error 28"));
+        assert!(is_disk_error_str("os error 30"));
     }
 
     #[test]
-    fn disk_error_does_not_match_network_error() {
-        assert!(!is_disk_error("connection refused"));
-        assert!(!is_disk_error("timeout"));
-        assert!(!is_disk_error("http 500"));
-        assert!(!is_disk_error("DNS resolution failed"));
+    fn disk_error_str_does_not_match_network_error() {
+        assert!(!is_disk_error_str("connection refused"));
+        assert!(!is_disk_error_str("timeout"));
+        assert!(!is_disk_error_str("http 500"));
+        assert!(!is_disk_error_str("DNS resolution failed"));
     }
 
     #[test]
-    fn disk_error_does_not_match_empty() {
-        assert!(!is_disk_error(""));
+    fn disk_error_str_does_not_match_empty() {
+        assert!(!is_disk_error_str(""));
+    }
+
+    #[test]
+    fn disk_error_classifies_io_kinds_via_chain() {
+        use std::io;
+        let perm_err: anyhow::Error =
+            io::Error::new(io::ErrorKind::PermissionDenied, "denied").into();
+        assert!(is_disk_error(&perm_err));
+
+        let full_err: anyhow::Error =
+            io::Error::new(io::ErrorKind::StorageFull, "full").into();
+        assert!(is_disk_error(&full_err));
+
+        let ro_err: anyhow::Error =
+            io::Error::new(io::ErrorKind::ReadOnlyFilesystem, "ro").into();
+        assert!(is_disk_error(&ro_err));
+
+        let other_io: anyhow::Error =
+            io::Error::new(io::ErrorKind::ConnectionRefused, "no").into();
+        assert!(!is_disk_error(&other_io));
+    }
+
+    #[test]
+    fn disk_error_uses_string_fallback_when_no_io_error() {
+        let plain = anyhow::anyhow!("permission denied while writing page");
+        assert!(is_disk_error(&plain));
+
+        let network = anyhow::anyhow!("connection refused");
+        assert!(!is_disk_error(&network));
     }
 }

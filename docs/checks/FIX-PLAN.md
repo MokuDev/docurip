@@ -101,8 +101,8 @@
 - [x] SSRF-Modul existiert (`crawler/ssrf.rs`) und erkennt interne IPs (IPv4/IPv6 privat, localhost, `.local`)
 - [x] `ssrf_protection` Config-Feld wird im Orchestrator durchgesetzt (orchestrator.rs:646)
 - [x] 10 Unit-Tests für SSRF-Erkennung
-- [ ] `validate_crawl_input` ruft SSRF-Check NICHT auf — Start-URL wird beim Submit nicht geprüft, erst Folge-Links während Crawl
-- [ ] Frontend zeigt keine Warnung beim Eintragen einer internen URL
+- [x] `validate_crawl_input` ruft SSRF-Check für Start-URL auf, wenn `ssrf_protection` aktiv ist (commands.rs:25)
+- [ ] Frontend zeigt keine Warnung beim Eintragen einer internen URL — Fehler kommt erst nach Submit
 
 **Verifikation:**
 - [x] `cargo test` — alle Tests passen
@@ -185,8 +185,8 @@
 - [x] `Cargo.toml`: `0.3.3`
 - [x] `package.json`: `0.3.3`
 - [x] `App.tsx` Footer: `v0.3.3`
-- [ ] `HttpFetcher` User-Agent: weiterhin `Docurip/0.3.1` (http.rs:28) — **OFFEN**
-- [ ] `AppSettings` Default User-Agent: weiterhin `Docurip/0.3.1` (config.rs:33) — **OFFEN**
+- [x] `HttpFetcher` User-Agent: `Docurip/0.3.3` (http.rs:28)
+- [x] `AppSettings` Default User-Agent: `Docurip/0.3.3` (config.rs:33)
 
 **Verifikation:**
 - [x] `cargo test` — alle Tests passen
@@ -295,7 +295,7 @@
 **Beschreibung:** Assets werden ohne MIME-Type-Validierung und ohne Größenlimit heruntergeladen.
 
 **Akzeptanzkriterien:**
-- [ ] Content-Type wird geprüft — **OFFEN**: keine MIME-Type-Validierung in `fetch_bytes`
+- [x] Content-Type wird geprüft — `is_allowed_asset_mime` in http.rs lehnt `text/html`/`application/xhtml+xml` ab und whitelistet Images/Fonts/CSS/JS/JSON/PDF/Audio/Video/Octet-Stream
 - [x] Max-Download-Größe (50MB hardcoded, http.rs:110-112) — nicht konfigurierbar, aber wirksam
 - [x] Ungültige Downloads werden via `anyhow::bail!` abgewiesen und vom Orchestrator als Asset-Fehler geloggt
 
@@ -330,7 +330,7 @@
 
 **Akzeptanzkriterien:**
 - [x] Ein einziges Polling-Interval (3s) für alle Daten (Dashboard.tsx:31-36) — siehe CHANGELOG v0.3.0
-- [ ] Stats werden nur alle 10s gefreshed — **OFFEN**: Stats werden weiterhin im 3s-Interval gepollt (kein eigener 10s-Sub-Interval)
+- [x] Stats werden gedrosselt: live (3s) während aktiver Crawls, sonst nur jede 4. Iteration (~12s) via Tick-Counter (Dashboard.tsx)
 
 **Verifikation:**
 - [x] `npm run build` — kein Fehler
@@ -371,9 +371,9 @@
 **Beschreibung:** `is_disk_error` und `is_transient_error` verwenden String-Matching statt Error-Typen.
 
 **Akzeptanzkriterien:**
-- [ ] `is_disk_error` verwendet `std::io::ErrorKind` — **OFFEN**: weiterhin `msg: &str`-basiert (orchestrator.rs:683)
-- [ ] `is_transient_error` verwendet `reqwest::Error`-Methoden — **OFFEN**: weiterhin `err_str.contains("timeout")` (http.rs:42)
-- [ ] Keine String-Vergleiche mehr für Error-Klassifikation — **OFFEN**
+- [x] `is_disk_error(&anyhow::Error)` läuft die Fehlerkette ab und matched `std::io::ErrorKind::PermissionDenied`/`StorageFull`/`ReadOnlyFilesystem`. String-Fallback (`is_disk_error_str`) bleibt für Errors ohne `io::Error`-Source (orchestrator.rs:683)
+- [x] `is_transient_error` prüft per `downcast_ref::<reqwest::Error>` `is_timeout()`/`is_connect()`/`is_request()`. String-Fallback bleibt für Nicht-reqwest-Fehler (http.rs:42)
+- [x] Strukturierte Klassifikation primär, String-Matching nur als Fallback
 
 **Verifikation:**
 - [x] `cargo test` — alle Tests passen (Tests prüfen das bestehende String-Matching-Verhalten)
@@ -470,7 +470,7 @@
 **Beschreibung:** P6-P8 aus PROBLEMS.md: Logs-Array Copy-on-Write, keine Virtualisierung im ResultTree, kein Debounce bei Suche.
 
 **Akzeptanzkriterien:**
-- [ ] Logs `useRef` statt State-Array — **OFFEN**: weiterhin `useState<string[]>` (NewCrawl.tsx:36), aber Memory-Cap (500 Einträge) per `.slice(-(MAX_LOGS - 1))` — siehe CHANGELOG v0.3.1
+- [x] Logs `useRef` statt State-Array: `logsRef` + `logTick`-Counter, mutiert in-place mit 500er Cap (NewCrawl.tsx)
 - [ ] ResultTree mit Virtualisierung (`react-window`/`@tanstack/react-virtual`) — **OFFEN**: keine Virtualisierung implementiert
 - [x] ResultSearch mit Debounce (200ms) — siehe CHANGELOG v0.3.1
 
@@ -508,9 +508,9 @@
 **Akzeptanzkriterien:**
 - [x] B10 — `prefillUrl` re-triggerbar: `if (prev.url) return prev` Guard entfernt (NewCrawl.tsx:53-56) — siehe CHANGELOG v0.3.1
 - [x] B11 — `AppSettings`-TS-Typ vollständig: `defaultDownloadAssets`, `defaultHeadlessStrategy`, `defaultRespectRobotsTxt` vorhanden (types/index.ts:53-55)
-- [ ] B12 — `walk_dir`-Duplizierung — **TEILWEISE**: `export.rs` hat noch eigenes `walk_dir` (export.rs:33); `commands.rs` nutzt weiterhin Inline-`std::fs::read_dir` (z. B. commands.rs:609)
-- [ ] B13 — Identisch mit B8/Task 16 (LiveConsole) → ✅ erledigt
-- [ ] B14 — `useUpdater` Error State in UI anzeigen — **OFFEN**: `error` wird gesetzt (useUpdater.ts:32, 51, 62), aber im Update-Banner nicht gerendert
+- [x] B12 — `walk_dir` als `pub` in `export.rs` exponiert; `commands.rs::export_job_zip` ruft jetzt `export::zip_directory` statt eigener Inline-Rekursion auf
+- [x] B13 — Identisch mit B8/Task 16 (LiveConsole) → ✅ erledigt
+- [x] B14 — `useUpdater` Error State im Update-Banner gerendert (App.tsx); Button-Label wird zu „Retry" bei Fehler
 
 **Dependencies:** Keine
 
@@ -555,43 +555,38 @@
 
 ---
 
-## Aktueller Implementierungsstatus (verifiziert gegen v0.3.3-Code)
+## Aktueller Implementierungsstatus (verifiziert nach Quick-Wins/Mittel-Pass)
 
 | Task | Status | Anmerkung |
 |------|--------|-----------|
 | 1 — `stay_within_domain` | ✅ Erledigt | orchestrator.rs:658 |
 | 2 — `respect_robots_txt` | ✅ Erledigt | `robots.rs` + orchestrator.rs:228, 655 |
-| 3 — `tokio::fs`-Migration | ⚠️ Teilweise | `state.rs` migriert; `commands.rs` & `export.rs` nutzen weiter `std::fs::read_dir` |
-| 4 — SSRF-Schutz | ⚠️ Teilweise | `ssrf.rs` + Folge-Links gefiltert; **Start-URL wird in `validate_crawl_input` NICHT geprüft** |
+| 3 — `tokio::fs`-Migration | ⚠️ Teilweise | `state.rs` migriert; `commands.rs::dir_size_capped` und `export.rs` nutzen weiter `std::fs` (sync via spawn_blocking-Pfad noch offen) |
+| 4 — SSRF-Schutz | ✅ Erledigt | `ssrf.rs` + Folge-Links + Start-URL in `validate_crawl_input` (commands.rs:25) |
 | 5 — Cancel-Status | ⚠️ Teilweise | Cancel = Failed mit Error-Text; kein eigener `Cancelled`-Enum-Wert |
 | 6 — Timeout-Setting | ✅ Erledigt | `HttpFetcher::new(timeout_secs)` |
-| 7 — Versionsnummern | ⚠️ Teilweise | Cargo/package/App = 0.3.3; **User-Agent in http.rs/config.rs noch 0.3.1** |
+| 7 — Versionsnummern | ✅ Erledigt | Alle Versionen auf `0.3.3` inklusive User-Agent |
 | 8 — Query-Strings aus Dateinamen | ✅ Erledigt | 3 Regression-Tests in fs.rs |
 | 9 — Double Update Check | ✅ Erledigt | `updateRef.current` cache |
-| 10 — Headless Browser wiederverwenden | ✅ Erledigt | Browser im Struct, Tabs pro Fetch |
+| 10 — Headless Browser wiederverwenden | ✅ Erledigt | Browser im Struct, Tabs pro Fetch (Bonus: `tab.close(false)` für headless_chrome 1.x) |
 | 11 — System-Stats cachen | ✅ Erledigt | `LazyLock<Mutex<System>>` |
-| 12 — Content-Type + Größenlimit | ⚠️ Teilweise | 50 MB Limit aktiv (hardcoded), **keine MIME-Type-Validierung**, nicht konfigurierbar |
-| 13 — Dashboard-Polling | ⚠️ Teilweise | Single Interval (3s), aber **kein 10s-Sub-Interval für Stats** |
+| 12 — Content-Type + Größenlimit | ✅ Erledigt | 50 MB Limit + MIME-Type-Whitelist (`is_allowed_asset_mime` in http.rs), lehnt `text/html` ab |
+| 13 — Dashboard-Polling | ✅ Erledigt | Single Interval, Stats live (3s) bei aktiven Crawls, sonst gedrosselt (~12s) |
 | 14 — Parallele Asset-Downloads | ✅ Erledigt | `JoinSet` in orchestrator.rs:519 |
-| 15 — String-Matching → Error-Typen | ❌ Offen | `is_disk_error`/`is_transient_error` weiterhin string-basiert |
+| 15 — String-Matching → Error-Typen | ✅ Erledigt | `is_disk_error` via `io::ErrorKind`, `is_transient_error` via `reqwest::Error`-Methoden; String-Fallback nur für Errors ohne typisierte Source |
 | 16 — LiveConsole Event-Verarbeitung | ✅ Erledigt | `lastProcessedIdx` ref |
 | 17 — History Lade-Flackern | ✅ Erledigt | `showSpinner`-Param |
 | 18 — StatusBadge auslagern | ✅ Erledigt | `components/StatusBadge.tsx` |
-| 19 — Frontend-Performance | ⚠️ Teilweise | Debounce ✅; **Logs-`useRef` ❌, ResultTree-Virtualisierung ❌** (Memory-Cap 500 als Workaround) |
+| 19 — Frontend-Performance | ⚠️ Teilweise | Debounce ✅, Logs-`useRef` ✅; ResultTree-Virtualisierung ❌ |
 | 20 — Code-Qualität (C9-C11) | ⚠️ Teilweise | C11 ✅; **C9 (Markdown-Parser), C10 (redundante Logs) offen** |
-| 21 — Minor Bugfixes | ⚠️ Teilweise | B10 ✅, B11 ✅, B13 ✅; **B12 (walk_dir-Duplizierung) und B14 (Updater-Error in UI) offen** |
+| 21 — Minor Bugfixes | ✅ Erledigt | B10–B14 alle erledigt (B12 walk_dir konsolidiert, B14 Updater-Error im UI gerendert) |
 
-**Bilanz:** 11 von 21 Tasks vollständig erledigt, 9 teilweise erledigt, 1 komplett offen (Task 15).
+**Bilanz:** 18 von 21 Tasks vollständig erledigt, 3 teilweise erledigt (3, 19, 20).
 
 **Noch offene Arbeiten:**
-1. `validate_crawl_input` um SSRF-Check für die Start-URL erweitern
-2. User-Agent-Strings in `http.rs` und `config.rs` von `Docurip/0.3.1` auf `0.3.3` aktualisieren
-3. Restliche `std::fs::read_dir` in `commands.rs` und `export.rs` auf `tokio::fs` oder `spawn_blocking` umstellen
-4. MIME-Type-Validierung in `fetch_bytes` ergänzen
-5. `is_disk_error`/`is_transient_error` von String-Matching auf `std::io::ErrorKind` bzw. `reqwest::Error`-Methoden umstellen
-6. ResultTree-Virtualisierung (`react-window`/`@tanstack/react-virtual`)
-7. NewCrawl-Logs auf `useRef` umstellen
-8. MarkdownPreview auf echten Markdown-Parser (`react-markdown`) umstellen
-9. `walk_dir` als gemeinsame Helper-Funktion zwischen `export.rs` und `commands.rs`
-10. `useUpdater.error` im Update-Banner rendern
-11. Optional: separater `JobStatus::Cancelled`-Enum-Wert
+1. Restliche `std::fs` in `commands.rs` (`dir_size_capped`) und `export.rs` auf `tokio::fs` oder `spawn_blocking` umstellen
+2. ResultTree-Virtualisierung (`react-window`/`@tanstack/react-virtual`)
+3. MarkdownPreview auf echten Markdown-Parser (`react-markdown`) umstellen
+4. Redundante Log-Speicherung in NewCrawl (lokaler State zusätzlich zu globalen Events) entfernen
+5. Optional: separater `JobStatus::Cancelled`-Enum-Wert für Frontend-Unterscheidung zwischen Cancel und Failed
+6. Optional: Frontend-Warnung beim Eintragen einer internen URL, bevor der Submit blockiert wird

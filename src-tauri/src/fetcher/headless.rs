@@ -19,7 +19,7 @@ mod inner {
                 tab.navigate_to(&url)?;
                 tab.wait_until_navigated()?;
                 let content = tab.get_content()?;
-                let _ = tab.close();
+                let _ = tab.close(false);
                 Ok(content)
             })
             .await??;

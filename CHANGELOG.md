@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.3.4 (2026-06-27)
+
+### Added
+- **MIME-Type validation for asset downloads**: `HttpFetcher::fetch_bytes` checks `Content-Type` against an allow-list (images, fonts, CSS, JS, JSON, PDF, audio/video, octet-stream) and rejects `text/html`/`application/xhtml+xml` so that error pages or login redirects served at asset URLs no longer get persisted as broken images/stylesheets.
+- **SSRF check on the start URL**: `validate_crawl_input` now runs `crawler::ssrf::is_private_target` on the submitted URL when `ssrf_protection` is enabled, returning an actionable error before the crawl is even spawned. Previously SSRF was only enforced on follow-up links during the crawl.
+- **`useUpdater.error` rendered in the update banner**: the update banner now shows the captured error message and switches the action button label from "Install & Restart" to "Retry" when a previous install attempt failed.
+
+### Changed
+- **User-Agent unified to `Docurip/0.3.3`** in `HttpFetcher` (`fetcher/http.rs`) and the default `AppSettings.user_agent` (`settings/config.rs`); previously both still advertised `Docurip/0.3.1`.
+- **Dashboard stats polling throttled**: stats refresh every 3 s while at least one crawl is active, otherwise every 4th tick (~12 s). Job list and recent exports continue to poll every 3 s. Keeps the live-stats UX from v0.3.2 during crawls while reducing idle backend load.
+- **NewCrawl logs migrated to `useRef`**: log entries are appended into a ref-backed array (mutated in place, capped at 500); a `logTick` counter drives re-renders. Avoids per-append array-copy that grew quadratic on long crawls.
+- **`walk_dir` is now `pub` in `export.rs`** and `commands::export_job_zip` calls `export::zip_directory` instead of its own inline `add_dir_to_zip` recursion. Eliminates ~25 lines of duplicated ZIP-walking logic.
+- **Error classification uses typed downcasts**:
+  - `crawler::orchestrator::is_disk_error` now walks the `anyhow::Error` chain looking for `std::io::Error` and matches on `ErrorKind::PermissionDenied` / `StorageFull` / `ReadOnlyFilesystem`. The original substring-based logic is kept as `is_disk_error_str` and used as a fallback only when no `io::Error` is present in the chain.
+  - `HttpFetcher::is_transient_error` now downcasts to `reqwest::Error` and uses `is_timeout()` / `is_connect()` / `is_request()`. Substring matching remains as a fallback for non-reqwest errors.
+
+### Fixed
+- **Headless feature build**: `tab.close()` now passes the required `fire_unload: bool` argument (`tab.close(false)`) so `cargo check --features headless` succeeds against headless_chrome 1.x. Previously failed to compile in the headless build.
+
+### Tests
+- 2 new tests for `is_disk_error`: classifies `io::ErrorKind::PermissionDenied`/`StorageFull`/`ReadOnlyFilesystem` via cause chain; falls back to string matching when no `io::Error` is present.
+- 1 new test for `is_allowed_asset_mime` covering images, fonts, CSS, JS, JSON, PDF, audio/video, octet-stream, charset suffixes, empty content-type, and rejection of `text/html`/`application/xhtml+xml`.
+
+
 ## v0.3.3 (2026-06-14)
 
 ### Added

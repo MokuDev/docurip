@@ -148,7 +148,7 @@ One click compiles your archive into separate Markdown files, a consolidated han
 
 Download the latest installer — free, no account required:
 
-**[Download docurip v0.3.4](https://docurip.moku.cx/download.html)**
+**[Download docurip](https://docurip.moku.cx/download.html)**
 
 ---
 
@@ -157,8 +157,8 @@ Download the latest installer — free, no account required:
 **Prerequisites:** Rust 1.95+, Node.js 22+, Windows with WebView2 (bundled with modern Windows)
 
 ```bash
-git clone https://github.com/MokuDev/docurip-src
-cd docurip-src
+git clone https://github.com/MokuDev/docurip
+cd docurip
 npm install
 
 # Development (hot-reload)

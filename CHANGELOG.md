@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.4 (2026-06-27)
 
 ### Added
 - **MIME-Type validation for asset downloads**: `HttpFetcher::fetch_bytes` checks `Content-Type` against an allow-list (images, fonts, CSS, JS, JSON, PDF, audio/video, octet-stream) and rejects `text/html`/`application/xhtml+xml` so that error pages or login redirects served at asset URLs no longer get persisted as broken images/stylesheets.

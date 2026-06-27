@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
 import {
@@ -8,7 +8,7 @@ import {
   FolderOpen,
   FileText,
 } from '@phosphor-icons/react';
-import type { CrawlJob, PageMeta } from '../types';
+import type { CrawlJob, PageMeta, SearchMatch } from '../types';
 import { ResultTree } from '../components/ResultTree';
 import { MarkdownPreview } from '../components/MarkdownPreview';
 import { ResultSearch } from '../components/ResultSearch';
@@ -26,20 +26,50 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
   const [pageContent, setPageContent] = useState<string>('');
   const [contentLoading, setContentLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchMatches, setSearchMatches] = useState<SearchMatch[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportPath, setExportPath] = useState('');
 
   const pages = job.results;
 
+  useEffect(() => {
+    if (searchQuery.length >= 3) {
+      setIsSearching(true);
+      const timer = setTimeout(async () => {
+        try {
+          const matches = await invoke<SearchMatch[]>('search_job_results', {
+            jobId: job.id,
+            query: searchQuery,
+          });
+          setSearchMatches(matches);
+        } catch (err) {
+          console.error('Search failed', err);
+          setSearchMatches([]);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setSearchMatches([]);
+      setIsSearching(false);
+    }
+  }, [searchQuery, job.id]);
+
   const filteredPages = useMemo(() => {
     if (!searchQuery) return pages;
+    if (searchMatches.length > 0) {
+      const matchUrls = new Set(searchMatches.map((m) => m.url));
+      return pages.filter((p) => matchUrls.has(p.url));
+    }
     const q = searchQuery.toLowerCase();
     return pages.filter(
       (p) =>
         p.title.toLowerCase().includes(q) ||
         p.url.toLowerCase().includes(q)
     );
-  }, [pages, searchQuery]);
+  }, [pages, searchQuery, searchMatches]);
 
   const handleSelect = useCallback(async (page: PageMeta) => {
     setSelectedPage(page);
@@ -137,8 +167,11 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
           <ResultSearch
             value={searchQuery}
             onChange={setSearchQuery}
-            resultCount={filteredPages.length}
+            resultCount={isSearching ? 0 : filteredPages.length}
           />
+          {isSearching && (
+            <span className="text-charcoal text-xs mt-1 block">Searching...</span>
+          )}
         </div>
 
         {/* Content */}
@@ -150,7 +183,7 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
                 pages={filteredPages}
                 selectedUrl={selectedPage?.url || ''}
                 onSelect={handleSelect}
-                filterQuery={searchQuery}
+                filterQuery={searchMatches.length > 0 ? undefined : searchQuery}
               />
             ) : (
               <EmptyState
@@ -158,6 +191,11 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
                 title="No pages"
                 description="This crawl produced no results."
               />
+            )}
+            {searchQuery.length >= 3 && filteredPages.length === 0 && !isSearching && (
+              <div className="p-4 text-center text-charcoal text-xs">
+                No matches found for "{searchQuery}"
+              </div>
             )}
           </div>
 

@@ -3,6 +3,7 @@
 ## v0.4.0 (2026-06-28)
 
 ### Added
+- **Full-text search in ResultBrowser**: backend-powered content search via `search_job_results` — reads `.md` files from disk with relevance scoring and preview snippets. Triggered at 3+ characters with 300ms debounce.
 - **ErrorKind icons in LiveConsole**: error events now display visual indicators for error type — red disk icon for `Disk`, orange cloud for `Network`, file-x for `Parse`, stop sign for `RobotsBlocked`, and generic warning for `Unknown`.
 
 ### Changed

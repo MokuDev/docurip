@@ -7,6 +7,14 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dev/crash output files
+*.txt
+dev-out.txt
+dev-err.txt
+dev-output.txt
+crash-out.txt
+crash-err.txt
+
 node_modules
 dist
 dist-ssr
@@ -26,3 +34,10 @@ dist-ssr
 # Rust
 src-tauri/target
 src-tauri/gen
+
+# AI agent configuration (local tooling)
+.kilo/
+AGENTS.md
+.claude/
+.cursor/
+.codegraph/

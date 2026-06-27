@@ -53,7 +53,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/MokuDev/docurip/releases/latest/download/latest.json"
+        "https://github.com/MokuDev/docurip-dl/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc0MjIxOTdDQjJEN0NGNzYKUldSMno5ZXlmQmtpZEtKSTBDa3FpWXpaT3UzRjhnOC94VklCaytmVTJzai9IdEx0VVNCSC8wWnUK"
     }

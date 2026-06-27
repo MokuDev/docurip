@@ -22,6 +22,15 @@
 
 ---
 
+<div align="center">
+  <img src="assets/screenshots/dashboard.png" alt="Dashboard — 154 pages saved, 200.9 pages/min, 0.0% fail rate" width="49%" />
+  <img src="assets/screenshots/new-crawl.png" alt="New Crawl — live monitor streaming progress in real time" width="49%" />
+  <img src="assets/screenshots/result-browser.png" alt="Result Browser — split-pane tree and Markdown preview" width="49%" />
+  <img src="assets/screenshots/export.png" alt="Export modal — Markdown Files, Merged MD, PDF options" width="49%" />
+</div>
+
+---
+
 ## What is docurip?
 
 Docurip is a high-performance desktop app that recursively crawls documentation websites and converts them into structured, offline Markdown archives. The Rust backend handles parallel fetching, HTML-to-Markdown conversion, and asset downloads. The React frontend streams live progress and lets you browse, search, and export results — all without leaving the app.

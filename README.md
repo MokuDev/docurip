@@ -69,28 +69,58 @@ For RAG, standard text splitters break arbitrarily on HTML tags, splitting code 
 **Real-world benchmark — complete Python documentation:**
 `~35M tokens (Markdown)` vs. `~80M tokens (HTML)` — **55% less overhead, 2.2× faster** processing, zero layout noise in the training set.
 
+**React.dev example:** a single page goes from `42,300 tokens` (raw HTML with nav, sidebar, hydration scripts) to `4,800 tokens` (semantic Markdown). Across 200 pages with prompt caching: `200 × 5K × 1.9 cache multiplier = 1.9M tokens` vs. 60M raw.
+
+### How the savings stack
+
+| Step | Mechanism | Saving |
+|------|-----------|--------|
+| **Strip boilerplate** | 70–90% of a docs page is nav, sidebar, footer, scripts. Docurip strips it all — ~80–150 KB HTML becomes ~10–25 KB Markdown | **5–10× fewer tokens per page** |
+| **Load once** | Live-fetch tools re-crawl on every query, paying the full HTML price each time. Docurip's Merged MD loads once into context | **no redundant requests** |
+| **Cache repeats** | Anthropic's prompt cache reads cost ~10% of normal input tokens — cache the Merged MD once and every subsequent query drops to micro-cents | **90% cost reduction on repeats** |
+
 ---
 
 ## Features
 
-### Crawl Engine
+> Runs native. Blazing fast. A documentation harvester optimized for speed, cleanliness, and developer experience — built with Rust + Tauri.
+
+### Extraction Engine
+
+Never lose context to the upstream. Set a start URL, crawl depth, and page limit. Docurip walks the site in parallel via an async I/O pool, respects `robots.txt` by default, and spins up headless Chrome on demand for JS-rendered apps.
 
 | | |
 |---|---|
 | **Parallel fetching** | Semaphore-bounded concurrency (configurable, default 3) with a shared `reqwest` connection pool |
+| **Headless Chrome** | On-demand for CSR apps (VitePress, Docusaurus, Nextra); strategies: `never`, `auto`, `always` |
+| **robots.txt compliance** | Fetches and parses `/robots.txt`, honors `User-agent`, `Disallow`, `Allow`, `Crawl-delay` — built-in |
+| **Domain-locked** | Never wanders off-site — `stayWithinDomain` enforced by default |
 | **Pause / Resume / Cancel** | Soft-pause via atomics — in-flight requests finish gracefully before stopping |
-| **Headless Chrome** | Feature-gated fetcher for JS-rendered SPAs; strategies: `never`, `auto`, `always` |
 | **Automatic retry** | Exponential backoff for transient errors (timeouts, 5xx); permanent errors (4xx) fail immediately |
-| **Disk-error auto-pause** | Detects permission errors, full disks, and read-only filesystems — pauses the job so you can fix the path and resume |
-| **Domain scoping** | Stays within the start URL's origin by default; configurable |
+| **Disk-error auto-pause** | Detects permission errors, full disks, read-only filesystems — pauses so you can fix and resume |
 | **Depth & page limits** | `maxDepth` (1–10) and `pageLimit` (1–10,000) prevent runaway crawls |
+
+### Real-time Monitoring
+
+An integrated console drawer streams every fetch request, network connection, and file write as it happens — debug bottlenecks or see exactly where the crawler is walking the documentation tree.
+
+- **Live velocity speedometer** — pages/min updated in real time
+- **Streaming console logger** — color-coded `✅` success · `⚠️` warning · `❌` error
+- **pause, resume, retry, cancel** — full control without restarting
+
+### Result Browser
+
+Explore your archive instantly. Built-in debounced full-text search finds files by content. A sandboxed preview pane renders Markdown with syntax-highlighted code blocks, sanitized through DOMPurify.
+
+- **Instant full-text search** — 200 ms debounce, filters by title, path, or content
+- **Sandboxed Markdown preview** — DOMPurify sanitized, `javascript:` URIs blocked
+- **Hierarchical folder navigation** — collapsible tree mirroring the site's URL structure
 
 ### Safety & Compliance
 
 | | |
 |---|---|
-| **SSRF protection** | Blocks loopback, RFC 1918, link-local, IPv6 ULA, `.local` TLD, and hosts that resolve to private IPs — checked before every request |
-| **robots.txt enforcement** | Fetches and parses `/robots.txt`, honors `User-agent`, `Disallow`, `Allow`, and `Crawl-delay` |
+| **SSRF protection** | Blocks loopback, RFC 1918, link-local, IPv6 ULA, `.local` TLD, and hosts resolving to private IPs |
 | **Asset safety** | 50 MB size cap, MIME-type allow-list, path sanitization, directory-traversal prevention |
 | **XSS prevention** | Markdown preview sanitized with DOMPurify; `javascript:` URIs blocked |
 | **CSP hardened** | No `unsafe-inline` in `script-src`; `withGlobalTauri: false` |
@@ -100,18 +130,10 @@ For RAG, standard text splitters break arbitrarily on HTML tags, splitting code 
 | Format | Description |
 |--------|-------------|
 | **MD Files** | Individual `.md` files preserving the site's folder structure |
-| **Merged MD** | All pages concatenated into one file — ideal for pasting into an LLM or a RAG pipeline |
-| **PDF Files** | Per-page PDF export via headless Chrome |
+| **Merged MD** | All pages as one file — load once into LLM context or feed into a RAG pipeline |
+| **PDF Files** | Per-page PDF via headless Chrome |
 | **Merged PDF** | All pages as a single searchable PDF |
 | **ZIP** | Full output directory as an archive |
-
-### UI
-
-- **Live console** — real-time colored log stream during crawls (`✅` success · `⚠️` warning · `❌` error)
-- **Split-pane result browser** — collapsible page tree + Markdown preview + full-text search (200 ms debounce)
-- **Dashboard** — animated stats (Pages Saved, Total Size, Crawl Velocity, Fail Rate), recent activity, recent exports
-- **System status bars** — live CPU%, RAM, session uptime
-- **Dark terminal aesthetic** — near-black background, neon green accent, framer-motion transitions
 
 ---
 

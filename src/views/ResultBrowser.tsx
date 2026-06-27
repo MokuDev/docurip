@@ -8,7 +8,7 @@ import {
   FolderOpen,
   FileText,
 } from '@phosphor-icons/react';
-import type { CrawlJob, PageResult } from '../types';
+import type { CrawlJob, PageMeta } from '../types';
 import { ResultTree } from '../components/ResultTree';
 import { MarkdownPreview } from '../components/MarkdownPreview';
 import { ResultSearch } from '../components/ResultSearch';
@@ -22,7 +22,9 @@ interface ResultBrowserProps {
 
 export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
   const { pushToast } = useToasts();
-  const [selectedPage, setSelectedPage] = useState<PageResult | null>(null);
+  const [selectedPage, setSelectedPage] = useState<PageMeta | null>(null);
+  const [pageContent, setPageContent] = useState<string>('');
+  const [contentLoading, setContentLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportPath, setExportPath] = useState('');
@@ -35,10 +37,25 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
     return pages.filter(
       (p) =>
         p.title.toLowerCase().includes(q) ||
-        p.url.toLowerCase().includes(q) ||
-        p.content.toLowerCase().includes(q)
+        p.url.toLowerCase().includes(q)
     );
   }, [pages, searchQuery]);
+
+  const handleSelect = useCallback(async (page: PageMeta) => {
+    setSelectedPage(page);
+    setContentLoading(true);
+    try {
+      const content = await invoke<string>('read_page_content', {
+        jobId: job.id,
+        url: page.url,
+      });
+      setPageContent(content);
+    } catch {
+      setPageContent('*Content not available*');
+    } finally {
+      setContentLoading(false);
+    }
+  }, [job.id]);
 
   const handleExport = useCallback(async () => {
     setExporting(true);
@@ -132,7 +149,7 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
               <ResultTree
                 pages={filteredPages}
                 selectedUrl={selectedPage?.url || ''}
-                onSelect={setSelectedPage}
+                onSelect={handleSelect}
                 filterQuery={searchQuery}
               />
             ) : (
@@ -147,10 +164,16 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
           {/* Preview */}
           <div className="flex-1 bg-[#050a0f]">
             {selectedPage ? (
-              <MarkdownPreview
-                content={selectedPage.content}
-                searchQuery={searchQuery}
-              />
+              contentLoading ? (
+                <div className="flex items-center justify-center h-full text-charcoal text-sm">
+                  Loading…
+                </div>
+              ) : (
+                <MarkdownPreview
+                  content={pageContent}
+                  searchQuery={searchQuery}
+                />
+              )
             ) : (
               <EmptyState
                 icon={<FileText size={48} />}

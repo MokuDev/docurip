@@ -5,6 +5,7 @@ import {
   Globe,
   Clock,
   FileText,
+  Prohibit,
 } from '@phosphor-icons/react';
 
 const badgeStyles: Record<string, string> = {
@@ -13,6 +14,7 @@ const badgeStyles: Record<string, string> = {
   paused: 'bg-cyberBlue/10 text-cyberBlue',
   completed: 'bg-brightGreen/10 text-brightGreen',
   failed: 'bg-crimson/10 text-crimson',
+  cancelled: 'bg-charcoal/20 text-charcoal',
 };
 
 export function StatusBadge({ status }: { status: string }) {
@@ -37,6 +39,8 @@ export function StatusIcon({ status, size = 16 }: { status: string; size?: numbe
       return <Clock size={size} className="text-amber" />;
     case 'paused':
       return <FileText size={size} className="text-cyberBlue" />;
+    case 'cancelled':
+      return <Prohibit size={size} className="text-charcoal" />;
     default:
       return <Globe size={size} className="text-charcoal" />;
   }

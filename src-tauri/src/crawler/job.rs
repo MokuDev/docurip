@@ -3,6 +3,16 @@ use crate::settings::config::CrawlConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PageMeta {
+    pub url: String,
+    pub title: String,
+    pub status: u16,
+    pub links_count: usize,
+}
+
+/// Full page data used only during crawl processing; not stored in CrawlJob.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PageResult {
     pub url: String,
     pub title: String,
@@ -31,6 +41,7 @@ pub enum JobStatus {
     Paused,
     Completed,
     Failed,
+    Cancelled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,7 +51,7 @@ pub struct CrawlJob {
     pub url: String,
     pub status: JobStatus,
     pub config: CrawlConfig,
-    pub results: Vec<PageResult>,
+    pub results: Vec<PageMeta>,
     pub progress: CrawlProgress,
     pub error: Option<String>,
     pub start_time: Option<String>,

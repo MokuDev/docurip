@@ -6,7 +6,6 @@ import {
   ArrowClockwise,
   Globe,
   FileText,
-  Download,
   CheckCircle,
   SpinnerGap,
   Pause,
@@ -435,14 +434,9 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
               value={activeJob.results.length}
             />
             <StatBox
-              icon={<Download size={16} className="text-cyberBlue" />}
-              label="Assets"
-              value={activeJob.results.reduce((sum, r) => sum + r.assets.length, 0)}
-            />
-            <StatBox
               icon={<CheckCircle weight="fill" size={16} className="text-brightGreen" />}
               label="Links"
-              value={activeJob.results.reduce((sum, r) => sum + r.links.length, 0)}
+              value={activeJob.results.reduce((sum, r) => sum + r.linksCount, 0)}
             />
           </div>
         )}

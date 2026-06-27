@@ -1,16 +1,27 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::broadcast;
-use crate::crawler::job::{CrawlProgress, JobStatus, PageResult};
+use crate::crawler::job::{CrawlProgress, JobStatus, PageMeta};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ErrorKind {
+    Network,
+    Disk,
+    Parse,
+    RobotsBlocked,
+    Cancelled,
+    Unknown,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum CrawlEvent {
     Progress { job_id: String, progress: CrawlProgress },
     Log { job_id: String, level: String, message: String },
-    PageComplete { job_id: String, page: PageResult },
+    PageComplete { job_id: String, page: PageMeta },
     JobStatusChanged { job_id: String, status: JobStatus },
-    Error { job_id: String, message: String },
+    Error { job_id: String, message: String, kind: ErrorKind },
 }
 
 #[derive(Clone)]

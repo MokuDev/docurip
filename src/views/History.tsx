@@ -319,33 +319,8 @@ export function HistoryView() {
                           </div>
                           <p className="text-xs text-charcoal break-all mb-2">{page.url}</p>
                           <div className="flex items-center space-x-4 text-xs text-charcoal">
-                            <span>{page.links.length} links</span>
-                            <span>{page.assets.length} assets</span>
+                            <span>{page.linksCount} links</span>
                           </div>
-                          {page.links.length > 0 && (
-                            <details className="mt-2">
-                              <summary className="text-xs text-secondary cursor-pointer hover:text-ghost transition-colors">
-                                Links ({page.links.length})
-                              </summary>
-                              <ul className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
-                                {page.links.map((link, i) => (
-                                  <li key={i} className="text-[11px] text-charcoal truncate font-mono">{link}</li>
-                                ))}
-                              </ul>
-                            </details>
-                          )}
-                          {page.assets.length > 0 && (
-                            <details className="mt-2">
-                              <summary className="text-xs text-secondary cursor-pointer hover:text-ghost transition-colors">
-                                Assets ({page.assets.length})
-                              </summary>
-                              <ul className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
-                                {page.assets.map((asset, i) => (
-                                  <li key={i} className="text-[11px] text-charcoal truncate font-mono">{asset}</li>
-                                ))}
-                              </ul>
-                            </details>
-                          )}
                         </div>
                       ))}
                     </div>

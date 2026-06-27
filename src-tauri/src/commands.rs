@@ -7,6 +7,7 @@ use tauri::{AppHandle, Manager, State};
 use tokio::sync::RwLock;
 
 use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
+use crate::writer::fs::FsWriter;
 use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
 use crate::exports::{self, RecentExport};
@@ -543,6 +544,21 @@ fn extract_preview(content: &str, query: &str) -> String {
 }
 
 #[tauri::command]
+pub async fn read_page_content(
+    job_id: String,
+    url: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<String, String> {
+    let job = get_job(job_id, state).await?;
+    let main_dir = PathBuf::from(&job.config.output_dir).join("main");
+    let writer = FsWriter::new(&main_dir);
+    let path = writer.url_to_page_path(&url);
+    tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| format!("Could not read page content: {}", e))
+}
+
+#[tauri::command]
 pub async fn search_job_results(
     job_id: String,
     query: String,
@@ -550,21 +566,26 @@ pub async fn search_job_results(
 ) -> Result<Vec<SearchMatch>, String> {
     let job = get_job(job_id, state).await?;
     let q = query.to_lowercase();
+    let main_dir = PathBuf::from(&job.config.output_dir).join("main");
+    let writer = FsWriter::new(&main_dir);
     let mut matches = Vec::new();
 
     for page in &job.results {
         let title_lower = page.title.to_lowercase();
-        let content_lower = page.content.to_lowercase();
         let url_lower = page.url.to_lowercase();
 
         let title_score = title_lower.matches(&q).count() as u32;
-        let content_score = content_lower.matches(&q).count() as u32;
         let url_score = url_lower.matches(&q).count() as u32;
+
+        let path = writer.url_to_page_path(&page.url);
+        let content = tokio::fs::read_to_string(&path).await.unwrap_or_default();
+        let content_lower = content.to_lowercase();
+        let content_score = content_lower.matches(&q).count() as u32;
 
         let relevance = title_score * 10 + content_score + url_score * 5;
 
         if relevance > 0 {
-            let preview = extract_preview(&page.content, &q);
+            let preview = extract_preview(&content, &q);
             matches.push(SearchMatch {
                 url: page.url.clone(),
                 title: page.title.clone(),

@@ -83,6 +83,8 @@ fn make_config(output_dir: &str) -> CrawlConfig {
         content_selectors: vec![],
         exclude_patterns: vec![],
         respect_robots_txt: false,
+        stay_within_domain: true,
+        ssrf_protection: false,
     }
 }
 
@@ -98,6 +100,10 @@ fn make_settings() -> AppSettings {
         default_download_assets: true,
         default_headless_strategy: String::from("never"),
         default_respect_robots_txt: false,
+        default_stay_within_domain: true,
+        default_ssrf_protection: false,
+        window_width: 1280,
+        window_height: 900,
     }
 }
 

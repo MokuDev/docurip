@@ -1,15 +1,15 @@
 import { FileText, CaretRight, CaretDown } from '@phosphor-icons/react';
 import { useState } from 'react';
-import type { PageResult } from '../types';
+import type { PageMeta } from '../types';
 
 interface TreeNode {
   name: string;
   path: string;
-  page?: PageResult;
+  page?: PageMeta;
   children: TreeNode[];
 }
 
-function buildTree(pages: PageResult[]): TreeNode[] {
+function buildTree(pages: PageMeta[]): TreeNode[] {
   const root: TreeNode[] = [];
 
   for (const page of pages) {
@@ -58,7 +58,7 @@ function TreeNodeView({
 }: {
   node: TreeNode;
   selectedUrl: string;
-  onSelect: (page: PageResult) => void;
+  onSelect: (page: PageMeta) => void;
   depth?: number;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -103,9 +103,9 @@ function TreeNodeView({
 }
 
 interface ResultTreeProps {
-  pages: PageResult[];
+  pages: PageMeta[];
   selectedUrl: string;
-  onSelect: (page: PageResult) => void;
+  onSelect: (page: PageMeta) => void;
   filterQuery?: string;
 }
 

@@ -49,7 +49,7 @@ If your goal is LLM training, fine-tuning, or RAG, raw HTML is your enemy. Clean
 
 ```
 RAW HTML        12,000 tokens/page   ████████████████████  100%
-CLEAN MARKDOWN   5,000 tokens/page   ████████             40%  — 58% saved
+CLEAN MARKDOWN   5,000 tokens/page   ████████             40%  — 60% saved
 ```
 
 | | |

@@ -116,24 +116,31 @@ Explore your archive instantly. Built-in debounced full-text search finds files 
 - **Sandboxed Markdown preview** — DOMPurify sanitized, `javascript:` URIs blocked
 - **Hierarchical folder navigation** — collapsible tree mirroring the site's URL structure
 
-### Safety & Compliance
+### Safety Systems
+
+> Built to behave. Engineered to protect your network, respect targets, and safeguard local disk space.
 
 | | |
 |---|---|
-| **SSRF protection** | Blocks loopback, RFC 1918, link-local, IPv6 ULA, `.local` TLD, and hosts resolving to private IPs |
+| **Domain Lock** | Locks crawling to your target host — never drifts into external ad networks, vendor blogs, or partner sites |
+| **SSRF Protection** | Blocks localhost, RFC 1918 private ranges, link-local, IPv6 ULA, and `.local` TLD at launch — no accidental internal hits |
+| **Hardened CSP** | No `unsafe-inline` scripts; HTML sanitized through DOMPurify; preview pane sandboxed with strict capabilities |
+| **Disk Guard** | Pauses on disk full, permission denied, or read-only errors — fix the issue, hit Resume, keep your progress |
 | **Asset safety** | 50 MB size cap, MIME-type allow-list, path sanitization, directory-traversal prevention |
-| **XSS prevention** | Markdown preview sanitized with DOMPurify; `javascript:` URIs blocked |
-| **CSP hardened** | No `unsafe-inline` in `script-src`; `withGlobalTauri: false` |
 
-### Export
+### Export Pipeline
+
+> Stitch, compress, and ship anywhere. No proprietary database — exports documentation exactly how you want it.
+
+One click compiles your archive into separate Markdown files, a consolidated handbook, standard PDFs, or a portable ZIP. The pipeline handles link rewriting so all internal references work offline, and hashes, deduplicates, and downloads images, styles, and fonts locally.
 
 | Format | Description |
 |--------|-------------|
-| **MD Files** | Individual `.md` files preserving the site's folder structure |
-| **Merged MD** | All pages as one file — load once into LLM context or feed into a RAG pipeline |
+| **MD Files** | Individual `.md` files with automatic link rewriting — all internal refs work offline |
+| **Merged MD** | All pages as one file — RAG-ready structured output, load once into LLM context |
 | **PDF Files** | Per-page PDF via headless Chrome |
 | **Merged PDF** | All pages as a single searchable PDF |
-| **ZIP** | Full output directory as an archive |
+| **ZIP** | Full output archive with asset deduplication & hashing |
 
 ---
 
@@ -268,5 +275,6 @@ MIT — see [LICENSE](LICENSE).
 ---
 
 <div align="center">
+  <strong>Ready to rip?</strong> · Free · No account required<br /><br />
   Made with love by <a href="https://moku.cx">moku</a>
 </div>

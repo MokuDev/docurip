@@ -6,6 +6,11 @@ import {
   Terminal,
   Circle,
   Trash,
+  Cloud,
+  HardDrives,
+  FileX,
+  Stop,
+  Warning,
 } from '@phosphor-icons/react';
 
 interface LogEntry {
@@ -14,6 +19,7 @@ interface LogEntry {
   level: 'info' | 'success' | 'warning' | 'error';
   message: string;
   jobId?: string;
+  kind?: 'network' | 'disk' | 'parse' | 'robotsBlocked' | 'cancelled' | 'unknown';
 }
 
 export function LiveConsole({ onClose }: { onClose: () => void }) {
@@ -60,6 +66,7 @@ export function LiveConsole({ onClose }: { onClose: () => void }) {
         level,
         message,
         jobId: ev.jobId,
+        kind: ev.type === 'error' ? ev.kind : undefined,
       });
     }
 
@@ -143,6 +150,7 @@ export function LiveConsole({ onClose }: { onClose: () => void }) {
             >
               <span className="text-charcoal/40 flex-shrink-0">[{log.timestamp}]</span>
               <span className="flex-shrink-0 font-semibold uppercase">{log.level}</span>
+              {log.kind && <ErrorKindIcon kind={log.kind} />}
               {log.jobId && (
                 <span className="text-charcoal/30 flex-shrink-0">[{log.jobId.slice(0, 8)}]</span>
               )}
@@ -168,3 +176,21 @@ const levelColor = (level: LogEntry['level']) => {
       return 'text-secondary';
   }
 };
+
+function ErrorKindIcon({ kind }: { kind: LogEntry['kind'] }) {
+  if (!kind) return null;
+  switch (kind) {
+    case 'network':
+      return <Cloud size={14} className="text-amber flex-shrink-0" title="Network error" />;
+    case 'disk':
+      return <HardDrives size={14} className="text-crimson flex-shrink-0" title="Disk error" />;
+    case 'parse':
+      return <FileX size={14} className="text-amber flex-shrink-0" title="Parse error" />;
+    case 'robotsBlocked':
+      return <Stop size={14} className="text-amber flex-shrink-0" title="Blocked by robots.txt" />;
+    case 'cancelled':
+      return null;
+    default:
+      return <Warning size={14} className="text-charcoal flex-shrink-0" title="Unknown error" />;
+  }
+}

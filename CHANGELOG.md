@@ -2,6 +2,9 @@
 
 ## v0.4.0 (2026-06-28)
 
+### Added
+- **ErrorKind icons in LiveConsole**: error events now display visual indicators for error type — red disk icon for `Disk`, orange cloud for `Network`, file-x for `Parse`, stop sign for `RobotsBlocked`, and generic warning for `Unknown`.
+
 ### Changed
 - **`job.results` keeps only metadata in RAM**: `PageMeta` now stores URL, title, HTTP status, and link count — Markdown content no longer sits on the heap. Eliminates O(n·content) RAM growth during large crawls.
 - **Persist throttling**: `persist_job` is no longer invoked after every page; it runs at most every 50 pages or 10 seconds, whichever comes first.

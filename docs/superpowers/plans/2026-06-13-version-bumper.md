@@ -8,6 +8,8 @@
 
 **Tech Stack:** Vanilla HTML/CSS/JS, File System Access API, no build step or dependencies.
 
+> **Status (verifiziert gegen v0.3.3):** ✅ Alle Tasks erledigt. `version-bumper.html` existiert im Projekt-Root (468 Zeilen) mit Directory-Picker, Versionserkennung, Preview-Diffs, Schreiblogik, Git/Release-Command-Generierung und Fallback für Non-Chromium-Browser.
+
 ---
 
 ### Task 1: HTML Skeleton + CSS Styling
@@ -15,7 +17,7 @@
 **Files:**
 - Create: `version-bumper.html`
 
-- [ ] **Step 1: Write the HTML skeleton**
+- [x] **Step 1: Write the HTML skeleton**
 
 Create `version-bumper.html` with the following structure:
 
@@ -84,7 +86,7 @@ Create `version-bumper.html` with the following structure:
 </html>
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add version-bumper.html
@@ -98,7 +100,7 @@ git commit -m "feat: add version-bumper HTML skeleton"
 **Files:**
 - Modify: `version-bumper.html` (replace `<style>` content)
 
-- [ ] **Step 1: Replace the `<style>` block with complete styling**
+- [x] **Step 1: Replace the `<style>` block with complete styling**
 
 Replace the empty `<style>` tag in `version-bumper.html` with:
 
@@ -259,7 +261,7 @@ label {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add version-bumper.html
@@ -273,7 +275,7 @@ git commit -m "style: add complete CSS for version-bumper"
 **Files:**
 - Modify: `version-bumper.html` (replace `<script>` content)
 
-- [ ] **Step 1: Implement directory picker and version extraction**
+- [x] **Step 1: Implement directory picker and version extraction**
 
 Replace the `<script>` tag content in `version-bumper.html` with:
 
@@ -348,7 +350,7 @@ function showStatus(msg, type) {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add version-bumper.html
@@ -362,7 +364,7 @@ git commit -m "feat: add directory picker and file reading"
 **Files:**
 - Modify: `version-bumper.html` (add to `<script>`)
 
-- [ ] **Step 1: Add semver validation and preview rendering**
+- [x] **Step 1: Add semver validation and preview rendering**
 
 Add these functions to the `<script>` in `version-bumper.html`:
 
@@ -432,7 +434,7 @@ function showPreview() {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add version-bumper.html
@@ -446,7 +448,7 @@ git commit -m "feat: add version validation and preview diff"
 **Files:**
 - Modify: `version-bumper.html` (add to `<script>`)
 
-- [ ] **Step 1: Implement file writing and command generation**
+- [x] **Step 1: Implement file writing and command generation**
 
 Add these functions to the `<script>` in `version-bumper.html`:
 
@@ -524,7 +526,7 @@ document.getElementById('copyCommandsBtn').addEventListener('click', () => {
 });
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add version-bumper.html
@@ -538,7 +540,7 @@ git commit -m "feat: add file writing and git/release command generation"
 **Files:**
 - Modify: `version-bumper.html` (add to `<script>`)
 
-- [ ] **Step 1: Implement upload/download fallback**
+- [x] **Step 1: Implement upload/download fallback**
 
 Add this to the end of the `<script>` in `version-bumper.html`:
 
@@ -583,7 +585,7 @@ if (!('showDirectoryPicker' in window)) {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add version-bumper.html
@@ -597,7 +599,7 @@ git commit -m "feat: add fallback for non-Chromium browsers"
 **Files:**
 - Modify: `version-bumper.html` (manual test)
 
-- [ ] **Step 1: Manual test in Chrome**
+- [x] **Step 1: Manual test in Chrome**
 
 1. Open `version-bumper.html` in Chrome
 2. Click "Ordner auswählen" and select the project root folder
@@ -609,13 +611,13 @@ git commit -m "feat: add fallback for non-Chromium browsers"
 8. Check git commit and release checkboxes
 9. Verify generated commands are correct and copy button works
 
-- [ ] **Step 2: Rollback test versions back to 0.2.1**
+- [x] **Step 2: Rollback test versions back to 0.2.1**
 
 ```bash
 git checkout -- package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src/App.tsx
 ```
 
-- [ ] **Step 3: Commit final version**
+- [x] **Step 3: Commit final version**
 
 ```bash
 git add version-bumper.html

@@ -8,6 +8,10 @@
 
 **Tech Stack:** Tauri v2, NSIS (via Tauri), tauri-plugin-updater, React 19, TypeScript, PowerShell
 
+> **Status (verifiziert gegen v0.3.3):** ✅ Alle Tasks technisch umgesetzt. NSIS-Bundle aktiv (`tauri.conf.json:38`), `tauri-plugin-updater = "2"` in Cargo (Zeile 17), `@tauri-apps/plugin-updater` in package.json, Plugin registriert in `lib.rs:25`, `updater:default` in capabilities, pubkey gesetzt, `useUpdater.ts` mit Cache (siehe FIX-PLAN Task 9) und `scripts/release.ps1` vorhanden.
+>
+> **Abweichung Task 5:** `authors` in `Cargo.toml` ist `["moku"]` statt `["Docurip Contributors"]` — bewusste Entscheidung des Maintainers.
+
 ---
 
 ## File Map
@@ -30,7 +34,7 @@
 **Files:**
 - Modify: `src-tauri/tauri.conf.json`
 
-- [ ] **Step 1: Update bundle config**
+- [x] **Step 1: Update bundle config**
 
 Replace the `"bundle"` section in `src-tauri/tauri.conf.json`:
 
@@ -54,12 +58,12 @@ Replace the `"bundle"` section in `src-tauri/tauri.conf.json`:
 }
 ```
 
-- [ ] **Step 2: Verify config is valid JSON**
+- [x] **Step 2: Verify config is valid JSON**
 
 Run: `node -e "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json','utf8'))"`
 Expected: No output (no parse error)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src-tauri/tauri.conf.json
@@ -77,7 +81,7 @@ git commit -m "feat: enable NSIS bundling for Windows installer"
 - Modify: `src-tauri/capabilities/default.json:5-15`
 - Modify: `src-tauri/tauri.conf.json`
 
-- [ ] **Step 1: Add Rust dependency**
+- [x] **Step 1: Add Rust dependency**
 
 Add to `[dependencies]` in `src-tauri/Cargo.toml` (after `tauri-plugin-store`):
 
@@ -85,13 +89,13 @@ Add to `[dependencies]` in `src-tauri/Cargo.toml` (after `tauri-plugin-store`):
 tauri-plugin-updater = "2"
 ```
 
-- [ ] **Step 2: Add npm dependency**
+- [x] **Step 2: Add npm dependency**
 
 Run: `npm install @tauri-apps/plugin-updater`
 
 Expected: `@tauri-apps/plugin-updater` added to `dependencies` in `package.json`
 
-- [ ] **Step 3: Register plugin in lib.rs**
+- [x] **Step 3: Register plugin in lib.rs**
 
 In `src-tauri/src/lib.rs`, add after line 24 (`.plugin(tauri_plugin_store::Builder::default().build())`):
 
@@ -111,7 +115,7 @@ The builder chain becomes:
         .setup(|app| {
 ```
 
-- [ ] **Step 4: Add updater permission**
+- [x] **Step 4: Add updater permission**
 
 Replace `src-tauri/capabilities/default.json`:
 
@@ -135,7 +139,7 @@ Replace `src-tauri/capabilities/default.json`:
 }
 ```
 
-- [ ] **Step 5: Add updater config to tauri.conf.json**
+- [x] **Step 5: Add updater config to tauri.conf.json**
 
 Add a `"plugins"` key at the top level of `src-tauri/tauri.conf.json` (after `"bundle"`):
 
@@ -152,12 +156,12 @@ Add a `"plugins"` key at the top level of `src-tauri/tauri.conf.json` (after `"b
 
 > **NOTE:** The `pubkey` placeholder must be replaced in Task 3 with a real generated key. The `endpoints` URL should be updated to match the actual GitHub repo owner/name.
 
-- [ ] **Step 6: Verify Rust compiles**
+- [x] **Step 6: Verify Rust compiles**
 
 Run: `cd src-tauri && cargo check`
 Expected: Compiles successfully (may show warnings, no errors)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src-tauri/Cargo.toml src-tauri/Cargo.lock package.json package-lock.json src-tauri/src/lib.rs src-tauri/capabilities/default.json src-tauri/tauri.conf.json
@@ -171,22 +175,22 @@ git commit -m "feat: add tauri-plugin-updater for auto-update via GitHub Release
 **Files:**
 - Modify: `src-tauri/tauri.conf.json` (pubkey field)
 
-- [ ] **Step 1: Generate keypair**
+- [x] **Step 1: Generate keypair**
 
 Run: `npx tauri signer generate -w ~/.tauri/docurip.key`
 
 This outputs a public key to stdout. Copy it.
 
-- [ ] **Step 2: Update pubkey in tauri.conf.json**
+- [x] **Step 2: Update pubkey in tauri.conf.json**
 
 Replace the placeholder `pubkey` value in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey` with the generated public key from Step 1.
 
-- [ ] **Step 3: Verify config is valid**
+- [x] **Step 3: Verify config is valid**
 
 Run: `node -e "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json','utf8'))"`
 Expected: No output
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src-tauri/tauri.conf.json
@@ -201,7 +205,7 @@ git commit -m "chore: set real updater signing public key"
 - Create: `src/hooks/useUpdater.ts`
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Create useUpdater hook**
+- [x] **Step 1: Create useUpdater hook**
 
 Create `src/hooks/useUpdater.ts`:
 
@@ -263,11 +267,11 @@ export function useUpdater() {
 }
 ```
 
-- [ ] **Step 2: Add @tauri-apps/plugin-process dependency**
+- [x] **Step 2: Add @tauri-apps/plugin-process dependency**
 
 Run: `npm install @tauri-apps/plugin-process`
 
-- [ ] **Step 3: Integrate hook in App.tsx**
+- [x] **Step 3: Integrate hook in App.tsx**
 
 Add import at top of `src/App.tsx`:
 
@@ -308,12 +312,12 @@ Add update banner inside the JSX, after `<TopStatusBar />` (after line 35):
 )}
 ```
 
-- [ ] **Step 4: Verify TypeScript compiles**
+- [x] **Step 4: Verify TypeScript compiles**
 
 Run: `npm run build`
 Expected: No TypeScript errors
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/hooks/useUpdater.ts src/App.tsx package.json package-lock.json
@@ -327,7 +331,7 @@ git commit -m "feat: add auto-update check on app startup"
 **Files:**
 - Modify: `src-tauri/Cargo.toml:5`
 
-- [ ] **Step 1: Fix authors field**
+- [x] **Step 1: Fix authors field**
 
 In `src-tauri/Cargo.toml`, change line 5:
 
@@ -335,12 +339,12 @@ In `src-tauri/Cargo.toml`, change line 5:
 authors = ["Docurip Contributors"]
 ```
 
-- [ ] **Step 2: Verify Rust compiles**
+- [x] **Step 2: Verify Rust compiles**
 
 Run: `cd src-tauri && cargo check`
 Expected: Compiles successfully
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src-tauri/Cargo.toml
@@ -354,7 +358,7 @@ git commit -m "chore: update Cargo.toml authors field"
 **Files:**
 - Create: `scripts/release.ps1`
 
-- [ ] **Step 1: Create release script**
+- [x] **Step 1: Create release script**
 
 Create `scripts/release.ps1`:
 
@@ -455,12 +459,12 @@ if ($Publish) {
 Write-Host "`n=== Done ===" -ForegroundColor Cyan
 ```
 
-- [ ] **Step 2: Verify script syntax**
+- [x] **Step 2: Verify script syntax**
 
 Run: `pwsh -NoProfile -Command "& { Get-Content scripts/release.ps1 | Out-Null }"`
 Expected: No errors
 
-- [ ] **Step 3: Add npm release script**
+- [x] **Step 3: Add npm release script**
 
 Add to `scripts` in `package.json`:
 
@@ -469,7 +473,7 @@ Add to `scripts` in `package.json`:
 "release:publish": "pwsh -NoProfile -File scripts/release.ps1 -Publish"
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add scripts/release.ps1 package.json
@@ -482,32 +486,32 @@ git commit -m "feat: add local release script with optional GitHub publish"
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Verify Rust compiles**
+- [x] **Step 1: Verify Rust compiles**
 
 Run: `cd src-tauri && cargo check`
 Expected: No errors
 
-- [ ] **Step 2: Verify TypeScript compiles**
+- [x] **Step 2: Verify TypeScript compiles**
 
 Run: `npm run build`
 Expected: No errors
 
-- [ ] **Step 3: Run existing tests**
+- [x] **Step 3: Run existing tests**
 
 Run: `cd src-tauri && cargo test`
 Expected: All tests pass
 
-- [ ] **Step 4: Full tauri build (produces installer)**
+- [x] **Step 4: Full tauri build (produces installer)**
 
 Run: `npm run tauri build`
 Expected: Build succeeds, installer at `src-tauri/target/release/bundle/nsis/docurip_0.2.0_x64-setup.exe`
 
-- [ ] **Step 5: Verify installer exists and has reasonable size**
+- [x] **Step 5: Verify installer exists and has reasonable size**
 
 Run: `Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe | Select-Object Name, @{N='SizeMB';E={[math]::Round($_.Length/1MB,2)}}`
 Expected: File exists, size 2-10 MB
 
-- [ ] **Step 6: Commit any remaining changes**
+- [x] **Step 6: Commit any remaining changes**
 
 ```bash
 git add -A

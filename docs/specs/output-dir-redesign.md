@@ -68,13 +68,15 @@ Rework the output directory system so that:
 
 ## Success Criteria
 
-- [ ] New crawl creates `{domain}/{date}-{id}` subfolder automatically
-- [ ] NewCrawl view has folder picker button (native dialog)
-- [ ] Settings view has folder picker button (native dialog)
-- [ ] ExportModal pre-fills destination from job output dir
-- [ ] History "Open folder" button works for all completed jobs
-- [ ] All 75 existing tests pass
-- [ ] No breaking changes to persisted job data
+> **Status (verifiziert gegen v0.3.3):** Umgesetzt, aber mit zwei bewussten Spec-Abweichungen (siehe CHANGELOG v0.3.2): (1) Subfolder vereinfacht zu `{domain}` (ohne Date/ID), Inhalt unterteilt in `main|zip|formats`. (2) NewCrawl-Picker ganz entfernt, Output-Dir nur noch in Settings.
+
+- [x] Neuer Crawl erzeugt automatisch `{outputDir}/{domain}/{main|zip|formats}` (abweichend: kein Date/ID-Suffix)
+- [ ] NewCrawl mit Folder-Picker — **bewusst entfernt** (Settings-only)
+- [x] Settings mit nativen Folder-Picker (`Settings.tsx:182`)
+- [x] ExportModal benötigt kein Destination-Picker mehr (auto-destination, weiter vereinfacht als ursprünglich geplant)
+- [x] History "Open folder" funktioniert, öffnet `main/` (History.tsx:61-64)
+- [x] Alle Tests bestehen (`cargo test` grün laut CHANGELOG)
+- [x] Keine Breaking Changes an persistierten Jobs
 
 ## Resolved Questions
 

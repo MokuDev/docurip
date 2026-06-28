@@ -13,7 +13,7 @@
   <br />
   <br />
 
-  [![Version](https://img.shields.io/badge/version-0.4.0-00ff88?style=flat-square&labelColor=0a0a0f)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-0.5.0-00ff88?style=flat-square&labelColor=0a0a0f)](CHANGELOG.md)
   [![License](https://img.shields.io/badge/license-MIT-00ff88?style=flat-square&labelColor=0a0a0f)](LICENSE)
   [![Platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square&labelColor=0a0a0f)](https://github.com/MokuDev/docurip-src/releases)
   [![Rust](https://img.shields.io/badge/rust-1.95+-f74c00?style=flat-square&labelColor=0a0a0f)](https://www.rust-lang.org/)
@@ -37,7 +37,7 @@
 
 ## What is docurip?
 
-Docurip is a high-performance desktop app that recursively crawls documentation websites and converts them into structured, offline Markdown archives. The Rust backend handles parallel fetching, HTML-to-Markdown conversion, and asset downloads. The React frontend streams live progress and lets you browse, search, and export results — all without leaving the app.
+Docurip is a high-performance desktop app that crawls documentation websites, imports PDFs and EPUBs, and converts everything into structured, offline Markdown archives. The Rust backend handles parallel fetching, HTML-to-Markdown conversion, file import with text cleaning, and asset downloads. The React frontend streams live progress and lets you browse, search, and export results — all without leaving the app.
 
 Built for developers who want their docs available offline — for LLM context windows, RAG pipelines, air-gapped environments, or just reading without an internet connection.
 
@@ -96,6 +96,8 @@ Never lose context to the upstream. Set a start URL, crawl depth, and page limit
 | **robots.txt compliance** | Fetches and parses `/robots.txt`, honors `User-agent`, `Disallow`, `Allow`, `Crawl-delay` — built-in |
 | **Domain-locked** | Never wanders off-site — `stayWithinDomain` enforced by default |
 | **Pause / Resume / Cancel** | Soft-pause via atomics — in-flight requests finish gracefully before stopping |
+| **Smart content extraction** | Auto-detects `<main>`, `<article>`, `[role="main"]` — strips nav, sidebar, footer, and UI chrome automatically |
+| **Markdown deduplication** | Removes duplicate content blocks, TOC navigation, and trailing heading stubs from converted output |
 | **Automatic retry** | Exponential backoff for transient errors (timeouts, 5xx); permanent errors (4xx) fail immediately |
 | **Disk-error auto-pause** | Detects permission errors, full disks, read-only filesystems — pauses so you can fix and resume |
 | **Depth & page limits** | `maxDepth` (1–10) and `pageLimit` (1–10,000) prevent runaway crawls |
@@ -128,16 +130,31 @@ Explore your archive instantly. Built-in debounced full-text search finds files 
 | **Disk Guard** | Pauses on disk full, permission denied, or read-only errors — fix the issue, hit Resume, keep your progress |
 | **Asset safety** | 50 MB size cap, MIME-type allow-list, path sanitization, directory-traversal prevention |
 
+### File Import
+
+> Already have PDFs or EPUBs? Drag them in — docurip converts them to clean Markdown too.
+
+Drop a PDF or EPUB onto the Import view and docurip extracts text and images into a Markdown archive, ready for the same export pipeline as crawled content.
+
+| | |
+|---|---|
+| **PDF import** | Extracts text per page, splits into individual Markdown files, pulls embedded images |
+| **EPUB import** | Converts each chapter's HTML to Markdown, extracts cover and inline images |
+| **Text cleaner** | Strips repeated headers/footers, page numbers, footnotes, and boilerplate — toggle on/off per import |
+| **Drag & drop** | Native Tauri file drop — drag files directly onto the app window |
+
 ### Export Pipeline
 
 > Stitch, compress, and ship anywhere. No proprietary database — exports documentation exactly how you want it.
 
-One click compiles your archive into separate Markdown files, a consolidated handbook, standard PDFs, or a portable ZIP. The pipeline handles link rewriting so all internal references work offline, and hashes, deduplicates, and downloads images, styles, and fonts locally.
+One click compiles your archive into separate Markdown files, a consolidated handbook, structured JSON, standard PDFs, or a portable ZIP. The pipeline handles link rewriting so all internal references work offline, and hashes, deduplicates, and downloads images, styles, and fonts locally.
 
 | Format | Description |
 |--------|-------------|
 | **MD Files** | Individual `.md` files with automatic link rewriting — all internal refs work offline |
 | **Merged MD** | All pages as one file — RAG-ready structured output, load once into LLM context |
+| **JSON Files** | Structured JSON per page with `title`, `url`, `content`, and `meta` fields |
+| **Merged JSON** | All pages as a single JSON array — ready for programmatic consumption |
 | **PDF Files** | Per-page PDF via headless Chrome |
 | **Merged PDF** | All pages as a single searchable PDF |
 | **ZIP** | Full output archive with asset deduplication & hashing |
@@ -196,11 +213,15 @@ Go to **New Crawl**, paste a docs URL, tune depth/page limits, and click **Start
 
 The live console shows each page in real time. Use **Pause** if you see a spike of rate-limit errors, wait a moment, then **Resume**.
 
-### 3. Browse & Export
+### 3. Import Files (optional)
+
+Go to **Import**, drag a PDF or EPUB onto the drop zone. Enable **Clean text** to automatically strip headers, footers, page numbers, and footnotes. The imported content appears as a Markdown archive — same as crawled content.
+
+### 4. Browse & Export
 
 In **History**, select any completed job to:
 - **Browse Results** — search and preview all captured pages
-- **Export** — choose a format; output lands automatically in the job's folder
+- **Export** — choose a format (MD, Merged MD, JSON, PDF, ZIP); output lands automatically in the job's folder
 - **Open Output Folder** — opens the `main/` subfolder directly in Explorer
 
 ### Output folder layout
@@ -227,6 +248,14 @@ The `---` separators between pages are natural chunk boundaries for text splitte
 
 **With Anthropic Prompt Caching:** load the Merged MD once, cache it, and pay ~90% less on every subsequent read. At 1,000 pages, that's 120M tokens (raw HTML, 10 queries) → 9.5M tokens — a **12.6× reduction**.
 
+### PDF / EPUB to LLM-ready Markdown
+
+```
+Import PDF or EPUB → text cleaner strips artifacts → Export as Merged MD or JSON
+```
+
+Drop a technical manual, ebook, or whitepaper into the Import view. The text cleaner removes repeated headers/footers, page numbers, and footnotes. Export as JSON for programmatic access or Merged MD for direct LLM context.
+
 ### Large sites (500+ pages)
 
 ```
@@ -248,7 +277,7 @@ Crawl the site, then **Export → Merged PDF**. One searchable PDF containing al
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Rust 1.95+, Tauri v2, tokio, reqwest, scraper, html2md, pulldown-cmark |
+| Backend | Rust 1.95+, Tauri v2, tokio, reqwest, scraper, html2md, pulldown-cmark, pdf-extract, epub |
 | Frontend | React 19, TypeScript 5, Vite 6, Tailwind CSS 3.4, framer-motion |
 | Tauri Plugins | shell, fs, dialog, store, updater |
 | System | sysinfo, uuid, DOMPurify |
@@ -261,7 +290,7 @@ Crawl the site, then **Export → Merged PDF**. One searchable PDF containing al
 | Version | Focus |
 |---------|-------|
 | **v0.4** | Foundations — stability, test coverage, memory bounds, backpressure |
-| **v0.5** | Import — PDF → Markdown, ePub → Markdown |
+| **v0.5** | Import & Export — PDF/EPUB → Markdown, JSON export, smart content extraction, text cleaning |
 | **v0.6** | UX & Automation — scheduled crawls, URL rules, full-text search improvements, optional OCR |
 | **v0.7** | Distribution — robust installer, auto-updater, macOS/Linux build preparation |
 | **v1.0** | CLI mode, 5k-page crawls, stable release |

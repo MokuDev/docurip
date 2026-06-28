@@ -13,7 +13,7 @@
   <br />
   <br />
 
-  [![Version](https://img.shields.io/badge/version-0.3.4-00ff88?style=flat-square&labelColor=0a0a0f)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-0.4.0-00ff88?style=flat-square&labelColor=0a0a0f)](CHANGELOG.md)
   [![License](https://img.shields.io/badge/license-MIT-00ff88?style=flat-square&labelColor=0a0a0f)](LICENSE)
   [![Platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square&labelColor=0a0a0f)](https://github.com/MokuDev/docurip-src/releases)
   [![Rust](https://img.shields.io/badge/rust-1.95+-f74c00?style=flat-square&labelColor=0a0a0f)](https://www.rust-lang.org/)

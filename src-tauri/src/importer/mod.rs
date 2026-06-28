@@ -1,5 +1,6 @@
 pub mod pdf;
 pub mod epub;
+pub mod text_cleaner;
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

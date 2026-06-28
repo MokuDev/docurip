@@ -18,6 +18,7 @@ export function ImportView() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [cleanText, setCleanText] = useState(true);
   const { pushToast } = useToasts();
 
   const handleImport = async (filePath?: string) => {
@@ -45,6 +46,7 @@ export function ImportView() {
       const res = await invoke<ImportResult>('import_file', {
         filePath: selectedPath,
         outputDir: null,
+        cleanText,
       });
       setResult(res);
       pushToast('success', `Imported "${res.title}" — ${res.pageCount} pages, ${res.imageCount} images`);
@@ -125,6 +127,28 @@ export function ImportView() {
             Supports <span className="text-secondary">.pdf</span> and <span className="text-secondary">.epub</span> files
           </p>
         </motion.div>
+
+        {/* Clean text toggle */}
+        <label className="mt-4 flex items-center gap-3 cursor-pointer select-none">
+          <div
+            onClick={() => setCleanText(!cleanText)}
+            className={`
+              relative w-9 h-5 rounded-full transition-colors duration-200
+              ${cleanText ? 'bg-accentGreen' : 'bg-abyssal'}
+            `}
+          >
+            <div
+              className={`
+                absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-ghost transition-transform duration-200
+                ${cleanText ? 'translate-x-4' : 'translate-x-0'}
+              `}
+            />
+          </div>
+          <div>
+            <span className="text-sm text-ghost">Clean text</span>
+            <span className="text-xs text-charcoal ml-2">Remove headers, footers, page numbers, footnotes</span>
+          </div>
+        </label>
 
         {/* Result */}
         {result && (

@@ -4,7 +4,7 @@ use lopdf::Document;
 
 use super::{ensure_output_dir, sanitize_filename, ImportResult};
 
-pub fn import_pdf(file_path: &Path, output_dir: &Path) -> anyhow::Result<ImportResult> {
+pub fn import_pdf(file_path: &Path, output_dir: &Path, clean_text: bool) -> anyhow::Result<ImportResult> {
     let images_dir = ensure_output_dir(output_dir)?;
 
     let text = pdf_extract::extract_text(file_path)
@@ -50,8 +50,16 @@ pub fn import_pdf(file_path: &Path, output_dir: &Path) -> anyhow::Result<ImportR
     let title = file_stem.to_string();
     let safe_name = sanitize_filename(file_stem);
 
-    let pages: Vec<&str> = text.split('\u{0C}').collect();
-    let page_count = pages.len().max(1);
+    let raw_pages: Vec<&str> = text.split('\u{0C}').collect();
+    let owned_pages: Vec<String> = raw_pages.iter().map(|p| p.to_string()).collect();
+
+    let cleaned = if clean_text {
+        super::text_cleaner::clean_pages(&owned_pages, &super::text_cleaner::CleanerConfig::default())
+    } else {
+        owned_pages.into_iter().filter(|p| !p.trim().is_empty()).collect()
+    };
+
+    let page_count = cleaned.len().max(1);
 
     let mut markdown = String::new();
     markdown.push_str(&format!("# {}\n\n", title));
@@ -65,12 +73,12 @@ pub fn import_pdf(file_path: &Path, output_dir: &Path) -> anyhow::Result<ImportR
         markdown.push_str("---\n\n");
     }
 
-    for (i, page) in pages.iter().enumerate() {
+    for (i, page) in cleaned.iter().enumerate() {
         let trimmed = page.trim();
         if trimmed.is_empty() {
             continue;
         }
-        if pages.len() > 1 {
+        if cleaned.len() > 1 {
             markdown.push_str(&format!("## Page {}\n\n", i + 1));
         }
         markdown.push_str(trimmed);
@@ -102,7 +110,7 @@ mod tests {
     #[test]
     fn import_pdf_missing_file_returns_error() {
         let output = TempDir::new().unwrap();
-        let result = import_pdf(&PathBuf::from("/nonexistent.pdf"), output.path());
+        let result = import_pdf(&PathBuf::from("/nonexistent.pdf"), output.path(), false);
         assert!(result.is_err());
     }
 }

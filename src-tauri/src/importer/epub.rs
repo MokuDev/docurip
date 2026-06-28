@@ -4,7 +4,7 @@ use epub::doc::EpubDoc;
 
 use super::{ensure_output_dir, sanitize_filename, ImportResult};
 
-pub fn import_epub(file_path: &Path, output_dir: &Path) -> anyhow::Result<ImportResult> {
+pub fn import_epub(file_path: &Path, output_dir: &Path, clean_text: bool) -> anyhow::Result<ImportResult> {
     let images_dir = ensure_output_dir(output_dir)?;
 
     let mut doc = EpubDoc::new(file_path)
@@ -80,6 +80,12 @@ pub fn import_epub(file_path: &Path, output_dir: &Path) -> anyhow::Result<Import
         }
     }
 
+    let chapters = if clean_text {
+        super::text_cleaner::clean_pages(&chapters, &super::text_cleaner::CleanerConfig::default())
+    } else {
+        chapters.into_iter().filter(|c| !c.trim().is_empty()).collect()
+    };
+
     let page_count = chapters.len().max(1);
 
     let mut markdown = String::new();
@@ -123,7 +129,7 @@ mod tests {
     #[test]
     fn import_epub_missing_file_returns_error() {
         let output = TempDir::new().unwrap();
-        let result = import_epub(&PathBuf::from("/nonexistent.epub"), output.path());
+        let result = import_epub(&PathBuf::from("/nonexistent.epub"), output.path(), false);
         assert!(result.is_err());
     }
 }

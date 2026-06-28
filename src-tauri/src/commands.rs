@@ -670,6 +670,7 @@ pub async fn list_exports(
 pub async fn import_file(
     file_path: String,
     output_dir: Option<String>,
+    clean_text: Option<bool>,
     app: AppHandle,
 ) -> Result<ImportResult, String> {
     let path = std::path::PathBuf::from(&file_path);
@@ -697,10 +698,12 @@ pub async fn import_file(
     };
     std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
 
+    let do_clean = clean_text.unwrap_or(true);
+
     match ext.as_str() {
-        "pdf" => crate::importer::pdf::import_pdf(&path, &dest)
+        "pdf" => crate::importer::pdf::import_pdf(&path, &dest, do_clean)
             .map_err(|e| format!("PDF import failed: {}", e)),
-        "epub" => crate::importer::epub::import_epub(&path, &dest)
+        "epub" => crate::importer::epub::import_epub(&path, &dest, do_clean)
             .map_err(|e| format!("EPUB import failed: {}", e)),
         _ => Err(format!("Unsupported file type: .{}", ext)),
     }

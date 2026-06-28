@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.5.0 (2026-06-28)
+
+### Added
+- **PDF/EPUB import**: Import PDF and EPUB files into Markdown with automatic image extraction. New Import view with drag & drop file picker. Backend modules `importer/pdf.rs` and `importer/epub.rs` handle extraction via `pdf_extract` and `epub` crates.
+- **JSON export format**: Export crawled documentation as structured JSON files (individual or merged). Each entry includes `title`, `url`, `content`, and `meta` fields. Added `JsonFiles` and `MergedJson` variants to `ExportFormat`.
+- **Text cleaner for imports**: Configurable pipeline that strips headers, footers, page numbers, footnotes, and boilerplate from imported PDFs/EPUBs. Uses cross-page frequency analysis for header/footer detection, sequential number detection for page numbers, and zone-restricted pattern matching. Toggle in Import UI, enabled by default.
+- **Tauri native drag & drop**: Import view uses Tauri's native file drop event instead of HTML5 drag & drop for more reliable file handling.
+- **Auto content extraction in crawler**: When no CSS selectors are configured, the crawler now tries common content selectors (`main`, `article`, `[role="main"]`, `#content`, `.content`, etc.) before falling back to the full HTML body. Prevents nav, sidebar, and footer content from polluting the Markdown output.
+- **Markdown deduplication**: Post-processing step in `HtmlToMarkdown` removes duplicate text blocks (>80 chars) that appear multiple times in converted output, eliminating repeated content from pages with duplicated DOM structures.
+
+### Fixed
+- **JSON export title extraction**: Now detects both ATX-style (`# Heading`) and setext-style (`Heading\n===`) Markdown headings. Previously only ATX headings were detected, causing filenames like `getting-started` to appear as the title instead of the actual heading text.
+- **Clean text toggle not working**: Fixed click area (onClick was only on the small track, not the label) and stale closure in drag & drop handler (useEffect captured initial state; now uses useRef to always read current value).
+- **TextCleaner ineffective on real PDFs**: Pre-trims excessive blank lines from `pdf_extract` output, uses non-blank-line-aware zone indexing, expanded detection zones to 5 lines, added sequential page number detection across pages, and caps effective zone at half page height to avoid false positives on short pages.
+
 ## v0.4.2 (2026-06-28)
 
 ### Added

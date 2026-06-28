@@ -114,7 +114,7 @@ export interface SessionInfo {
   uptimeSecs: number;
 }
 
-export type ExportFormat = 'md_files' | 'pdf_files' | 'merged_md' | 'merged_pdf';
+export type ExportFormat = 'md_files' | 'pdf_files' | 'merged_md' | 'merged_pdf' | 'json_files' | 'merged_json';
 
 export interface ExportOption {
   format: ExportFormat;
@@ -137,6 +137,18 @@ export const EXPORT_OPTIONS: ExportOption[] = [
     requiresHeadless: false,
   },
   {
+    format: 'json_files',
+    label: 'JSON Files',
+    description: 'Individual .json files per page',
+    requiresHeadless: false,
+  },
+  {
+    format: 'merged_json',
+    label: 'Merged JSON',
+    description: 'All pages in one JSON array',
+    requiresHeadless: false,
+  },
+  {
     format: 'pdf_files',
     label: 'PDF Files',
     description: 'Individual .pdf files per page',
@@ -149,3 +161,11 @@ export const EXPORT_OPTIONS: ExportOption[] = [
     requiresHeadless: true,
   },
 ];
+
+export interface ImportResult {
+  markdownPath: string;
+  imagesDir: string | null;
+  pageCount: number;
+  imageCount: number;
+  title: string;
+}

@@ -12,6 +12,8 @@ pub enum ExportFormat {
     PdfFiles,
     MergedMd,
     MergedPdf,
+    JsonFiles,
+    MergedJson,
 }
 
 pub fn copy_md_files(src_dir: &Path, dst_dir: &Path) -> anyhow::Result<()> {
@@ -201,6 +203,89 @@ pub fn export_merged_pdf(_src_dir: &Path, _dst_file: &Path) -> anyhow::Result<()
     anyhow::bail!("PDF export requires headless Chrome support. Rebuild with --features headless.")
 }
 
+fn extract_title(content: &str, fallback: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+
+    // ATX heading: "# Title"
+    if let Some(l) = lines.iter().find(|l| l.starts_with("# ")) {
+        return l.trim_start_matches("# ").to_string();
+    }
+
+    // Setext heading: "Title\n=====" (line followed by === or ---)
+    for i in 0..lines.len().saturating_sub(1) {
+        let line = lines[i].trim();
+        let next = lines[i + 1].trim();
+        if !line.is_empty()
+            && next.len() >= 3
+            && next.chars().all(|c| c == '=')
+        {
+            return line.to_string();
+        }
+    }
+
+    fallback.to_string()
+}
+
+pub fn export_json_files(src_dir: &Path, dst_dir: &Path) -> anyhow::Result<()> {
+    for entry in walk_dir(src_dir)? {
+        if entry.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let relative = entry.strip_prefix(src_dir)?;
+        let dst_path = dst_dir.join(relative).with_extension("json");
+        if let Some(parent) = dst_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let content = std::fs::read_to_string(&entry)?;
+        let fallback = relative
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled")
+            .to_string();
+        let title = extract_title(&content, &fallback);
+        let page = serde_json::json!({
+            "title": title,
+            "source": relative.to_string_lossy(),
+            "content": content,
+        });
+        let json = serde_json::to_string_pretty(&page)?;
+        std::fs::write(&dst_path, json)?;
+    }
+    Ok(())
+}
+
+pub fn merge_json_files(src_dir: &Path, dst_file: &Path) -> anyhow::Result<()> {
+    let mut files = walk_dir(src_dir)?
+        .into_iter()
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("md"))
+        .collect::<Vec<_>>();
+    files.sort();
+
+    let mut pages = Vec::new();
+    for file in &files {
+        let relative = file.strip_prefix(src_dir)?;
+        let content = std::fs::read_to_string(file)?;
+        let fallback = relative
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled")
+            .to_string();
+        let title = extract_title(&content, &fallback);
+        pages.push(serde_json::json!({
+            "title": title,
+            "source": relative.to_string_lossy(),
+            "content": content,
+        }));
+    }
+
+    if let Some(parent) = dst_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(&pages)?;
+    std::fs::write(dst_file, json)?;
+    Ok(())
+}
+
 pub fn zip_directory(src_dir: &Path, dst_file: &Path) -> anyhow::Result<()> {
     let file = File::create(dst_file)?;
     let mut zip = zip::ZipWriter::new(file);
@@ -246,6 +331,8 @@ mod tests {
             ExportFormat::PdfFiles,
             ExportFormat::MergedMd,
             ExportFormat::MergedPdf,
+            ExportFormat::JsonFiles,
+            ExportFormat::MergedJson,
         ];
         for fmt in &formats {
             let json = serde_json::to_string(fmt).unwrap();
@@ -256,6 +343,8 @@ mod tests {
                     | (ExportFormat::PdfFiles, ExportFormat::PdfFiles)
                     | (ExportFormat::MergedMd, ExportFormat::MergedMd)
                     | (ExportFormat::MergedPdf, ExportFormat::MergedPdf)
+                    | (ExportFormat::JsonFiles, ExportFormat::JsonFiles)
+                    | (ExportFormat::MergedJson, ExportFormat::MergedJson)
             ));
         }
     }
@@ -266,6 +355,8 @@ mod tests {
         assert_eq!(serde_json::to_string(&ExportFormat::PdfFiles).unwrap(), "\"pdf_files\"");
         assert_eq!(serde_json::to_string(&ExportFormat::MergedMd).unwrap(), "\"merged_md\"");
         assert_eq!(serde_json::to_string(&ExportFormat::MergedPdf).unwrap(), "\"merged_pdf\"");
+        assert_eq!(serde_json::to_string(&ExportFormat::JsonFiles).unwrap(), "\"json_files\"");
+        assert_eq!(serde_json::to_string(&ExportFormat::MergedJson).unwrap(), "\"merged_json\"");
     }
 
     #[test]
@@ -283,6 +374,68 @@ mod tests {
         assert!(dst.path().join("a.md").exists());
         assert!(dst.path().join("sub").join("b.md").exists());
         assert!(!dst.path().join("c.txt").exists());
+    }
+
+    #[test]
+    fn export_json_files_creates_json() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        std::fs::write(src.path().join("page.md"), "# Hello\n\nWorld").unwrap();
+
+        export_json_files(src.path(), dst.path()).unwrap();
+
+        let json_path = dst.path().join("page.json");
+        assert!(json_path.exists());
+        let content = std::fs::read_to_string(&json_path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["title"], "Hello");
+        assert!(parsed["content"].as_str().unwrap().contains("World"));
+    }
+
+    #[test]
+    fn merge_json_files_creates_array() {
+        let src = TempDir::new().unwrap();
+        std::fs::write(src.path().join("a.md"), "# A\n\nAlpha").unwrap();
+        std::fs::write(src.path().join("b.md"), "# B\n\nBeta").unwrap();
+
+        let dst = TempDir::new().unwrap();
+        let out = dst.path().join("merged.json");
+        merge_json_files(src.path(), &out).unwrap();
+
+        let content = std::fs::read_to_string(&out).unwrap();
+        let parsed: Vec<serde_json::Value> = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed.len(), 2);
+    }
+
+    #[test]
+    fn extract_title_atx_heading() {
+        assert_eq!(extract_title("# My Title\n\nContent", "fallback"), "My Title");
+    }
+
+    #[test]
+    fn extract_title_setext_heading() {
+        assert_eq!(
+            extract_title("My Setext Title\n==========\n\nContent", "fallback"),
+            "My Setext Title"
+        );
+    }
+
+    #[test]
+    fn extract_title_fallback() {
+        assert_eq!(extract_title("No heading here\nJust text", "page-name"), "page-name");
+    }
+
+    #[test]
+    fn export_json_setext_title() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        std::fs::write(src.path().join("page.md"), "Getting Started\n==========\n\nContent").unwrap();
+
+        export_json_files(src.path(), dst.path()).unwrap();
+
+        let content = std::fs::read_to_string(dst.path().join("page.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["title"], "Getting Started");
     }
 
     #[test]

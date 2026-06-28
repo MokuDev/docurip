@@ -35,6 +35,9 @@ sysinfo = "0.31"
 pulldown-cmark = "0.12"
 tempfile = "3"
 tauri-plugin-process = "2.3.1"
+pdf-extract = "0.12"
+lopdf = "0.42"
+epub = "2.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util"] }

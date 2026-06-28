@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -19,9 +19,11 @@ export function ImportView() {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [cleanText, setCleanText] = useState(true);
+  const cleanTextRef = useRef(cleanText);
+  cleanTextRef.current = cleanText;
   const { pushToast } = useToasts();
 
-  const handleImport = async (filePath?: string) => {
+  const handleImport = useCallback(async (filePath?: string) => {
     let selectedPath = filePath;
 
     if (!selectedPath) {
@@ -46,7 +48,7 @@ export function ImportView() {
       const res = await invoke<ImportResult>('import_file', {
         filePath: selectedPath,
         outputDir: null,
-        cleanText,
+        cleanText: cleanTextRef.current,
       });
       setResult(res);
       pushToast('success', `Imported "${res.title}" — ${res.pageCount} pages, ${res.imageCount} images`);
@@ -57,7 +59,7 @@ export function ImportView() {
     } finally {
       setImporting(false);
     }
-  };
+  }, [pushToast]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -129,11 +131,13 @@ export function ImportView() {
         </motion.div>
 
         {/* Clean text toggle */}
-        <label className="mt-4 flex items-center gap-3 cursor-pointer select-none">
+        <div
+          onClick={() => setCleanText(!cleanText)}
+          className="mt-4 flex items-center gap-3 cursor-pointer select-none"
+        >
           <div
-            onClick={() => setCleanText(!cleanText)}
             className={`
-              relative w-9 h-5 rounded-full transition-colors duration-200
+              relative w-9 h-5 rounded-full transition-colors duration-200 flex-shrink-0
               ${cleanText ? 'bg-accentGreen' : 'bg-abyssal'}
             `}
           >
@@ -148,7 +152,7 @@ export function ImportView() {
             <span className="text-sm text-ghost">Clean text</span>
             <span className="text-xs text-charcoal ml-2">Remove headers, footers, page numbers, footnotes</span>
           </div>
-        </label>
+        </div>
 
         {/* Result */}
         {result && (

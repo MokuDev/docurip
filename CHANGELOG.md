@@ -14,6 +14,9 @@
 - **JSON export title extraction**: Now detects both ATX-style (`# Heading`) and setext-style (`Heading\n===`) Markdown headings. Previously only ATX headings were detected, causing filenames like `getting-started` to appear as the title instead of the actual heading text.
 - **Clean text toggle not working**: Fixed click area (onClick was only on the small track, not the label) and stale closure in drag & drop handler (useEffect captured initial state; now uses useRef to always read current value).
 - **TextCleaner ineffective on real PDFs**: Pre-trims excessive blank lines from `pdf_extract` output, uses non-blank-line-aware zone indexing, expanded detection zones to 5 lines, added sequential page number detection across pages, and caps effective zone at half page height to avoid false positives on short pages.
+- **UI boilerplate in crawled output**: Strips "Copy page", "Open markdown", "Edit page" text that leaks from documentation site UI buttons into the Markdown/JSON output.
+- **TOC navigation polluting output**: Detects and removes anchor-link table-of-contents sections (lists of `[Section](#anchor)` links), including full-path variants like `/docs/page#section`.
+- **Trailing heading stubs**: Removes repeated heading-only blocks (no content between them) that appear at the end of pages from sidebar/mobile navigation elements. Handles both ATX (`## Heading`) and setext (`Heading\n----------`) formats, plus short fragments like "💡Tip" interspersed between stubs.
 
 ## v0.4.2 (2026-06-28)
 

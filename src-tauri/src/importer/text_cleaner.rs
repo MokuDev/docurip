@@ -20,7 +20,10 @@ impl Default for CleanerConfig {
 }
 
 pub fn clean_pages(pages: &[String], config: &CleanerConfig) -> Vec<String> {
-    let mut result: Vec<String> = pages.to_vec();
+    let mut result: Vec<String> = pages
+        .iter()
+        .map(|p| trim_blank_lines(p))
+        .collect();
 
     if config.remove_headers_footers {
         remove_headers_footers(&mut result);
@@ -42,6 +45,23 @@ pub fn clean_pages(pages: &[String], config: &CleanerConfig) -> Vec<String> {
         .collect()
 }
 
+fn trim_blank_lines(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let first = lines.iter().position(|l| !l.trim().is_empty()).unwrap_or(0);
+    let last = lines.iter().rposition(|l| !l.trim().is_empty()).unwrap_or(0);
+    if first > last {
+        return String::new();
+    }
+    lines[first..=last].join("\n")
+}
+
+fn non_blank_indices(lines: &[&str]) -> Vec<usize> {
+    lines.iter().enumerate()
+        .filter(|(_, l)| !l.trim().is_empty())
+        .map(|(i, _)| i)
+        .collect()
+}
+
 fn normalize_signature(line: &str) -> String {
     let trimmed = line.trim();
     let no_digits: String = trimmed.chars().map(|c| if c.is_ascii_digit() { ' ' } else { c }).collect();
@@ -54,22 +74,24 @@ fn remove_headers_footers(pages: &mut [String]) {
     }
 
     let threshold = (pages.len() as f64 * 0.6).ceil() as usize;
-    let zone_size = 3;
+    let zone_count = 5;
 
     let mut top_sigs: HashMap<String, usize> = HashMap::new();
     let mut bottom_sigs: HashMap<String, usize> = HashMap::new();
 
     for page in pages.iter() {
         let lines: Vec<&str> = page.lines().collect();
-        for line in lines.iter().take(zone_size) {
-            let sig = normalize_signature(line);
+        let nb = non_blank_indices(&lines);
+        let ez = zone_count.min(nb.len() / 2);
+
+        for &idx in nb.iter().take(ez) {
+            let sig = normalize_signature(lines[idx]);
             if !sig.is_empty() {
                 *top_sigs.entry(sig).or_insert(0) += 1;
             }
         }
-        let start = lines.len().saturating_sub(zone_size);
-        for line in lines.iter().skip(start) {
-            let sig = normalize_signature(line);
+        for &idx in nb.iter().rev().take(ez) {
+            let sig = normalize_signature(lines[idx]);
             if !sig.is_empty() {
                 *bottom_sigs.entry(sig).or_insert(0) += 1;
             }
@@ -90,20 +112,21 @@ fn remove_headers_footers(pages: &mut [String]) {
 
     for page in pages.iter_mut() {
         let lines: Vec<&str> = page.lines().collect();
+        let nb = non_blank_indices(&lines);
+        let ez = zone_count.min(nb.len() / 2);
         let mut keep = vec![true; lines.len()];
 
-        for (i, line) in lines.iter().enumerate().take(zone_size) {
-            let sig = normalize_signature(line);
+        for &idx in nb.iter().take(ez) {
+            let sig = normalize_signature(lines[idx]);
             if frequent_top.contains(&sig) {
-                keep[i] = false;
+                keep[idx] = false;
             }
         }
 
-        let start = lines.len().saturating_sub(zone_size);
-        for (i, line) in lines.iter().enumerate().skip(start) {
-            let sig = normalize_signature(line);
+        for &idx in nb.iter().rev().take(ez) {
+            let sig = normalize_signature(lines[idx]);
             if frequent_bottom.contains(&sig) {
-                keep[i] = false;
+                keep[idx] = false;
             }
         }
 
@@ -124,24 +147,36 @@ fn remove_page_numbers(pages: &mut [String]) {
     let x_of_y = Regex::new(r"(?i)^\s*\d{1,4}\s+of\s+\d{1,4}\s*$").unwrap();
     let roman = Regex::new(r"(?i)^\s*[ivxlcdm]+\s*$").unwrap();
 
-    let check_zone = 2;
+    let zone_count = 5;
 
-    for page in pages.iter_mut() {
+    // Phase 1: detect sequential bare numbers across pages (strongest signal)
+    let seq_positions = detect_sequential_numbers(pages);
+
+    for (page_idx, page) in pages.iter_mut().enumerate() {
         let lines: Vec<&str> = page.lines().collect();
+        let nb = non_blank_indices(&lines);
         let mut keep = vec![true; lines.len()];
 
-        for (i, line) in lines.iter().enumerate() {
-            let in_zone = i < check_zone || i >= lines.len().saturating_sub(check_zone);
-            if !in_zone {
-                continue;
-            }
-            if bare_number.is_match(line)
-                || page_x.is_match(line)
+        // Remove sequential page numbers found anywhere
+        if let Some(line_idx) = seq_positions.get(&page_idx) {
+            keep[*line_idx] = false;
+        }
+
+        // Zone-based removal for patterned page numbers
+        let ez = zone_count.min(nb.len() / 2);
+        let top_zone: Vec<usize> = nb.iter().take(ez).copied().collect();
+        let bottom_zone: Vec<usize> = nb.iter().rev().take(ez).copied().collect();
+
+        for &idx in top_zone.iter().chain(bottom_zone.iter()) {
+            let line = lines[idx];
+            if page_x.is_match(line)
                 || dash_number.is_match(line)
                 || x_of_y.is_match(line)
-                || roman.is_match(line)
             {
-                keep[i] = false;
+                keep[idx] = false;
+            }
+            if bare_number.is_match(line) || roman.is_match(line) {
+                keep[idx] = false;
             }
         }
 
@@ -153,6 +188,42 @@ fn remove_page_numbers(pages: &mut [String]) {
             .collect::<Vec<_>>()
             .join("\n");
     }
+}
+
+fn detect_sequential_numbers(pages: &[String]) -> HashMap<usize, usize> {
+    if pages.len() < 3 {
+        return HashMap::new();
+    }
+
+    let bare_number = Regex::new(r"^\s*(\d{1,4})\s*$").unwrap();
+    let mut best: HashMap<usize, usize> = HashMap::new();
+
+    // Try each possible starting page number (1-based or 0-based)
+    for start_num in 0..=5u32 {
+        let mut matches: HashMap<usize, usize> = HashMap::new();
+
+        for (page_idx, page) in pages.iter().enumerate() {
+            let expected = start_num + page_idx as u32;
+            for (line_idx, line) in page.lines().enumerate() {
+                if let Some(caps) = bare_number.captures(line) {
+                    if let Ok(n) = caps[1].parse::<u32>() {
+                        if n == expected {
+                            matches.insert(page_idx, line_idx);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Need matches on at least 60% of pages to be confident
+        let threshold = (pages.len() as f64 * 0.6).ceil() as usize;
+        if matches.len() >= threshold && matches.len() > best.len() {
+            best = matches;
+        }
+    }
+
+    best
 }
 
 fn remove_footnotes(pages: &mut [String]) {
@@ -190,22 +261,23 @@ fn remove_boilerplate(pages: &mut [String]) {
         r"(?i)(©|\bcopyright\b|\ball rights reserved\b|\bconfidential\b|\bdraft\s*[-–—]\s*do not distribute\b)"
     ).unwrap();
 
-    let zone_size = 3;
+    let zone_count = 5;
 
     for page in pages.iter_mut() {
         let lines: Vec<&str> = page.lines().collect();
+        let nb = non_blank_indices(&lines);
+        let effective_zone = zone_count.min(nb.len() / 2);
         let mut keep = vec![true; lines.len()];
 
-        for (i, line) in lines.iter().enumerate().take(zone_size) {
-            if boilerplate.is_match(line) {
-                keep[i] = false;
+        for &idx in nb.iter().take(effective_zone) {
+            if boilerplate.is_match(lines[idx]) {
+                keep[idx] = false;
             }
         }
 
-        let start = lines.len().saturating_sub(zone_size);
-        for (i, line) in lines.iter().enumerate().skip(start) {
-            if boilerplate.is_match(line) {
-                keep[i] = false;
+        for &idx in nb.iter().rev().take(effective_zone) {
+            if boilerplate.is_match(lines[idx]) {
+                keep[idx] = false;
             }
         }
 
@@ -508,6 +580,72 @@ mod tests {
         let result = clean_pages(&input, &CleanerConfig { remove_headers_footers: true, ..Default::default() });
         for page in &result {
             assert!(!page.contains("Guide"), "Normalized header should be removed: {}", page);
+        }
+    }
+
+    #[test]
+    fn trims_leading_trailing_blank_lines() {
+        let input = pages(&["\n\n\nActual content\n\n\n"]);
+        let config = CleanerConfig {
+            remove_headers_footers: false,
+            remove_page_numbers: false,
+            remove_footnotes: false,
+            remove_boilerplate: false,
+        };
+        let result = clean_pages(&input, &config);
+        assert_eq!(result[0], "Actual content");
+    }
+
+    #[test]
+    fn removes_page_numbers_after_blank_lines() {
+        let input = pages(&["\n\n\n42\n\nReal content here\n\n\n43\n\n"]);
+        let config = CleanerConfig {
+            remove_page_numbers: true,
+            remove_headers_footers: false,
+            remove_footnotes: false,
+            remove_boilerplate: false,
+        };
+        let result = clean_pages(&input, &config);
+        assert!(!result[0].contains("42"), "Page number after blanks should be removed");
+        assert!(!result[0].contains("43"), "Page number before blanks should be removed");
+        assert!(result[0].contains("Real content here"));
+    }
+
+    #[test]
+    fn sequential_page_numbers_detected_anywhere() {
+        let input = pages(&[
+            "Content A\n1\nMore A",
+            "Content B\n2\nMore B",
+            "Content C\n3\nMore C",
+            "Content D\n4\nMore D",
+            "Content E\n5\nMore E",
+        ]);
+        let config = CleanerConfig {
+            remove_page_numbers: true,
+            remove_headers_footers: false,
+            remove_footnotes: false,
+            remove_boilerplate: false,
+        };
+        let result = clean_pages(&input, &config);
+        for (i, page) in result.iter().enumerate() {
+            let num = format!("{}", i + 1);
+            assert!(!page.lines().any(|l| l.trim() == num),
+                "Sequential page number {} should be removed from page {}", num, i);
+        }
+    }
+
+    #[test]
+    fn realistic_pdf_page_with_blanks() {
+        let input = pages(&[
+            "\n\n  My Book Title  \n\n\nSome introduction text.\nMore text.\n\n  © 2024 Publisher  \n\n\n  1  \n\n",
+            "\n\n  My Book Title  \n\n\nChapter 1 content.\nDetails here.\n\n  © 2024 Publisher  \n\n\n  2  \n\n",
+            "\n\n  My Book Title  \n\n\nChapter 2 content.\nMore details.\n\n  © 2024 Publisher  \n\n\n  3  \n\n",
+            "\n\n  My Book Title  \n\n\nChapter 3 content.\nFinal text.\n\n  © 2024 Publisher  \n\n\n  4  \n\n",
+        ]);
+        let result = clean_pages(&input, &CleanerConfig::default());
+        for page in &result {
+            assert!(!page.contains("My Book Title"), "Repeated header should be removed: {}", page);
+            assert!(!page.contains("© 2024 Publisher"), "Copyright should be removed: {}", page);
         }
     }
 }

@@ -7,6 +7,7 @@ use tauri::{AppHandle, Manager, State};
 use tokio::sync::RwLock;
 
 use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
+use crate::importer::ImportResult;
 use crate::writer::fs::FsWriter;
 use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
@@ -499,6 +500,15 @@ pub async fn export_job_v2(
             crate::export::export_merged_pdf(&main_dir, &out_file)
                 .map_err(|e| format!("PDF export failed: {}", e))?;
         }
+        crate::export::ExportFormat::JsonFiles => {
+            crate::export::export_json_files(&main_dir, &dest)
+                .map_err(|e| format!("JSON export failed: {}", e))?;
+        }
+        crate::export::ExportFormat::MergedJson => {
+            let out_file = dest.join(format!("{}-merged.json", job_id));
+            crate::export::merge_json_files(&main_dir, &out_file)
+                .map_err(|e| format!("JSON export failed: {}", e))?;
+        }
     }
 
     Ok(dest.to_string_lossy().to_string())
@@ -654,6 +664,46 @@ pub async fn list_exports(
     }
 
     Ok(exports::list_recent_exports(&output_dirs, n))
+}
+
+#[tauri::command]
+pub async fn import_file(
+    file_path: String,
+    output_dir: Option<String>,
+    app: AppHandle,
+) -> Result<ImportResult, String> {
+    let path = std::path::PathBuf::from(&file_path);
+    if !path.exists() {
+        return Err("File not found".into());
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let dest = match output_dir {
+        Some(d) if !d.is_empty() => std::path::PathBuf::from(d),
+        _ => {
+            let settings = get_settings(app).await?;
+            let base = std::path::PathBuf::from(&settings.output_dir);
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("import");
+            base.join(format!("import-{}", stem))
+        }
+    };
+    std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+
+    match ext.as_str() {
+        "pdf" => crate::importer::pdf::import_pdf(&path, &dest)
+            .map_err(|e| format!("PDF import failed: {}", e)),
+        "epub" => crate::importer::epub::import_epub(&path, &dest)
+            .map_err(|e| format!("EPUB import failed: {}", e)),
+        _ => Err(format!("Unsupported file type: .{}", ext)),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

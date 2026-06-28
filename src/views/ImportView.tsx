@@ -1,10 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { motion } from 'framer-motion';
 import { FileArrowUp, SpinnerGap, CheckCircle, WarningCircle, File as FileIcon, Image } from '@phosphor-icons/react';
 import { useToasts } from '../hooks/useToasts';
 import type { ImportResult } from '../types';
+
+const SUPPORTED_EXTENSIONS = ['pdf', 'epub'];
+
+function getExtension(path: string): string {
+  return path.split('.').pop()?.toLowerCase() ?? '';
+}
 
 export function ImportView() {
   const [importing, setImporting] = useState(false);
@@ -50,19 +57,34 @@ export function ImportView() {
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      if (ext === 'pdf' || ext === 'epub') {
-        handleImport((file as any).path || file.name);
-      } else {
-        pushToast('error', 'Only .pdf and .epub files are supported');
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    getCurrentWebview().onDragDropEvent((event) => {
+      const { type } = event.payload;
+
+      if (type === 'enter' || type === 'over') {
+        setDragOver(true);
+      } else if (type === 'leave') {
+        setDragOver(false);
+      } else if (type === 'drop') {
+        setDragOver(false);
+        const paths = event.payload.paths;
+        const validFile = paths.find((p) => SUPPORTED_EXTENSIONS.includes(getExtension(p)));
+        if (validFile) {
+          handleImport(validFile);
+        } else if (paths.length > 0) {
+          pushToast('error', 'Only .pdf and .epub files are supported');
+        }
       }
-    }
-  };
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   return (
     <div className="flex-1 overflow-y-auto p-8">
@@ -77,9 +99,6 @@ export function ImportView() {
 
         {/* Drop zone */}
         <motion.div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
           onClick={() => !importing && handleImport()}
           className={`
             relative cursor-pointer rounded-xl border-2 border-dashed p-12
@@ -100,7 +119,7 @@ export function ImportView() {
             <FileArrowUp size={48} className={`mb-4 ${dragOver ? 'text-accentGreen' : 'text-charcoal'}`} />
           )}
           <p className="text-ghost font-medium text-lg mb-1">
-            {importing ? 'Converting...' : 'Drop a file here or click to browse'}
+            {importing ? 'Converting...' : dragOver ? 'Drop to import' : 'Drop a file here or click to browse'}
           </p>
           <p className="text-charcoal text-sm">
             Supports <span className="text-secondary">.pdf</span> and <span className="text-secondary">.epub</span> files

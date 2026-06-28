@@ -71,6 +71,27 @@ fn is_heading(line: &str) -> bool {
         || t.chars().all(|c| c == '-')
 }
 
+fn is_stub_section(section: &str) -> bool {
+    let trimmed = section.trim();
+    let non_empty: Vec<&str> = trimmed.lines().filter(|l| !l.trim().is_empty()).collect();
+    if non_empty.is_empty() {
+        return true;
+    }
+    // ATX heading: "## Foo"
+    if non_empty.len() == 1 && is_heading(non_empty[0]) {
+        return true;
+    }
+    // Setext heading: "Title\n=========="
+    if non_empty.len() == 2 {
+        let second = non_empty[1].trim();
+        if (second.chars().all(|c| c == '=') || second.chars().all(|c| c == '-')) && !second.is_empty() {
+            return true;
+        }
+    }
+    // Short fragment with no sentence structure (e.g. "💡Tip")
+    non_empty.len() == 1 && non_empty[0].trim().len() < 30 && !non_empty[0].contains('.')
+}
+
 fn strip_trailing_heading_stubs(md: &str) -> String {
     let sections: Vec<&str> = md.split("\n\n").collect();
     if sections.len() < 4 {
@@ -83,11 +104,7 @@ fn strip_trailing_heading_stubs(md: &str) -> String {
         if trimmed.is_empty() {
             continue;
         }
-        let all_headings = trimmed.lines().all(|l| {
-            let lt = l.trim();
-            lt.is_empty() || is_heading(lt)
-        });
-        if all_headings {
+        if is_stub_section(trimmed) {
             last_content_idx = i;
         } else {
             break;
@@ -108,7 +125,7 @@ fn is_toc_section(section: &str) -> bool {
     }
     let anchor_links = lines.iter().filter(|l| {
         let t = l.trim().trim_start_matches("* ").trim_start_matches("- ");
-        t.starts_with('[') && t.contains("](#")
+        t.starts_with('[') && t.contains('#') && t.ends_with(')')
     }).count();
     anchor_links * 2 >= lines.len()
 }
@@ -216,11 +233,28 @@ mod tests {
     }
 
     #[test]
+    fn test_strips_toc_with_full_path_links() {
+        let md = "# Title\n\nParagraph one.\n\nParagraph two.\n\nParagraph three.\n\nParagraph four.\n\nParagraph five.\n\n* [Where to Use Kilo](/docs/getting-started#where-to-use-kilo)\n* [What Kilo Can Do](/docs/getting-started#what-kilo-can-do)\n* [Quick Start](/docs/getting-started#quick-start)";
+        let result = dedup_markdown(md);
+        assert!(!result.contains("where-to-use-kilo"), "TOC with full paths not removed: {}", result);
+        assert!(result.contains("Paragraph one."));
+    }
+
+    #[test]
     fn test_strips_trailing_heading_stubs() {
         let md = "# Title\n\nSome real content.\n\nMore content.\n\nEven more.\n\n## Section A\n==========\n\n## Section B\n----------\n\n## Section C\n----------";
         let result = strip_trailing_heading_stubs(md);
         assert!(result.contains("Even more."), "got: {}", result);
         assert!(!result.contains("Section C"), "heading stubs not stripped: {}", result);
+    }
+
+    #[test]
+    fn test_strips_trailing_stubs_with_short_fragments() {
+        let md = "# Title\n\nSome real content.\n\nMore content.\n\nEven more.\n\nIntro\n==========\n\nSection A\n----------\n\n💡Tip\n\nSection B\n----------";
+        let result = strip_trailing_heading_stubs(md);
+        assert!(result.contains("Even more."), "got: {}", result);
+        assert!(!result.contains("💡Tip"), "short fragment not stripped: {}", result);
+        assert!(!result.contains("Section B"), "heading stubs not stripped: {}", result);
     }
 
     #[test]

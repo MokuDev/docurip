@@ -18,7 +18,7 @@ import { useCrawlEvents } from './hooks/useCrawlEvents';
 import { useUpdater } from './hooks/useUpdater';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'crawls' | 'history' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'crawls' | 'history' | 'settings' | 'active-crawl'>('dashboard');
   const [pendingUrl, setPendingUrl] = useState('');
   const [liveConsoleOpen, setLiveConsoleOpen] = useState(false);
   const { activeJobIds } = useCrawlEvents();
@@ -82,12 +82,22 @@ function App() {
               onClick={() => setActiveTab('dashboard')}
               badge={activeJobsCount > 0 ? activeJobsCount.toString() : undefined}
             />
-            <NavItem
-              icon={<GlobeHemisphereWest weight="fill" size={18} />}
-              label="New Crawl"
-              active={activeTab === 'crawls'}
-              onClick={() => setActiveTab('crawls')}
-            />
+            {activeJobsCount > 0 ? (
+              <NavItem
+                icon={<GlobeHemisphereWest weight="fill" size={18} />}
+                label="Active Crawl"
+                active={activeTab === 'active-crawl'}
+                onClick={() => setActiveTab('active-crawl')}
+                badge="RUNNING"
+              />
+            ) : (
+              <NavItem
+                icon={<GlobeHemisphereWest weight="fill" size={18} />}
+                label="New Crawl"
+                active={activeTab === 'crawls'}
+                onClick={() => setActiveTab('crawls')}
+              />
+            )}
             <NavItem
               icon={<ClockCounterClockwise weight="fill" size={18} />}
               label="History"
@@ -121,8 +131,9 @@ function App() {
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col overflow-hidden relative">
-          {activeTab === 'dashboard' && <DashboardView onQuickStart={(url) => { setPendingUrl(url); setActiveTab('crawls'); }} />}
-          {activeTab === 'crawls' && <NewCrawlView prefillUrl={pendingUrl} key={pendingUrl} />}
+          {activeTab === 'dashboard' && <DashboardView onQuickStart={(url) => { setPendingUrl(url); setActiveTab(activeJobsCount > 0 ? 'active-crawl' : 'crawls'); }} />}
+          {activeTab === 'active-crawl' && <NewCrawlView prefillUrl={pendingUrl} />}
+          {activeTab === 'crawls' && <NewCrawlView prefillUrl={pendingUrl} />}
           {activeTab === 'history' && <HistoryView />}
           {activeTab === 'settings' && <SettingsView />}
         </main>
@@ -132,7 +143,7 @@ function App() {
 
       {/* Live Console Drawer */}
       {liveConsoleOpen && (
-        <LiveConsole onClose={() => setLiveConsoleOpen(false)} />
+        <LiveConsole />
       )}
 
       <ToastContainer />

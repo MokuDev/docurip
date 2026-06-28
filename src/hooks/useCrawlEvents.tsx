@@ -26,11 +26,9 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
         if (event.type === 'jobStatusChanged') {
           if (event.status === 'running' || event.status === 'queued') {
             nextActive.add(event.jobId);
-          } else {
+          } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
             nextActive.delete(event.jobId);
           }
-        } else {
-          nextActive.add(event.jobId);
         }
         return { ...prev, events: nextEvents, activeJobIds: nextActive };
       });

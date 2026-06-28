@@ -1,9 +1,22 @@
 # Changelog
 
+## v0.4.2 (2026-06-28)
+
+### Added
+- **"Active Crawl" navigation item**: New sidebar entry appears when a crawl is running, allowing access to crawl controls (pause/cancel) from any view. Dashboard remains accessible during active crawls.
+- **Default settings update**: `default_page_limit` increased from 50 to 1000, `request_delay` reduced from 1000ms to 750ms (25% faster).
+
+### Fixed
+- **`activeJobIds` tracking bug**: Fixed stale "RUNNING" badge issue — `activeJobIds` now only updates on `jobStatusChanged` events. Jobs are correctly removed from active set when status is `completed`, `failed`, or `cancelled`. Previously, all non-status events incorrectly added the jobId to the active set.
+- **`NewCrawlView` state loss**: Active crawl state is now persisted in `sessionStorage` and restored on mount — switching between Dashboard and Active Crawl no longer loses the Live Monitor or controls. Paused jobs are now correctly restored (previously only `running`/`queued` were handled).
+- **Duplicate sidebar entries**: "New Crawl" and "Active Crawl" are now mutually exclusive — only one appears at a time based on whether a crawl is running.
+- **LiveConsole close button removed**: Removed the "X" close button from the LiveConsole header — only "Clear" and "Minimize" remain, as closing the console while a crawl is active was confusing and rarely useful.
+
 ## v0.4.1 (2026-06-28)
 
 ### Added
 - **Queue backpressure**: `MAX_QUEUE_SIZE = 50_000` limit with warning event when queue reaches capacity — prevents unbounded memory growth during aggressive crawls.
+- **Vitest test suite**: 8 passing frontend unit tests covering `useToasts` (push, dismiss, auto-dismiss, error persistence) and `useCrawlEvents` (event handling, active job tracking, 500-event cap). Includes `vitest.config.ts`, `src/test/setup.ts`, and test files for both hooks.
 
 ### Fixed
 - **Phosphor icon `title` prop removed**: `title` attribute is not supported by `@phosphor-icons/react` — removed from all icon instances in `LiveConsole.tsx` to fix TypeScript build error.

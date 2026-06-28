@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useCrawlEvents } from '../hooks/useCrawlEvents';
 import {
-  X,
   Minus,
   Terminal,
   Circle,
@@ -22,7 +21,7 @@ interface LogEntry {
   kind?: 'network' | 'disk' | 'parse' | 'robotsBlocked' | 'cancelled' | 'unknown';
 }
 
-export function LiveConsole({ onClose }: { onClose: () => void }) {
+export function LiveConsole() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [minimized, setMinimized] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -125,12 +124,6 @@ export function LiveConsole({ onClose }: { onClose: () => void }) {
             className="p-1 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"
           >
             <Minus size={12} />
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1 text-charcoal hover:text-crimson hover:bg-crimson/10 rounded transition-colors"
-          >
-            <X size={12} />
           </button>
         </div>
       </div>

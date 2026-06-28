@@ -28,11 +28,11 @@ impl Default for AppSettings {
         Self {
             output_dir,
             concurrency: 3,
-            request_delay: 1000,
+            request_delay: 750,
             timeout: 30000,
             user_agent: String::from("Docurip/0.3.3 (Documentation Crawler)"),
             default_max_depth: 2,
-            default_page_limit: 50,
+            default_page_limit: 1000,
             default_download_assets: false,
             default_headless_strategy: String::from("auto"),
             default_respect_robots_txt: true,

@@ -40,6 +40,25 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   const consecutiveErrors = useRef(0);
   const logs = logsRef.current;
 
+  // Initialize activeJob from sessionStorage on mount
+  useEffect(() => {
+    if (activeJob) return;
+    const storedJobId = sessionStorage.getItem('docurip_active_job');
+    if (!storedJobId) return;
+
+    invoke<CrawlJob>('get_job', { jobId: storedJobId })
+      .then((job) => {
+        if (job.status === 'running' || job.status === 'queued' || job.status === 'paused') {
+          setActiveJob(job);
+        } else {
+          sessionStorage.removeItem('docurip_active_job');
+        }
+      })
+      .catch(() => {
+        sessionStorage.removeItem('docurip_active_job');
+      });
+  }, []);
+
   const appendLog = (msg: string) => {
     const arr = logsRef.current;
     arr.push(msg);
@@ -72,12 +91,17 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
         const job: CrawlJob = await invoke('get_job', { jobId: activeJob.id });
         consecutiveErrors.current = 0;
         setActiveJob(job);
+        // Clear sessionStorage if job is done
+        if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+          sessionStorage.removeItem('docurip_active_job');
+        }
       } catch (err) {
         consecutiveErrors.current++;
         console.warn('[NewCrawl] get_job polling failed:', err);
         if (consecutiveErrors.current >= 3) {
           clearInterval(id);
           setActiveJob(prev => prev ? { ...prev, status: 'failed' } : prev);
+          sessionStorage.removeItem('docurip_active_job');
         }
       }
     }, 2000);
@@ -121,6 +145,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
 
       const job: CrawlJob = await invoke('get_job', { jobId });
       setActiveJob(job);
+      sessionStorage.setItem('docurip_active_job', jobId);
       appendLog(`Started crawl: ${jobId}`);
     } catch (err) {
       appendLog(`Error starting crawl: ${String(err)}`);

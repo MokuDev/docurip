@@ -12,8 +12,37 @@ impl HtmlToMarkdown {
     }
 
     pub fn convert(&self, html: &str) -> String {
-        html2md::parse_html(html)
+        let md = html2md::parse_html(html);
+        dedup_markdown(&md)
     }
+}
+
+fn dedup_markdown(md: &str) -> String {
+    let sections: Vec<&str> = md.split("\n\n").collect();
+    if sections.len() < 6 {
+        return md.to_string();
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    let mut result = Vec::new();
+
+    for section in &sections {
+        let trimmed = section.trim();
+        if trimmed.is_empty() {
+            result.push(*section);
+            continue;
+        }
+        // Only dedup substantial blocks (> 80 chars) to avoid removing
+        // short repeated elements like separators or short paragraphs
+        if trimmed.len() > 80 {
+            if !seen.insert(trimmed) {
+                continue;
+            }
+        }
+        result.push(*section);
+    }
+
+    result.join("\n\n")
 }
 
 #[cfg(test)]

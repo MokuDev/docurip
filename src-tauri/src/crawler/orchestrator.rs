@@ -534,7 +534,7 @@ impl Orchestrator {
                 .extract_content(&html, &self.config.content_selectors)
                 .unwrap_or(html.clone())
         } else {
-            html.clone()
+            self.parser.auto_extract_content(&html).unwrap_or(html.clone())
         };
 
         let mut asset_map = HashMap::new();

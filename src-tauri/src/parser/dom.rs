@@ -70,6 +70,33 @@ impl DomParser {
         assets
     }
 
+    pub fn auto_extract_content(&self, html: &str) -> Option<String> {
+        let candidates = [
+            "main",
+            "article",
+            "[role=\"main\"]",
+            "#content",
+            ".content",
+            ".main-content",
+            ".post-content",
+            ".article-content",
+            ".page-content",
+            ".docs-content",
+        ];
+        for sel_str in candidates {
+            if let Ok(selector) = Selector::parse(sel_str) {
+                let document = Html::parse_document(html);
+                if let Some(el) = document.select(&selector).next() {
+                    let inner = el.inner_html();
+                    if inner.trim().len() > 100 {
+                        return Some(inner);
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub fn extract_content(&self, html: &str, selectors: &[String]) -> Option<String> {
         let document = Html::parse_document(html);
         let mut parts = Vec::new();

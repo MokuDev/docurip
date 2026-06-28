@@ -203,6 +203,29 @@ pub fn export_merged_pdf(_src_dir: &Path, _dst_file: &Path) -> anyhow::Result<()
     anyhow::bail!("PDF export requires headless Chrome support. Rebuild with --features headless.")
 }
 
+fn extract_title(content: &str, fallback: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+
+    // ATX heading: "# Title"
+    if let Some(l) = lines.iter().find(|l| l.starts_with("# ")) {
+        return l.trim_start_matches("# ").to_string();
+    }
+
+    // Setext heading: "Title\n=====" (line followed by === or ---)
+    for i in 0..lines.len().saturating_sub(1) {
+        let line = lines[i].trim();
+        let next = lines[i + 1].trim();
+        if !line.is_empty()
+            && next.len() >= 3
+            && next.chars().all(|c| c == '=')
+        {
+            return line.to_string();
+        }
+    }
+
+    fallback.to_string()
+}
+
 pub fn export_json_files(src_dir: &Path, dst_dir: &Path) -> anyhow::Result<()> {
     for entry in walk_dir(src_dir)? {
         if entry.extension().and_then(|e| e.to_str()) != Some("md") {
@@ -214,17 +237,12 @@ pub fn export_json_files(src_dir: &Path, dst_dir: &Path) -> anyhow::Result<()> {
             std::fs::create_dir_all(parent)?;
         }
         let content = std::fs::read_to_string(&entry)?;
-        let title = content
-            .lines()
-            .find(|l| l.starts_with("# "))
-            .map(|l| l.trim_start_matches("# ").to_string())
-            .unwrap_or_else(|| {
-                relative
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("Untitled")
-                    .to_string()
-            });
+        let fallback = relative
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled")
+            .to_string();
+        let title = extract_title(&content, &fallback);
         let page = serde_json::json!({
             "title": title,
             "source": relative.to_string_lossy(),
@@ -247,17 +265,12 @@ pub fn merge_json_files(src_dir: &Path, dst_file: &Path) -> anyhow::Result<()> {
     for file in &files {
         let relative = file.strip_prefix(src_dir)?;
         let content = std::fs::read_to_string(file)?;
-        let title = content
-            .lines()
-            .find(|l| l.starts_with("# "))
-            .map(|l| l.trim_start_matches("# ").to_string())
-            .unwrap_or_else(|| {
-                relative
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("Untitled")
-                    .to_string()
-            });
+        let fallback = relative
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled")
+            .to_string();
+        let title = extract_title(&content, &fallback);
         pages.push(serde_json::json!({
             "title": title,
             "source": relative.to_string_lossy(),
@@ -392,6 +405,37 @@ mod tests {
         let content = std::fs::read_to_string(&out).unwrap();
         let parsed: Vec<serde_json::Value> = serde_json::from_str(&content).unwrap();
         assert_eq!(parsed.len(), 2);
+    }
+
+    #[test]
+    fn extract_title_atx_heading() {
+        assert_eq!(extract_title("# My Title\n\nContent", "fallback"), "My Title");
+    }
+
+    #[test]
+    fn extract_title_setext_heading() {
+        assert_eq!(
+            extract_title("My Setext Title\n==========\n\nContent", "fallback"),
+            "My Setext Title"
+        );
+    }
+
+    #[test]
+    fn extract_title_fallback() {
+        assert_eq!(extract_title("No heading here\nJust text", "page-name"), "page-name");
+    }
+
+    #[test]
+    fn export_json_setext_title() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        std::fs::write(src.path().join("page.md"), "Getting Started\n==========\n\nContent").unwrap();
+
+        export_json_files(src.path(), dst.path()).unwrap();
+
+        let content = std::fs::read_to_string(dst.path().join("page.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["title"], "Getting Started");
     }
 
     #[test]

@@ -5,9 +5,9 @@
     <img src="assets/docurip_dashboard.png" alt="docurip" width="480" />
   </a>
 
-  <h3><strong>Documentation, ripped offline.</strong></h3>
+  <h2><strong>RAG-Ready Markdown in Minutes. Slash LLM Token Costs by 90%.</strong></h2>
 
-  <p>Cut LLM token costs by <strong>12.6×</strong>. Mirror any docs site as clean, searchable Markdown — ready to feed to any model.</p>
+  <p>Engineered for solo developers, RAG builders, and AI engineers. Mirror any docs site or local PDF/EPUB as clean, searchable, model-ready Markdown instantly.</p>
 
   <p>
     <a href="https://docurip.moku.cx/download.html"><strong>Download free »</strong></a>
@@ -36,6 +36,15 @@
 ## Why docurip?
 
 If your goal is LLM training, fine-tuning, or RAG, **raw HTML is your enemy. Clean Markdown is your secret weapon.**
+
+### The Scraper's Nightmare
+- **Fragile Custom Scrapers:** Spending hours writing custom scripts, handling rate limits, and battling pagination just to read a docs site.
+- **Boilerplate Token Waste:** Wasting up to 90% of your context window and API billing on header links, navbars, sidebars, and footer scripts.
+- **Ruined RAG Quality:** Standard text splitters break code blocks and ignore header hierarchy, ruining your vector retrieval accuracy.
+- **Privacy Violations:** Sending local files or internal documentation to third-party cloud scrapers just to get clean text back.
+
+### The Savior
+**Docurip solves this once and for all.** It's a native desktop application that crawls entire documentation websites, extracts only the semantic content, and converts it into structured, RAG-ready Markdown—all locally, in seconds, and completely free. No SaaS fees, no API keys, and no data leaks.
 
 ```
 RAW HTML        12,000 tokens/page   ████████████████████  100%
@@ -80,7 +89,7 @@ For RAG, standard text splitters break arbitrarily on HTML tags, splitting code 
 
 ## Features
 
-### Extraction Engine — Never lose context to the upstream
+### Zero Context-Loss thanks to Parallel Crawling & Headless Chrome
 
 Set a start URL, crawl depth, and page limit. Docurip walks the site in parallel via an async I/O pool, respects `robots.txt` by default, and spins up headless Chrome on demand for JS-rendered apps.
 
@@ -97,7 +106,7 @@ Set a start URL, crawl depth, and page limit. Docurip walks the site in parallel
 | **Disk-error auto-pause** | Detects permission errors, full disks, read-only filesystems — pauses so you can fix and resume |
 | **Crawl profiles** | Pre-configured presets for API Docs, Wiki, Blog, Documentation — sensible defaults in one click |
 
-### Real-time Monitoring — Watch the crawler walk the tree
+### Watch the Crawler Walk the Tree with Real-Time Monitoring
 
 An integrated console drawer streams every fetch request, network connection, and file write as it happens.
 
@@ -105,7 +114,7 @@ An integrated console drawer streams every fetch request, network connection, an
 - **Streaming console logger** — color-coded `✅` success · `⚠️` warning · `❌` error with typed error icons
 - **Pause / Resume / Retry / Cancel** — full control without restarting
 
-### Result Browser — Explore your archive instantly
+### Instant RAG Ingestion thanks to a Virtualized Tree & Debounced Search
 
 Built-in debounced full-text search finds files by content. A sandboxed preview pane renders Markdown with syntax-highlighted code blocks, sanitized through DOMPurify.
 
@@ -114,7 +123,7 @@ Built-in debounced full-text search finds files by content. A sandboxed preview 
 - **Virtualized file tree** — windowed rendering for archives with thousands of pages
 - **Hierarchical navigation** — collapsible tree mirroring the site's URL structure
 
-### Safety Systems — Built to behave
+### 100% Secure & Behaving thanks to local Safety Systems
 
 > Engineered to protect your network, respect targets, and safeguard local disk space.
 
@@ -126,7 +135,7 @@ Built-in debounced full-text search finds files by content. A sandboxed preview 
 | **Disk Guard** | Pauses on disk full, permission denied, or read-only errors — fix the issue, hit Resume, keep your progress |
 | **Asset safety** | 50 MB size cap, MIME-type allow-list, path sanitization, directory-traversal prevention |
 
-### PDF & EPUB Importer — Already have local docs? Drag them in
+### Unified PDF & EPUB Conversion thanks to a Boilerplate-Stripping Importer
 
 Docurip isn't limited to websites. Drop a PDF or EPUB onto the Import view and docurip extracts text and images into a Markdown archive, ready for the same export pipeline as crawled content.
 
@@ -137,7 +146,7 @@ Docurip isn't limited to websites. Drop a PDF or EPUB onto the Import view and d
 | **Text cleaner** | Strips repeated headers/footers, page numbers, footnotes — cross-page frequency analysis, toggle per import |
 | **Native drag & drop** | Tauri-native file drop — reliable file handling, no HTML5 drag events |
 
-### Export Pipeline — Stitch, compress, and ship anywhere
+### Slash LLM Token Overhead by ~90% thanks to a Boilerplate-Stripping Export Pipeline
 
 No proprietary database. Docurip exports documentation exactly how you want it. One click compiles your archive with automatic link rewriting so all internal references work offline.
 

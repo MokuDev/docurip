@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
 import {
@@ -10,10 +10,11 @@ import {
 } from '@phosphor-icons/react';
 import type { CrawlJob, PageMeta, SearchMatch } from '../types';
 import { ResultTree } from '../components/ResultTree';
-import { MarkdownPreview } from '../components/MarkdownPreview';
 import { ResultSearch } from '../components/ResultSearch';
 import { EmptyState } from '../components/EmptyState';
 import { useToasts } from '../hooks/useToasts';
+
+const MarkdownPreview = lazy(() => import('../components/MarkdownPreview').then(m => ({ default: m.MarkdownPreview })));
 
 interface ResultBrowserProps {
   job: CrawlJob;
@@ -207,10 +208,16 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
                   Loading…
                 </div>
               ) : (
-                <MarkdownPreview
-                  content={pageContent}
-                  searchQuery={searchQuery}
-                />
+                <Suspense fallback={
+                  <div className="flex items-center justify-center h-full text-charcoal text-sm">
+                    Loading preview…
+                  </div>
+                }>
+                  <MarkdownPreview
+                    content={pageContent}
+                    searchQuery={searchQuery}
+                  />
+                </Suspense>
               )
             ) : (
               <EmptyState

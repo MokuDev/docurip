@@ -1,3 +1,57 @@
+export type CrawlProfile = 'apiDocs' | 'wiki' | 'blog' | 'documentation' | 'custom';
+
+export interface CrawlProfileInfo {
+  id: CrawlProfile;
+  label: string;
+  description: string;
+  defaultMaxDepth: number;
+  defaultPageLimit: number;
+  defaultRespectRobotsTxt: boolean;
+}
+
+export const CRAWL_PROFILES: CrawlProfileInfo[] = [
+  {
+    id: 'apiDocs',
+    label: 'API Documentation',
+    description: 'Optimized for API reference docs with strict selectors',
+    defaultMaxDepth: 3,
+    defaultPageLimit: 500,
+    defaultRespectRobotsTxt: true,
+  },
+  {
+    id: 'wiki',
+    label: 'Wiki',
+    description: 'Broad crawl for wiki-style content',
+    defaultMaxDepth: 4,
+    defaultPageLimit: 2000,
+    defaultRespectRobotsTxt: true,
+  },
+  {
+    id: 'blog',
+    label: 'Blog',
+    description: 'Article-focused crawl, excludes comments and tags',
+    defaultMaxDepth: 2,
+    defaultPageLimit: 100,
+    defaultRespectRobotsTxt: false,
+  },
+  {
+    id: 'documentation',
+    label: 'Documentation',
+    description: 'Balanced defaults for general documentation sites',
+    defaultMaxDepth: 3,
+    defaultPageLimit: 1000,
+    defaultRespectRobotsTxt: true,
+  },
+  {
+    id: 'custom',
+    label: 'Custom',
+    description: 'Manual configuration',
+    defaultMaxDepth: 2,
+    defaultPageLimit: 1000,
+    defaultRespectRobotsTxt: true,
+  },
+];
+
 export interface CrawlConfig {
   url: string;
   maxDepth: number;
@@ -10,6 +64,7 @@ export interface CrawlConfig {
   stayWithinDomain: boolean;
   ssrfProtection: boolean;
   outputDir: string;
+  profile?: CrawlProfile | null;
 }
 
 export interface PageMeta {
@@ -114,7 +169,7 @@ export interface SessionInfo {
   uptimeSecs: number;
 }
 
-export type ExportFormat = 'md_files' | 'pdf_files' | 'merged_md' | 'merged_pdf' | 'json_files' | 'merged_json';
+export type ExportFormat = 'md_files' | 'pdf_files' | 'merged_md' | 'merged_pdf' | 'json_files' | 'merged_json' | 'html_files' | 'merged_html';
 
 export interface ExportOption {
   format: ExportFormat;
@@ -146,6 +201,18 @@ export const EXPORT_OPTIONS: ExportOption[] = [
     format: 'merged_json',
     label: 'Merged JSON',
     description: 'All pages in one JSON array',
+    requiresHeadless: false,
+  },
+  {
+    format: 'html_files',
+    label: 'HTML Files',
+    description: 'Individual .html files per page',
+    requiresHeadless: false,
+  },
+  {
+    format: 'merged_html',
+    label: 'Merged HTML',
+    description: 'All pages combined into one .html file',
     requiresHeadless: false,
   },
   {

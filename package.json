@@ -1,7 +1,7 @@
 {
   "name": "docurip",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.5.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,12 +21,14 @@
     "@tauri-apps/plugin-shell": "^2.0.0",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@types/dompurify": "^3.0.5",
+    "@types/react-window": "^1.8.8",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.10",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.18.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-window": "^2.2.7",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {

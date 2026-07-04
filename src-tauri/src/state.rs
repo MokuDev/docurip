@@ -131,6 +131,7 @@ mod tests {
                 respect_robots_txt: true,
                 stay_within_domain: true,
                 ssrf_protection: true,
+                profile: None,
             },
             results: vec![],
             progress: crate::crawler::job::CrawlProgress {

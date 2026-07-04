@@ -123,7 +123,7 @@ function App() {
           {/* Footer */}
           <div className="h-auto flex flex-col items-center justify-center py-3 border-t border-abyssal/50 space-y-1">
             <span className="text-charcoal text-[10px] tracking-widest uppercase">
-              v0.5.0
+              v0.5.2
             </span>
             <span className="text-charcoal text-[10px]">
               made with love by{' '}

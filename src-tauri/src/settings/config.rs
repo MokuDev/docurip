@@ -1,6 +1,8 @@
 use dirs::home_dir;
 use serde::{Deserialize, Serialize};
 
+use super::profiles::CrawlProfile;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -59,6 +61,8 @@ pub struct CrawlConfig {
     pub stay_within_domain: bool,
     #[serde(default = "default_true")]
     pub ssrf_protection: bool,
+    #[serde(default)]
+    pub profile: Option<CrawlProfile>,
 }
 
 fn default_true() -> bool {

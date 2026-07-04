@@ -10,7 +10,8 @@ import {
   SpinnerGap,
   Pause,
 } from '@phosphor-icons/react';
-import type { CrawlConfig, CrawlJob } from '../types';
+import type { CrawlConfig, CrawlJob, CrawlProfile } from '../types';
+import { CRAWL_PROFILES } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 
 const MAX_LOGS = 500;
@@ -27,6 +28,19 @@ const DEFAULT_CONFIG: CrawlConfig = {
   stayWithinDomain: true,
   ssrfProtection: true,
   outputDir: '',
+  profile: null,
+};
+
+const applyProfile = (profileId: CrawlProfile, current: CrawlConfig): CrawlConfig => {
+  const profile = CRAWL_PROFILES.find((p) => p.id === profileId);
+  if (!profile) return current;
+  return {
+    ...current,
+    profile: profileId,
+    maxDepth: profile.defaultMaxDepth,
+    pageLimit: profile.defaultPageLimit,
+    respectRobotsTxt: profile.defaultRespectRobotsTxt,
+  };
 };
 
 export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
@@ -140,6 +154,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
           stayWithinDomain: config.stayWithinDomain,
           ssrfProtection: config.ssrfProtection,
           outputDir: config.outputDir,
+          profile: config.profile,
         },
       });
 
@@ -214,7 +229,29 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
                 className="w-full bg-surface/50 border border-abyssal rounded-md pl-9 pr-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all"
               />
             </div>
-            {urlError && <p className="text-crimson text-xs mt-1">{urlError}</p>}
+          {urlError && <p className="text-crimson text-xs mt-1">{urlError}</p>}
+        </div>
+
+          {/* Profile */}
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+              Crawl Profile
+            </label>
+            <select
+              value={config.profile || 'documentation'}
+              onChange={(e) => setConfig(applyProfile(e.target.value as CrawlProfile, config))}
+              disabled={!!activeJob}
+              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
+            >
+              {CRAWL_PROFILES.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-charcoal mt-1">
+              {CRAWL_PROFILES.find((p) => p.id === (config.profile || 'documentation'))?.description}
+            </p>
           </div>
 
           {/* Limits */}

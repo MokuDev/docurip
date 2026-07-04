@@ -1,3 +1,18 @@
+use regex::Regex;
+
+fn strip_script_and_style(html: &str) -> String {
+    let script_re = Regex::new(r"(?is)<script[^>]*>.*?</script>").expect("static regex");
+    let style_re = Regex::new(r"(?is)<style[^>]*>.*?</style>").expect("static regex");
+    let html = script_re.replace_all(html, "");
+    let html = style_re.replace_all(&html, "");
+    html.to_string()
+}
+
+fn strip_empty_links(html: &str) -> String {
+    let re = Regex::new(r#"(?i)<a[^>]*href="[^"]*"[^>]*>\s*</a>"#).expect("static regex");
+    re.replace_all(html, "").to_string()
+}
+
 pub struct HtmlToMarkdown;
 
 impl Default for HtmlToMarkdown {
@@ -12,27 +27,44 @@ impl HtmlToMarkdown {
     }
 
     pub fn convert(&self, html: &str) -> String {
-        let md = html2md::parse_html(html);
+        let html = strip_script_and_style(html);
+        let html = strip_empty_links(&html);
+        let md = html2md::parse_html(&html);
         let md = strip_ui_boilerplate(&md);
         let md = dedup_markdown(&md);
-        strip_trailing_heading_stubs(&md)
+        let md = strip_trailing_heading_stubs(&md);
+        let md = collapse_blank_lines(&md);
+        let md = remove_empty_links(&md);
+        remove_broken_images(&md)
     }
 }
 
 fn strip_ui_boilerplate(md: &str) -> String {
     use regex::Regex;
-    let re = Regex::new(r"(?i)(Copy\s*page\s*(?:Open\s*markdown\s*)?(?:Edit\s*page)?|Edit\s*page|Open\s*markdown)")
-        .expect("static regex");
-    let lines: Vec<&str> = md.lines().collect();
-    let mut result = Vec::new();
-    for line in &lines {
-        let trimmed = line.trim();
-        if !trimmed.is_empty() && re.replace_all(trimmed, "").trim().is_empty() {
-            continue;
+    let boilerplate_patterns = [
+        r"(?i)(Copy\s*page\s*(?:Open\s*markdown\s*)?(?:Edit\s*page)?|Edit\s*page|Open\s*markdown)",
+        r"(?i)^.*we\s+use\s+cookies.*$",
+        r"(?i)Subscribe\s+to\s+our\s+newsletter",
+        r"(?i)Copy\s+code",
+    ];
+    
+    let mut result = md.to_string();
+    
+    for pattern in &boilerplate_patterns {
+        let re = Regex::new(pattern).expect("static regex");
+        let lines: Vec<&str> = result.lines().collect();
+        let mut filtered = Vec::new();
+        for line in &lines {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() && re.replace_all(trimmed, "").trim().is_empty() {
+                continue;
+            }
+            filtered.push(*line);
         }
-        result.push(*line);
+        result = filtered.join("\n");
     }
-    result.join("\n")
+    
+    result
 }
 
 fn dedup_markdown(md: &str) -> String {
@@ -116,6 +148,21 @@ fn strip_trailing_heading_stubs(md: &str) -> String {
     } else {
         md.to_string()
     }
+}
+
+fn collapse_blank_lines(md: &str) -> String {
+    let re = Regex::new(r"\n{3,}").expect("static regex");
+    re.replace_all(md, "\n\n").to_string()
+}
+
+fn remove_empty_links(md: &str) -> String {
+    let re = Regex::new(r"\[([^\]]+)\]\(\s*\)").expect("static regex");
+    re.replace_all(md, "$1").to_string()
+}
+
+fn remove_broken_images(md: &str) -> String {
+    let re = Regex::new(r"!\[([^\]]*)\]\(\s*\)").expect("static regex");
+    re.replace_all(md, "").to_string()
 }
 
 fn is_toc_section(section: &str) -> bool {
@@ -271,5 +318,128 @@ mod tests {
         let md = "# Title\n\nParagraph.\n\nSecond.\n\nThird.\n\nFourth.\n\nFifth.\n\nSixth.\n\n* Item one\n* Item two\n* Item three";
         let result = dedup_markdown(md);
         assert!(result.contains("Item one"), "normal list removed: {}", result);
+    }
+
+    #[test]
+    fn test_strips_residual_html_tags() {
+        let converter = HtmlToMarkdown::new();
+        let html = r#"<div class="content"><section><p>Real content</p></section></div>"#;
+        let md = converter.convert(html);
+        assert!(!md.contains("<div"), "div tag not stripped: {}", md);
+        assert!(!md.contains("<section"), "section tag not stripped: {}", md);
+        assert!(!md.contains("</div>"), "closing div not stripped: {}", md);
+        assert!(md.contains("Real content"), "content lost: {}", md);
+    }
+
+    #[test]
+    fn test_strips_html_comments() {
+        let converter = HtmlToMarkdown::new();
+        let html = r#"<p>Visible content</p><!-- This is a comment --><p>More content</p>"#;
+        let md = converter.convert(html);
+        assert!(!md.contains("<!--"), "comment not stripped: {}", md);
+        assert!(!md.contains("This is a comment"), "comment text not stripped: {}", md);
+        assert!(md.contains("Visible content"), "content lost: {}", md);
+    }
+
+    #[test]
+    fn test_strips_span_tags() {
+        let converter = HtmlToMarkdown::new();
+        let html = r#"<p>Text with <span class="highlight">highlighted</span> content</p>"#;
+        let md = converter.convert(html);
+        assert!(!md.contains("<span"), "span tag not stripped: {}", md);
+        assert!(md.contains("highlighted"), "span content lost: {}", md);
+    }
+
+    #[test]
+    fn test_strips_script_content() {
+        let converter = HtmlToMarkdown::new();
+        let html = r#"<p>Real content</p><script>var x = 1; alert(x);</script><p>More content</p>"#;
+        let md = converter.convert(html);
+        assert!(!md.contains("alert"), "script content leaked: {}", md);
+        assert!(!md.contains("<script"), "script tag leaked: {}", md);
+        assert!(md.contains("Real content"), "content lost: {}", md);
+    }
+
+    #[test]
+    fn test_strips_style_content() {
+        let converter = HtmlToMarkdown::new();
+        let html = r#"<p>Real content</p><style>.foo { color: red; }</style><p>More content</p>"#;
+        let md = converter.convert(html);
+        assert!(!md.contains("color: red"), "style content leaked: {}", md);
+        assert!(!md.contains("<style"), "style tag leaked: {}", md);
+        assert!(md.contains("Real content"), "content lost: {}", md);
+    }
+
+    #[test]
+    fn test_no_excessive_blank_lines() {
+        let converter = HtmlToMarkdown::new();
+        let html = r#"<div><div><div><p>Content</p></div></div></div>"#;
+        let md = converter.convert(html);
+        let consecutive_blank_lines = md.contains("\n\n\n");
+        assert!(!consecutive_blank_lines, "excessive blank lines in: {:?}", md);
+    }
+
+    #[test]
+    fn test_strips_empty_links() {
+        let converter = HtmlToMarkdown::new();
+        let html = r##"<p>Text</p><a href="#"></a><p>More text</p>"##;
+        let md = converter.convert(html);
+        assert!(!md.contains("[](#)"), "empty link not stripped: {}", md);
+    }
+
+    #[test]
+    fn test_strips_nav_footer_header_boilerplate() {
+        let converter = HtmlToMarkdown::new();
+        let html = r#"<nav><a href="/">Home</a><a href="/docs">Docs</a></nav><article><p>Real content here</p></article><footer><p>Copyright 2024</p></footer>"#;
+        let md = converter.convert(html);
+        assert!(md.contains("Real content"), "article content lost: {}", md);
+    }
+
+    #[test]
+    fn test_strips_cookie_banner() {
+        let input = "# Title\n\nSome content here.\n\nWe use cookies to improve your experience.\n\nMore content.";
+        let result = strip_ui_boilerplate(input);
+        assert!(!result.contains("We use cookies"), "cookie banner not stripped: {}", result);
+        assert!(result.contains("Some content here."), "content lost: {}", result);
+    }
+
+    #[test]
+    fn test_strips_newsletter_signup() {
+        let input = "# Title\n\nSome content here.\n\nSubscribe to our newsletter\n\nMore content.";
+        let result = strip_ui_boilerplate(input);
+        assert!(!result.contains("Subscribe to our newsletter"), "newsletter not stripped: {}", result);
+        assert!(result.contains("Some content here."), "content lost: {}", result);
+    }
+
+    #[test]
+    fn test_strips_copy_code_button() {
+        let input = "# Title\n\nSome content here.\n\nCopy code\n\nMore content.";
+        let result = strip_ui_boilerplate(input);
+        assert!(!result.contains("Copy code"), "copy code button not stripped: {}", result);
+        assert!(result.contains("Some content here."), "content lost: {}", result);
+    }
+
+    #[test]
+    fn test_collapses_multiple_blank_lines() {
+        let input = "# Title\n\n\n\n\nSome content\n\n\n\n\nMore content";
+        let result = collapse_blank_lines(input);
+        assert!(!result.contains("\n\n\n"), "multiple blank lines not collapsed: {}", result);
+        assert!(result.contains("Some content"), "content lost: {}", result);
+    }
+
+    #[test]
+    fn test_removes_empty_links() {
+        let input = "# Title\n\n[Click here]()\n\nReal content with [valid link](https://example.com)";
+        let result = remove_empty_links(input);
+        assert!(!result.contains("[Click here]()"), "empty link not removed: {}", result);
+        assert!(result.contains("[valid link](https://example.com)"), "valid link removed: {}", result);
+    }
+
+    #[test]
+    fn test_removes_broken_images() {
+        let input = "# Title\n\n![Alt text]()\n\n![Valid image](https://example.com/image.png)";
+        let result = remove_broken_images(input);
+        assert!(!result.contains("![Alt text]()"), "broken image not removed: {}", result);
+        assert!(result.contains("![Valid image](https://example.com/image.png)"), "valid image removed: {}", result);
     }
 }

@@ -509,6 +509,15 @@ pub async fn export_job_v2(
             crate::export::merge_json_files(&main_dir, &out_file)
                 .map_err(|e| format!("JSON export failed: {}", e))?;
         }
+        crate::export::ExportFormat::HtmlFiles => {
+            crate::export::export_html_files(&main_dir, &dest)
+                .map_err(|e| format!("HTML export failed: {}", e))?;
+        }
+        crate::export::ExportFormat::MergedHtml => {
+            let out_file = dest.join(format!("{}-merged.html", job_id));
+            crate::export::merge_html_files(&main_dir, &out_file)
+                .map_err(|e| format!("HTML export failed: {}", e))?;
+        }
     }
 
     Ok(dest.to_string_lossy().to_string())

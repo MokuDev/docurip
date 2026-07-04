@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.5.2 (2026-07-04)
+
+### Added
+- **HTML export format**: Export crawled documentation as styled HTML files (individual or merged). Uses pulldown-cmark to convert Markdown to HTML with embedded CSS styling. Added `HtmlFiles` and `MergedHtml` variants to `ExportFormat`.
+- **Virtualized ResultTree**: Tree view in ResultBrowser now uses react-window for efficient rendering of large result sets. Only visible nodes are rendered, improving performance with thousands of pages.
+- **Lazy-loaded MarkdownPreview**: MarkdownPreview component is now code-split and loaded on demand, reducing initial bundle size by ~31KB.
+
+## v0.5.1 (2026-06-28)
+
+### Added
+- **Advanced Markdown cleaning pipeline**: Comprehensive pre- and post-processing for cleaner output:
+  - Pre-processing: strips `<script>` and `<style>` tags with content, removes empty `<a href="#"></a>` links before HTML-to-Markdown conversion
+  - Extended boilerplate detection: filters cookie banners ("we use cookies"), newsletter signups ("Subscribe to our newsletter"), and copy-code buttons in addition to existing UI elements
+  - Post-processing: collapses excessive blank lines (3+ → 2), removes empty link syntax `[text]()`, and strips broken image references `![alt]()`
+
 ## v0.5.0 (2026-06-28)
 
 ### Added
@@ -28,6 +43,8 @@
 - **`activeJobIds` tracking bug**: Fixed stale "RUNNING" badge issue — `activeJobIds` now only updates on `jobStatusChanged` events. Jobs are correctly removed from active set when status is `completed`, `failed`, or `cancelled`. Previously, all non-status events incorrectly added the jobId to the active set.
 - **`NewCrawlView` state loss**: Active crawl state is now persisted in `sessionStorage` and restored on mount — switching between Dashboard and Active Crawl no longer loses the Live Monitor or controls. Paused jobs are now correctly restored (previously only `running`/`queued` were handled).
 - **Duplicate sidebar entries**: "New Crawl" and "Active Crawl" are now mutually exclusive — only one appears at a time based on whether a crawl is running.
+- **LiveConsole close button removed**: Removed non-functional "X" close button, leaving only "Clear" and "Minimize" controls.
+- **Vitest test suite expanded**: 11 frontend unit tests now pass (useToasts: 6 tests for push, dismiss, auto-dismiss, error persistence, multiple types, correct removal; useCrawlEvents: 5 tests for initial state, event emission, active job tracking, 500-event cap, and non-status event isolation).
 - **LiveConsole close button removed**: Removed the "X" close button from the LiveConsole header — only "Clear" and "Minimize" remain, as closing the console while a crawl is active was confusing and rarely useful.
 
 ## v0.4.1 (2026-06-28)

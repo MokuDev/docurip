@@ -14,6 +14,8 @@ pub enum ExportFormat {
     MergedPdf,
     JsonFiles,
     MergedJson,
+    HtmlFiles,
+    MergedHtml,
 }
 
 pub fn copy_md_files(src_dir: &Path, dst_dir: &Path) -> anyhow::Result<()> {
@@ -74,7 +76,6 @@ pub fn merge_md_files(src_dir: &Path, dst_file: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "headless")]
 fn md_to_html(md_content: &str) -> String {
     use pulldown_cmark::{html, Options, Parser};
     let mut options = Options::empty();
@@ -286,6 +287,47 @@ pub fn merge_json_files(src_dir: &Path, dst_file: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn export_html_files(src_dir: &Path, dst_dir: &Path) -> anyhow::Result<()> {
+    for entry in walk_dir(src_dir)? {
+        if entry.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let relative = entry.strip_prefix(src_dir)?;
+        let dst_path = dst_dir.join(relative).with_extension("html");
+        if let Some(parent) = dst_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let md_content = std::fs::read_to_string(&entry)?;
+        let html_content = md_to_html(&md_content);
+        std::fs::write(&dst_path, html_content)?;
+    }
+    Ok(())
+}
+
+pub fn merge_html_files(src_dir: &Path, dst_file: &Path) -> anyhow::Result<()> {
+    let mut files = walk_dir(src_dir)?
+        .into_iter()
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("md"))
+        .collect::<Vec<_>>();
+    files.sort();
+
+    let mut merged_md = String::new();
+    for (i, file) in files.iter().enumerate() {
+        let content = std::fs::read_to_string(file)?;
+        if i > 0 {
+            merged_md.push_str("\n\n---\n\n");
+        }
+        merged_md.push_str(&content);
+    }
+
+    let html_content = md_to_html(&merged_md);
+    if let Some(parent) = dst_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(dst_file, html_content)?;
+    Ok(())
+}
+
 pub fn zip_directory(src_dir: &Path, dst_file: &Path) -> anyhow::Result<()> {
     let file = File::create(dst_file)?;
     let mut zip = zip::ZipWriter::new(file);
@@ -333,6 +375,8 @@ mod tests {
             ExportFormat::MergedPdf,
             ExportFormat::JsonFiles,
             ExportFormat::MergedJson,
+            ExportFormat::HtmlFiles,
+            ExportFormat::MergedHtml,
         ];
         for fmt in &formats {
             let json = serde_json::to_string(fmt).unwrap();
@@ -345,6 +389,8 @@ mod tests {
                     | (ExportFormat::MergedPdf, ExportFormat::MergedPdf)
                     | (ExportFormat::JsonFiles, ExportFormat::JsonFiles)
                     | (ExportFormat::MergedJson, ExportFormat::MergedJson)
+                    | (ExportFormat::HtmlFiles, ExportFormat::HtmlFiles)
+                    | (ExportFormat::MergedHtml, ExportFormat::MergedHtml)
             ));
         }
     }
@@ -357,6 +403,8 @@ mod tests {
         assert_eq!(serde_json::to_string(&ExportFormat::MergedPdf).unwrap(), "\"merged_pdf\"");
         assert_eq!(serde_json::to_string(&ExportFormat::JsonFiles).unwrap(), "\"json_files\"");
         assert_eq!(serde_json::to_string(&ExportFormat::MergedJson).unwrap(), "\"merged_json\"");
+        assert_eq!(serde_json::to_string(&ExportFormat::HtmlFiles).unwrap(), "\"html_files\"");
+        assert_eq!(serde_json::to_string(&ExportFormat::MergedHtml).unwrap(), "\"merged_html\"");
     }
 
     #[test]
@@ -452,5 +500,37 @@ mod tests {
         assert!(content.contains("# A"));
         assert!(content.contains("# B"));
         assert!(content.contains("---"));
+    }
+
+    #[test]
+    fn export_html_files_creates_html() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        std::fs::write(src.path().join("page.md"), "# Hello\n\nWorld").unwrap();
+
+        export_html_files(src.path(), dst.path()).unwrap();
+
+        let html_path = dst.path().join("page.html");
+        assert!(html_path.exists());
+        let content = std::fs::read_to_string(&html_path).unwrap();
+        assert!(content.contains("<!DOCTYPE html>"));
+        assert!(content.contains("<h1>Hello</h1>"));
+        assert!(content.contains("<p>World</p>"));
+    }
+
+    #[test]
+    fn merge_html_files_creates_single_html() {
+        let src = TempDir::new().unwrap();
+        std::fs::write(src.path().join("a.md"), "# A\n\nAlpha").unwrap();
+        std::fs::write(src.path().join("b.md"), "# B\n\nBeta").unwrap();
+
+        let dst = TempDir::new().unwrap();
+        let out = dst.path().join("merged.html");
+        merge_html_files(src.path(), &out).unwrap();
+
+        let content = std::fs::read_to_string(&out).unwrap();
+        assert!(content.contains("<!DOCTYPE html>"));
+        assert!(content.contains("<h1>A</h1>"));
+        assert!(content.contains("<h1>B</h1>"));
     }
 }

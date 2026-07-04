@@ -113,4 +113,48 @@ describe('useCrawlEvents', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(result.current.events.length).toBeLessThanOrEqual(500);
   });
+
+  it('should only track jobs via jobStatusChanged, not other events', async () => {
+    const { result } = renderHook(() => useCrawlEvents(), { wrapper });
+    
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    
+    const handler = (window as any).__tauriEventHandlers?.['crawl-event'];
+    
+    // Emit progress and pageComplete events — should NOT add to activeJobIds
+    if (handler) {
+      handler({
+        payload: {
+          type: 'progress',
+          jobId: 'job-progress',
+          progress: {
+            pagesCrawled: 10,
+            pageLimit: 100,
+            currentUrl: '',
+            depth: 1,
+            maxDepth: 2,
+            startTime: '',
+          },
+        } as unknown as CrawlEvent,
+      });
+      handler({
+        payload: {
+          type: 'pageComplete',
+          jobId: 'job-progress',
+          page: { url: '/test', title: 'Test', status: 200, linksCount: 5 },
+        } as CrawlEvent,
+      });
+      handler({
+        payload: {
+          type: 'error',
+          jobId: 'job-error',
+          message: 'Something broke',
+          kind: 'network',
+        } as CrawlEvent,
+      });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(result.current.activeJobIds.size).toBe(0);
+  });
 });

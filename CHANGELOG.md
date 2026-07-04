@@ -7,7 +7,7 @@
 - **Virtualized ResultTree**: Tree view in ResultBrowser now uses react-window for efficient rendering of large result sets. Only visible nodes are rendered, improving performance with thousands of pages.
 - **Lazy-loaded MarkdownPreview**: MarkdownPreview component is now code-split and loaded on demand, reducing initial bundle size by ~31KB.
 
-## v0.5.1 (2026-06-28)
+## v0.5.1 (2026-07-01)
 
 ### Added
 - **Advanced Markdown cleaning pipeline**: Comprehensive pre- and post-processing for cleaner output:

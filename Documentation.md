@@ -4,7 +4,7 @@
 
 Docurip is a Tauri v2 desktop application for crawling documentation websites and converting them into offline Markdown archives. It combines a Rust backend (high-performance crawling, security filtering, and disk I/O) with a React 19 / TypeScript / Tailwind CSS frontend.
 
-- **Current version:** v0.3.4
+- **Current version:** v0.5.2
 - **Platforms:** Windows (primary target), built with Tauri v2
 - **Architecture:** Rust backend + React 19 frontend
 - **Default output directory:** `~/.docurip` (falls back to `./output` if the home directory cannot be resolved)
@@ -27,9 +27,23 @@ Docurip’s crawler is built around a parallel, queue-based fetch loop:
 | ** robots.txt support** | Fetches and parses `/robots.txt`, honoring `User-agent`, `Disallow`, `Allow`, and `Crawl-delay` directives for the configured user agent. |
 | **SSRF protection** | Blocks private/internal targets: loopback IPs, RFC 1918 ranges, link-local, IPv6 ULA, `localhost`, `*.local`, and hostnames that resolve to private addresses. |
 
+### Crawl Profiles
+
+Since v0.5.0, Docurip includes pre-configured crawl profiles that set sensible defaults for common documentation types. Select a profile in the **New Crawl** view to auto-fill `maxDepth`, `pageLimit`, `respectRobotsTxt`, content selectors, and exclude patterns.
+
+| Profile | Max Depth | Page Limit | Robots.txt | Best for |
+|---------|-----------|------------|------------|----------|
+| **API Docs** | 3 | 500 | Yes | Swagger, OpenAPI, typedoc, Redoc |
+| **Wiki** | 4 | 2,000 | Yes | MediaWiki, GitBook, Notion-published wikis |
+| **Blog** | 2 | 100 | No | Static blogs, article collections |
+| **Documentation** | 3 | 1,000 | Yes | Docusaurus, MkDocs, Sphinx, VitePress |
+| **Custom** | 2 | 1,000 | Yes | Manual configuration — no presets applied |
+
+Selecting a profile sets the initial values; you can still adjust any field before starting the crawl.
+
 ### Crawl Configuration
 
-Each crawl job has its own configuration. Defaults are taken from **Settings** unless overridden when starting a crawl.
+Each crawl job has its own configuration. Defaults are taken from **Settings** or a **Crawl Profile** unless overridden when starting a crawl.
 
 | Field | Type / Range | Default | Description |
 |-------|--------------|---------|-------------|
@@ -55,7 +69,7 @@ Settings are persisted across sessions in `%APPDATA%/com.docurip.app/settings.js
 | Concurrency | 3 | 1–20 parallel fetch tasks. |
 | Request delay | 1000 ms | 0–30,000 ms delay before each request. |
 | Timeout | 30,000 ms | 1,000–120,000 ms per HTTP request. |
-| User agent | `Docurip/0.3.3 (Documentation Crawler)` | Sent with every request. The HTTP fetcher uses `Docurip/0.3.3 (+https://github.com/docurip)`. |
+| User agent | `Docurip/0.5.2 (Documentation Crawler)` | Sent with every request. The HTTP fetcher uses `Docurip/0.5.2 (+https://github.com/docurip)`. |
 | Default max depth | 2 | Default for new crawls. |
 | Default page limit | 50 | Default for new crawls. |
 | Default download assets | false | Default for new crawls. |
@@ -85,7 +99,7 @@ Since v0.3.2, every crawl creates a subfolder named after the target domain:
   {domain}/
     main/      # Crawled Markdown files
     zip/       # ZIP exports
-    formats/   # Markdown files, merged Markdown, PDF files, merged PDF
+    formats/   # Markdown files, merged Markdown, PDF files, merged PDF, HTML files, merged HTML
 ```
 
 For example, crawling `https://docs.example.com` with the default output directory produces `~/.docurip/docs.example.com/main/` containing the Markdown pages.
@@ -101,17 +115,29 @@ Completed jobs can be exported from the **History** view or the **Result Browser
 | **Merged Markdown** | Concatenates all Markdown pages into a single file with `---` separators. | Always available. |
 | **PDF Files** | Renders each Markdown page to an individual PDF. | Requires a build with `--features headless`. |
 | **Merged PDF** | Renders all pages into one PDF document. | Requires a build with `--features headless`. |
+| **HTML Files** | Converts each Markdown page to a standalone HTML file with basic styling. | Always available. |
+| **Merged HTML** | Concatenates all pages into a single HTML document with `---` separators. | Always available. |
 
 The app detects headless support at runtime and disables PDF options when the feature is not compiled in.
+
+### Markdown Cleaning
+
+Since v0.5.0, the HTML-to-Markdown pipeline includes automatic cleaning steps to produce cleaner output:
+
+- **Script/style removal** — `<script>` and `<style>` tags with their content are stripped before Markdown conversion.
+- **Empty link removal** — `<a href="#">` tags without meaningful content are removed before conversion.
+- **Boilerplate filtering** — After conversion, common UI noise is removed: "Copy page" / "Edit page" links, cookie banners, newsletter signups, and "Copy code" buttons.
+- **Post-processing** — Excessive blank lines are collapsed, empty link URLs (`[text]()`) are unwrapped to plain text, and broken images (`![alt]()`) are removed.
+- **Trailing heading stubs** — Orphaned heading lines at the end of a document (often from navigation fragments) are stripped.
 
 ### User Interface
 
 | View | Purpose |
 |------|---------|
 | **Dashboard** | Overview cards (pages saved, total size, crawl velocity, fail rate), quick-start buttons, recent jobs, recent exports, and live session/system status bars. |
-| **New Crawl** | Configure and start a crawl, plus a live monitor with progress bar, status badge, log drawer, pause/resume/cancel controls, and export shortcuts. |
+| **New Crawl** | Configure and start a crawl with profile selection, plus a live monitor with progress bar, status badge, log drawer, pause/resume/cancel controls, and export shortcuts. |
 | **History** | Browse all jobs, filter and search, inspect details, open output folders, delete jobs, and export results. |
-| **Result Browser** | Split-pane file tree + Markdown preview with a search panel that highlights matches across all pages. |
+| **Result Browser** | Split-pane virtualized file tree + lazy-loaded Markdown preview with a debounced search panel that highlights matches across all pages. |
 | **Settings** | Configure defaults, output directory, network behavior, window size, and reset to defaults. |
 
 ### Job Persistence
@@ -195,4 +221,28 @@ Docurip’s Markdown output is ideal for feeding into retrieval-augmented genera
 
 ## Version Notes
 
-This documentation reflects **Docurip v0.3.4**. Notable recent changes include MIME-type validation for assets, SSRF checks on start URLs, throttled dashboard polling, typed disk-error classification, and headless Chrome compatibility fixes for `headless_chrome` 1.x.
+This documentation reflects **Docurip v0.5.2**.
+
+### v0.5.x Highlights
+
+- **Crawl Profiles** — Pre-configured presets for API docs, wikis, blogs, and documentation sites.
+- **HTML Export** — New export formats: individual HTML files and merged HTML.
+- **Markdown Cleaning** — Automatic removal of script/style tags, UI boilerplate, empty links, broken images, and excessive blank lines.
+- **Virtualized Result Tree** — The Result Browser file tree uses windowed rendering for large crawl results.
+- **Lazy-loaded Markdown Preview** — The preview component is code-split and loaded on demand.
+- **Debounced Search** — Search input in the Result Browser is debounced (300 ms) to reduce redundant filtering.
+
+### v0.4.x Highlights
+
+- **Disk-error auto-pause** — Crawls pause automatically on permission denied, read-only filesystem, or no space left.
+- **Typed error classification** — All crawl errors are classified by kind (Network, Http, Disk, Parse, Config, Cancelled, Unknown).
+- **Queue backpressure** — Internal queue depth is bounded to prevent unbounded memory growth on large crawls.
+- **Throttled job persistence** — Active job state is persisted at most every 5 seconds to reduce disk I/O.
+- **Active crawl navigation** — Navigate directly to a running crawl from the Dashboard.
+
+### v0.3.x Highlights
+
+- MIME-type validation for downloaded assets
+- SSRF checks on start URLs
+- Throttled dashboard polling
+- Headless Chrome compatibility fixes for `headless_chrome` 1.x

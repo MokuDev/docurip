@@ -20,7 +20,7 @@ End state: a stable, single-user desktop productivity tool for crawling document
 
 ## Phases
 
-### v0.4 – Foundations
+### v0.4 – Foundations - Done! [X]
 
 - Stabilize the existing crawler, event system, and export pipeline.
 - Expand Rust and frontend test coverage for critical paths.
@@ -29,8 +29,8 @@ End state: a stable, single-user desktop productivity tool for crawling document
 
 ### v0.5 – Import & Export
 
-- Add **PDF → Markdown** import (text extraction; image-based PDFs handled later via OCR).
-- Add **ePub → Markdown** import by unpacking the archive and converting HTML content.
+- Add **PDF → Markdown** import (text extraction; image-based PDFs handled later via OCR). - Done! [X]
+- Add **ePub → Markdown** import by unpacking the archive and converting HTML content. - Done! [X]
 - Improve export UX: better format selection, naming, and destination control.
 - Validate import quality with a representative set of real-world PDFs and ePubs.
 

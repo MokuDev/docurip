@@ -68,7 +68,7 @@ For RAG, standard text splitters break arbitrarily on HTML tags, splitting code 
 ## Screenshots
 
 <div align="center">
-  <img src="assets/screenshots/Dashboard.png" alt="Dashboard — live stats, recent jobs, system monitor" width="49%" />
+  <img src="assets/screenshots/dashboard.png" alt="Dashboard — live stats, recent jobs, system monitor" width="49%" />
   <img src="assets/screenshots/Crawl.png" alt="Crawl — live monitor streaming progress in real time" width="49%" />
   <img src="assets/screenshots/MdBrowse.png" alt="Result Browser — split-pane tree and Markdown preview" width="49%" />
   <img src="assets/screenshots/PDFandEPUB.png" alt="PDF & EPUB Import — drag, drop, convert to clean Markdown" width="49%" />

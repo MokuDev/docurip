@@ -7,6 +7,13 @@
 - **Keyboard shortcuts**: `Ctrl/Cmd+N` opens New Crawl (or Active Crawl when running), `Ctrl/Cmd+F` focuses the search input, `Escape` closes the topmost modal or Live Console. Shortcuts suppress inside text inputs (except Escape). New `useKeyboardShortcuts` hook and `EscapeStack` context for coordinating Escape across nested modals.
 - **Desktop notifications**: system notifications fire when a crawl completes or fails. Gated by a new `notificationsEnabled` setting (default on) with a toggle in Settings → Notifications. Uses `tauri-plugin-notification` with permission request on first use.
 
+### Fixed
+- **ResultTree focusedIndex out of range**: keyboard-focused index could exceed the visible node count after filtering or collapsing a folder, causing undefined access. Now clamped via `useEffect` whenever `visibleNodes` shrinks.
+- **Duplicate desktop notifications**: if the backend emitted multiple terminal events for the same job (e.g. race between completed/failed), the notification fired more than once. A ref-backed `Set<string>` now deduplicates per jobId.
+- **Notification plugin errors unhandled**: `sendNotification` was not wrapped in try/catch — if the plugin threw after permission was granted, the rejection propagated as unhandled. Now caught and logged.
+- **Whitespace-only pattern lines sent to backend**: include/exclude/selector textareas split on newlines but only filtered with `.filter(Boolean)`, so a line of spaces passed through as a non-empty (invalid) regex. Lines are now `.trim()`'d before filtering.
+- **Keyboard shortcuts case-sensitive**: `Ctrl+N`/`Ctrl+F` matched `e.key === 'n'`/`'f'` literally, so they failed with CapsLock on. Now normalized via `.toLowerCase()`.
+
 ### Tests
 - 8 tests for `useKeyboardShortcuts`: Ctrl+N, Ctrl+F, Escape, modifier requirement, metaKey support, input suppression, Escape-in-input, cleanup on unmount.
 - 5 tests for `useNotifications`: permission-granted send, permission-request flow, permission-denied suppression, failure with/without error message.

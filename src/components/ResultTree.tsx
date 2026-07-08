@@ -106,6 +106,12 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
   }, [tree, expandedPaths]);
 
   useEffect(() => {
+    if (focusedIndex >= visibleNodes.length) {
+      setFocusedIndex(Math.max(visibleNodes.length - 1, -1));
+    }
+  }, [visibleNodes.length, focusedIndex]);
+
+  useEffect(() => {
     if (focusedIndex >= 0 && listRef.current) {
       listRef.current.scrollToItem(focusedIndex);
     }

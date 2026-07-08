@@ -38,8 +38,8 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
                 } else if (event.status === 'failed') {
                   notifyCrawlFailed(job.url, job.error);
                 }
-              }).catch(() => {});
-            }).catch(() => {});
+              }).catch((err) => { console.warn('Failed to fetch job for notification:', err); });
+            }).catch((err) => { console.warn('Failed to fetch settings for notification:', err); });
           }
         }
         return { ...prev, events: nextEvents, activeJobIds: nextActive };

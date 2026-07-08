@@ -23,10 +23,11 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
 
       if (isInput) return;
 
-      if (mod && e.key === 'n') {
+      const key = e.key.toLowerCase();
+      if (mod && key === 'n') {
         e.preventDefault();
         ref.current.onNewCrawl();
-      } else if (mod && e.key === 'f') {
+      } else if (mod && key === 'f') {
         e.preventDefault();
         ref.current.onSearch();
       }

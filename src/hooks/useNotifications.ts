@@ -14,17 +14,25 @@ async function ensurePermission(): Promise<boolean> {
 }
 
 export async function notifyCrawlComplete(jobUrl: string, pageCount: number): Promise<void> {
-  if (!(await ensurePermission())) return;
-  sendNotification({
-    title: 'Crawl Complete',
-    body: `Finished crawling ${jobUrl} — ${pageCount} pages saved`,
-  });
+  try {
+    if (!(await ensurePermission())) return;
+    sendNotification({
+      title: 'Crawl Complete',
+      body: `Finished crawling ${jobUrl} — ${pageCount} pages saved`,
+    });
+  } catch (err) {
+    console.warn('Failed to send completion notification:', err);
+  }
 }
 
 export async function notifyCrawlFailed(jobUrl: string, error?: string): Promise<void> {
-  if (!(await ensurePermission())) return;
-  sendNotification({
-    title: 'Crawl Failed',
-    body: `Failed to crawl ${jobUrl}${error ? `: ${error}` : ''}`,
-  });
+  try {
+    if (!(await ensurePermission())) return;
+    sendNotification({
+      title: 'Crawl Failed',
+      body: `Failed to crawl ${jobUrl}${error ? `: ${error}` : ''}`,
+    });
+  } catch (err) {
+    console.warn('Failed to send failure notification:', err);
+  }
 }

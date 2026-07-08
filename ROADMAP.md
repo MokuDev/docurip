@@ -124,6 +124,10 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 | **Orchestrator::new complexity** | Constructor accumulates include_set building, path_prefix cloning, output-dir setup, and writer init inline. Could extract config normalization into a dedicated helper or `CrawlConfig` resolver. | `orchestrator.rs:154` |
 | **Include-filter extraction** | Inline `has_include_constraint` / `matches_include` / `matches_prefix` logic could be extracted into a `url_matches_include_rules(&self, &str) -> bool` method for readability and independent testability. | `orchestrator.rs:718` |
 | **Redundant Url::parse in crawl loop** | Path-prefix check re-parses the URL string even though the link was already parsed/resolved earlier. Could pass the parsed `Url` object through or factor filtering into a helper that accepts a pre-parsed URL. | `orchestrator.rs:722` |
+| **start_crawl payload helper** | The config object sent to `invoke('start_crawl')` manually enumerates every field. A `toCrawlConfigPayload(config)` helper would keep the mapping in one place and prevent field omissions as CrawlConfig grows. | `NewCrawl.tsx:155` |
+| **Unused profile default methods** | `default_include_patterns` and `default_path_prefix` on `CrawlProfile` always return empty values and are not called anywhere yet. Prepared for v0.6.2 (job templates); remove or wire up when templates land. | `profiles.rs:92` |
+| **Regex validation DRY** | `validate_crawl_input` has two nearly identical loops for exclude and include patterns. Could extract a `validate_pattern_list(patterns, label) -> Result` helper. | `commands.rs:47` |
+| **Include-filter tests test primitives** | Unit tests for include/path-prefix replicate the production logic inline (`RegexSet::is_match`, `starts_with`) rather than exercising the actual orchestrator filter path. Rewrite once the filter is extracted into a helper method. | `orchestrator.rs:859` |
 
 ## Open Questions
 

@@ -4,10 +4,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Background tones
-        deepVoid: '#080C14',
-        surface: '#0F172A',
-        abyssal: '#1E293B',
+        // Background tones (theme-aware via CSS variables, see src/styles/index.css)
+        deepVoid: 'rgb(var(--color-deep-void) / <alpha-value>)',
+        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        abyssal: 'rgb(var(--color-abyssal) / <alpha-value>)',
 
         // Cyberpunk accent
         accentGreen: '#16E08D',
@@ -22,11 +22,11 @@ export default {
         cyberBlue: '#3B82F6',
         cyan: '#06B6D4',
 
-        // Text
-        ghost: '#F1F5F9',
-        smooth: '#CBD5E1',
-        secondary: '#94A3B8',
-        charcoal: '#64748B',
+        // Text (theme-aware via CSS variables, see src/styles/index.css)
+        ghost: 'rgb(var(--color-ghost) / <alpha-value>)',
+        smooth: 'rgb(var(--color-smooth) / <alpha-value>)',
+        secondary: 'rgb(var(--color-secondary) / <alpha-value>)',
+        charcoal: 'rgb(var(--color-charcoal) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],

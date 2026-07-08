@@ -34,7 +34,7 @@ function App() {
   }, [activeJobsCount, liveConsoleOpen]);
 
   return (
-    <div className="h-screen bg-[#050a0f] flex flex-col text-smooth font-sans">
+    <div className="h-screen bg-deepVoid flex flex-col text-smooth font-sans">
       <TopStatusBar />
 
       {updateAvailable && (
@@ -53,7 +53,7 @@ function App() {
             <button
               onClick={installUpdate}
               disabled={downloading}
-              className="px-3 py-1 bg-accentGreen hover:bg-brightGreen text-deepVoid font-semibold rounded text-xs transition-all disabled:opacity-50"
+              className="px-3 py-1 bg-accentGreen hover:bg-brightGreen text-slate-900 font-semibold rounded text-xs transition-all disabled:opacity-50"
             >
               {downloading ? 'Downloading...' : updateError ? 'Retry' : 'Install & Restart'}
             </button>
@@ -123,7 +123,7 @@ function App() {
           {/* Footer */}
           <div className="h-auto flex flex-col items-center justify-center py-3 border-t border-abyssal/50 space-y-1">
             <span className="text-charcoal text-[10px] tracking-widest uppercase">
-              v0.5.3
+              v0.6.0
             </span>
             <span className="text-charcoal text-[10px]">
               made with love by{' '}

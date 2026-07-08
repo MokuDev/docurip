@@ -58,6 +58,7 @@ pub fn run() {
             commands::delete_job,
             commands::get_settings,
             commands::update_settings,
+            commands::set_theme,
             commands::open_output_folder,
             commands::export_job,
             commands::export_job_v2,

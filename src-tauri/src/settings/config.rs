@@ -20,6 +20,8 @@ pub struct AppSettings {
     pub default_ssrf_protection: bool,
     pub window_width: u32,
     pub window_height: u32,
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 impl Default for AppSettings {
@@ -42,8 +44,13 @@ impl Default for AppSettings {
             default_ssrf_protection: true,
             window_width: 1280,
             window_height: 900,
+            theme: default_theme(),
         }
     }
+}
+
+fn default_theme() -> String {
+    String::from("system")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

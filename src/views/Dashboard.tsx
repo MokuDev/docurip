@@ -140,7 +140,7 @@ export function DashboardView({ onQuickStart }: { onQuickStart: (url: string) =>
           <button
             onClick={() => onQuickStart(quickUrl)}
             disabled={!quickUrl}
-            className="bg-accentGreen hover:bg-brightGreen text-deepVoid px-6 py-3 rounded-md font-semibold transition-all duration-fast disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-accentGreen hover:bg-brightGreen text-slate-900 px-6 py-3 rounded-md font-semibold transition-all duration-fast disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Start Crawl
           </button>

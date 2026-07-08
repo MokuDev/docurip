@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.6.0 (2026-07-08)
+
+### Added
+- **Dark / Light / System theme toggle**: the app was previously dark-only with no theme infrastructure. Semantic Tailwind tokens (`deepVoid`, `surface`, `abyssal`, `ghost`, `smooth`, `secondary`, `charcoal`) now resolve through CSS variables that flip based on a `.dark`/`.light` class on `<html>`, so existing component styling didn't need to change. New `ThemeProvider`/`useTheme()` hook persists the preference via a dedicated `set_theme` command; `system` mode tracks `prefers-color-scheme` live. Quick-access toggle in the top status bar; full picker in Settings → Appearance.
+
+### Fixed
+- **Unreadable button text in light mode**: `text-deepVoid` was reused as guaranteed-dark label text on `accentGreen`/`amber` buttons (Save, Start Crawl, dashboard CTA); since `deepVoid` now flips to near-white in light mode, those labels went nearly invisible. Switched to a fixed dark color for button labels instead of a theme-aware token.
+- **Low-contrast secondary text/badges in light mode**: darkened the light-mode text scale so `charcoal` (the most-muted token, used widely for hints and status badges) clears WCAG AA contrast against the near-white backgrounds.
+- **Theme-save race**: `useTheme`'s `setTheme` previously did its own `get_settings`→`update_settings` round trip, which could race with the Settings page's own save/reset flow and silently clobber either the theme or unrelated field edits (the backend does a full overwrite, not a merge). Replaced with a dedicated `set_theme` command that only touches the `theme` key; Settings now reads the live theme from context at save time instead of a locally-mirrored copy, and persistence failures now surface a toast instead of failing silently.
+
 ## v0.5.2 (2026-07-04)
 
 ### Added

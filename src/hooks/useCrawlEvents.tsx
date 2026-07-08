@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import type { AppSettings, CrawlEvent, CrawlJob } from '../types';
@@ -16,6 +16,7 @@ const CrawlEventsContext = createContext<CrawlEventsState>({
 
 export function CrawlEventsProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<CrawlEventsState>({ events: [], activeJobIds: new Set() });
+  const notifiedJobIds = useRef(new Set<string>());
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -30,16 +31,19 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
             nextActive.add(event.jobId);
           } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
             nextActive.delete(event.jobId);
-            invoke<AppSettings>('get_settings').then((settings) => {
-              if (!settings.notificationsEnabled) return;
-              invoke<CrawlJob>('get_job', { jobId: event.jobId }).then((job) => {
-                if (event.status === 'completed') {
-                  notifyCrawlComplete(job.url, job.results.length);
-                } else if (event.status === 'failed') {
-                  notifyCrawlFailed(job.url, job.error);
-                }
-              }).catch((err) => { console.warn('Failed to fetch job for notification:', err); });
-            }).catch((err) => { console.warn('Failed to fetch settings for notification:', err); });
+            if (!notifiedJobIds.current.has(event.jobId)) {
+              notifiedJobIds.current.add(event.jobId);
+              invoke<AppSettings>('get_settings').then((settings) => {
+                if (!settings.notificationsEnabled) return;
+                invoke<CrawlJob>('get_job', { jobId: event.jobId }).then((job) => {
+                  if (event.status === 'completed') {
+                    notifyCrawlComplete(job.url, job.results.length);
+                  } else if (event.status === 'failed') {
+                    notifyCrawlFailed(job.url, job.error);
+                  }
+                }).catch((err) => { console.warn('Failed to fetch job for notification:', err); });
+              }).catch((err) => { console.warn('Failed to fetch settings for notification:', err); });
+            }
           }
         }
         return { ...prev, events: nextEvents, activeJobIds: nextActive };

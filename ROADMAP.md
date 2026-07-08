@@ -105,6 +105,23 @@ Broken into incremental sub-releases, each building on the previous:
 - v0.7 acceptance: installer/updater works on a clean Windows machine.
 - v1.0 acceptance: 5,000-page crawl succeeds; CLI can start a crawl and export results; all tests pass on the release branch.
 
+## Future Optimization Candidates
+
+Low-priority items identified during v0.6.1 review. None are bugs — all are performance or code-quality improvements to consider when the relevant area is next touched.
+
+| Area | Description | Where |
+|------|-------------|-------|
+| **Dashboard stats I/O** | `compute_dashboard_stats` / `dir_size_capped` uses synchronous `std::fs` per job on every 3s poll. Move to `tokio::fs` / `spawn_blocking`, or cache sizes and update incrementally on crawl completion. | `commands.rs:203, 222` |
+| **Notification IPC round-trips** | Terminal crawl events trigger two sequential `invoke` calls (`get_settings` → `get_job`). Could cache `notificationsEnabled` in memory or include job summary in the event payload so the frontend doesn't need to call back. | `useCrawlEvents.tsx:33` |
+| **ResultTree re-renders on focus** | `focusedIndex` state change re-renders the entire virtualized list. Could isolate focus state in a child component or use react-window's item-specific APIs so only the old/new focused row re-render. | `ResultTree.tsx:124` |
+| **EscapeStack fireTop() allocation** | `Array.from(stack.entries())` materializes the full Map on every Escape press. In practice n ≤ 3 (max stacked modals), so not urgent, but could track a top pointer for O(1) dispatch. | `EscapeStack.tsx:31` |
+| **Settings form re-renders** | Object spread `{ ...settings, field: value }` on every keystroke re-renders the entire settings form. Could split into memoized section components or use a reducer. | `Settings.tsx:217` |
+| **stop_crawl lock contention** | `stop_crawl` holds a job read lock during persistence. Could snapshot the job, release the lock early, and persist in a background task. | `commands.rs:100` |
+| **Pattern textarea churn** | Include/exclude textareas do `join('\n')` on render and `split('\n')` on input. Could keep textarea state as a raw string and only parse on submission. | `NewCrawl.tsx:397` |
+| **is_transient_error string scanning** | Lowercases the full error string and scans multiple substrings on every retryable failure. The typed downcast path (added in v0.3.4) handles most cases; the string fallback could be lazy-evaluated. | `fetcher/http.rs:47` |
+| **EscapeStack effect deps** | ExportModal's registration effect depends only on `onClose` but closes over `escapeStack` from context. If the context identity ever changed, push/remove would churn. Currently stable (ref-backed), but adding `escapeStack` to deps would be more correct. | `ExportModal.tsx:23` |
+| **ResultTree accessibility** | The keyboard-navigable tree wrapper has `tabIndex={0}` but no `role="tree"` / `aria-activedescendant`. Adding ARIA semantics would improve screen-reader support. | `ResultTree.tsx:161` |
+
 ## Open Questions
 
 - ~~Which exact crates should be used for PDF and ePub parsing?~~ Resolved in v0.5: `pdf_extract` and `epub` crates.

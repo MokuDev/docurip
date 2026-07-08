@@ -128,6 +128,8 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 | **Unused profile default methods** | `default_include_patterns` and `default_path_prefix` on `CrawlProfile` always return empty values and are not called anywhere yet. Prepared for v0.6.2 (job templates); remove or wire up when templates land. | `profiles.rs:92` |
 | **Regex validation DRY** | `validate_crawl_input` has two nearly identical loops for exclude and include patterns. Could extract a `validate_pattern_list(patterns, label) -> Result` helper. | `commands.rs:47` |
 | **Include-filter tests test primitives** | Unit tests for include/path-prefix replicate the production logic inline (`RegexSet::is_match`, `starts_with`) rather than exercising the actual orchestrator filter path. Rewrite once the filter is extracted into a helper method. | `orchestrator.rs:859` |
+| **Shared filter-field component** | Include-pattern, exclude-pattern, and content-selector textareas repeat the same label/textarea/help-text layout. Extract a `FilterField` component when more filter types are added. | `NewCrawl.tsx:391` |
+| **ToggleRow/SettingSwitch component** | The notifications toggle is inline JSX in SettingsView. Extract a reusable `ToggleRow` component for when more boolean settings are added (e.g. auto-export in v0.6.2). | `Settings.tsx:213` |
 
 ## Open Questions
 

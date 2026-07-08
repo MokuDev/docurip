@@ -7,12 +7,9 @@ import {
   ArrowClockwise,
   CheckCircle,
   Warning,
-  Sun,
-  Moon,
-  Desktop,
 } from '@phosphor-icons/react';
-import type { AppSettings, ThemePreference } from '../types';
-import { useTheme } from '../hooks/useTheme';
+import type { AppSettings } from '../types';
+import { useTheme, THEME_ORDER, THEME_META } from '../hooks/useTheme';
 
 const DEFAULT_SETTINGS: AppSettings = {
   outputDir: '',
@@ -38,12 +35,6 @@ const WINDOW_PRESETS = [
   { w: 1920, h: 1080, label: 'Full HD' },
   { w: 2560, h: 1440, label: 'QHD' },
   { w: 3840, h: 2160, label: 'UHD / 4K' },
-];
-
-const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'system', label: 'System', icon: Desktop },
 ];
 
 export function SettingsView() {
@@ -90,7 +81,11 @@ export function SettingsView() {
       return;
     }
     try {
-      await invoke('update_settings', { settings });
+      // Theme is persisted independently via useTheme() (see setTheme), so
+      // splice in its live value here instead of this component's own
+      // possibly-stale copy to avoid reverting a theme change made elsewhere
+      // (e.g. the TopStatusBar quick toggle) while this page was open.
+      await invoke('update_settings', { settings: { ...settings, theme } });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -100,6 +95,7 @@ export function SettingsView() {
 
   const handleReset = () => {
     setSettings(DEFAULT_SETTINGS);
+    setTheme(DEFAULT_SETTINGS.theme);
     setSaved(false);
     setError('');
     setErrors({});
@@ -122,11 +118,6 @@ export function SettingsView() {
     } catch (err) {
       console.error('Failed to resize window', err);
     }
-  };
-
-  const handleThemeChange = (next: ThemePreference) => {
-    setTheme(next);
-    setSettings((prev) => ({ ...prev, theme: next }));
   };
 
   if (loading) {
@@ -154,7 +145,7 @@ export function SettingsView() {
           </button>
           <button
             onClick={handleSave}
-            className="flex items-center space-x-2 px-4 py-2 bg-accentGreen hover:bg-brightGreen text-deepVoid font-semibold rounded-md transition-all duration-fast hover:shadow-[0_0_15px_rgba(22,224,141,0.3)]"
+            className="flex items-center space-x-2 px-4 py-2 bg-accentGreen hover:bg-brightGreen text-slate-900 font-semibold rounded-md transition-all duration-fast hover:shadow-[0_0_15px_rgba(22,224,141,0.3)]"
           >
             <FloppyDisk weight="fill" size={16} />
             <span>Save</span>
@@ -191,21 +182,24 @@ export function SettingsView() {
               Theme
             </label>
             <div className="flex gap-2">
-              {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => handleThemeChange(value)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md border text-sm transition-all ${
-                    theme === value
-                      ? 'bg-accentGreen/10 border-accentGreen/50 text-accentGreen'
-                      : 'bg-surface/50 border-abyssal text-secondary hover:text-ghost hover:border-accentGreen/30'
-                  }`}
-                >
-                  <Icon size={16} weight={theme === value ? 'fill' : 'regular'} />
-                  <span>{label}</span>
-                </button>
-              ))}
+              {THEME_ORDER.map((value) => {
+                const { label, icon: Icon } = THEME_META[value];
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTheme(value)}
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md border text-sm transition-all ${
+                      theme === value
+                        ? 'bg-accentGreen/10 border-accentGreen/50 text-accentGreen'
+                        : 'bg-surface/50 border-abyssal text-secondary hover:text-ghost hover:border-accentGreen/30'
+                    }`}
+                  >
+                    <Icon size={16} weight={theme === value ? 'fill' : 'regular'} />
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
             </div>
             <p className="text-charcoal text-xs mt-1.5">
               Applied immediately. "System" follows your OS light/dark setting.

@@ -3,8 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  :root,
-  .dark {
+  :root {
     --color-deep-void: 8 12 20;
     --color-surface: 15 23 42;
     --color-abyssal: 30 41 59;
@@ -13,14 +12,17 @@
     --color-secondary: 148 163 184;
     --color-charcoal: 100 116 139;
   }
+  /* Shifted one step darker than a literal mirror of the dark palette so
+     `charcoal`, the most-muted text token, still clears WCAG AA (~4.6:1)
+     against the near-white light-mode backgrounds. */
   .light {
     --color-deep-void: 248 250 252;
     --color-surface: 255 255 255;
     --color-abyssal: 226 232 240;
-    --color-ghost: 15 23 42;
-    --color-smooth: 51 65 85;
-    --color-secondary: 100 116 139;
-    --color-charcoal: 148 163 184;
+    --color-ghost: 2 6 23;
+    --color-smooth: 30 41 59;
+    --color-secondary: 71 85 105;
+    --color-charcoal: 100 116 139;
   }
   html {
     background-color: rgb(var(--color-deep-void));

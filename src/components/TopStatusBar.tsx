@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Sun, Moon, Desktop } from '@phosphor-icons/react';
-import type { SessionInfo, ThemePreference } from '../types';
+import type { SessionInfo } from '../types';
 import { useCrawlEvents } from '../hooks/useCrawlEvents';
-import { useTheme } from '../hooks/useTheme';
-
-const THEME_CYCLE: ThemePreference[] = ['dark', 'light', 'system'];
-const THEME_ICON: Record<ThemePreference, typeof Sun> = { dark: Moon, light: Sun, system: Desktop };
+import { useTheme, THEME_ORDER, THEME_META } from '../hooks/useTheme';
 
 function formatUptime(secs: number): string {
   const h = Math.floor(secs / 3600);
@@ -42,10 +38,10 @@ export function TopStatusBar() {
   void now;
 
   const cycleTheme = () => {
-    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length];
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length];
     setTheme(next);
   };
-  const ThemeIcon = THEME_ICON[theme];
+  const ThemeIcon = THEME_META[theme].icon;
 
   return (
     <div className="h-6 w-full bg-deepVoid border-b border-abyssal/50 flex items-center justify-between px-3 text-[10px] font-mono text-secondary select-none">

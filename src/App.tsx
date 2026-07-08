@@ -53,7 +53,7 @@ function App() {
             <button
               onClick={installUpdate}
               disabled={downloading}
-              className="px-3 py-1 bg-accentGreen hover:bg-brightGreen text-deepVoid font-semibold rounded text-xs transition-all disabled:opacity-50"
+              className="px-3 py-1 bg-accentGreen hover:bg-brightGreen text-slate-900 font-semibold rounded text-xs transition-all disabled:opacity-50"
             >
               {downloading ? 'Downloading...' : updateError ? 'Retry' : 'Install & Restart'}
             </button>

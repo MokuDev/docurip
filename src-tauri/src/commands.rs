@@ -417,6 +417,28 @@ pub async fn update_settings(settings: AppSettings, app: AppHandle) -> Result<()
     Ok(())
 }
 
+/// Persists only the theme preference, merging into whatever settings are
+/// already stored instead of round-tripping the full `AppSettings` object.
+/// This keeps concurrent theme toggles from racing with (and clobbering, or
+/// being clobbered by) an in-flight `update_settings` call from the Settings
+/// page.
+#[tauri::command]
+pub async fn set_theme(theme: String, app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_store::StoreExt;
+    let store = app.store("settings.json").map_err(|e| e.to_string())?;
+    let mut settings: AppSettings = store
+        .get("settings")
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+    settings.theme = theme;
+    store.set(
+        "settings",
+        serde_json::to_value(&settings).map_err(|e| e.to_string())?,
+    );
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn open_output_folder(path: String) -> Result<(), String> {
     open::that(path).map_err(|e| e.to_string())

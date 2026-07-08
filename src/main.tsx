@@ -8,12 +8,12 @@ import "./styles/index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <ToastProvider>
+    <ToastProvider>
+      <ThemeProvider>
         <CrawlEventsProvider>
           <App />
         </CrawlEventsProvider>
-      </ToastProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </ToastProvider>
   </React.StrictMode>
 );

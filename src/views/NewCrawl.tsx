@@ -391,7 +391,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
             <button
               onClick={handleStart}
               disabled={isStarting}
-              className="flex-1 bg-accentGreen hover:bg-brightGreen text-deepVoid font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast hover:shadow-[0_0_15px_rgba(22,224,141,0.3)] disabled:opacity-50"
+              className="flex-1 bg-accentGreen hover:bg-brightGreen text-slate-900 font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast hover:shadow-[0_0_15px_rgba(22,224,141,0.3)] disabled:opacity-50"
             >
               {isStarting ? (
                 <SpinnerGap className="animate-spin" size={18} />
@@ -405,7 +405,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
               {activeJob.status === 'running' && (
                 <button
                   onClick={handlePause}
-                  className="flex-1 bg-amber/80 hover:bg-amber text-deepVoid font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast"
+                  className="flex-1 bg-amber/80 hover:bg-amber text-slate-900 font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast"
                 >
                   <Pause weight="fill" size={18} />
                   <span>Pause</span>
@@ -414,7 +414,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
               {activeJob.status === 'paused' && (
                 <button
                   onClick={handleResume}
-                  className="flex-1 bg-accentGreen/80 hover:bg-accentGreen text-deepVoid font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast"
+                  className="flex-1 bg-accentGreen/80 hover:bg-accentGreen text-slate-900 font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast"
                 >
                   <Play weight="fill" size={18} />
                   <span>Resume</span>

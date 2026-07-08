@@ -64,6 +64,7 @@ interface ResultTreeProps {
 }
 
 const ROW_HEIGHT = 32;
+const ROW_PROPS = {};
 
 export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: ResultTreeProps) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
@@ -163,7 +164,7 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
         ref={listRef}
         rowCount={visibleNodes.length}
         rowHeight={ROW_HEIGHT}
-        rowProps={{}}
+        rowProps={ROW_PROPS}
         rowComponent={({ index, style }) => {
           const { node, depth } = visibleNodes[index];
           const isSelected = node.page?.url === selectedUrl;

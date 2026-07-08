@@ -7,8 +7,12 @@ import {
   ArrowClockwise,
   CheckCircle,
   Warning,
+  Sun,
+  Moon,
+  Desktop,
 } from '@phosphor-icons/react';
-import type { AppSettings } from '../types';
+import type { AppSettings, ThemePreference } from '../types';
+import { useTheme } from '../hooks/useTheme';
 
 const DEFAULT_SETTINGS: AppSettings = {
   outputDir: '',
@@ -25,6 +29,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultSsrfProtection: true,
   windowWidth: 1280,
   windowHeight: 900,
+  theme: 'system',
 };
 
 const WINDOW_PRESETS = [
@@ -35,7 +40,14 @@ const WINDOW_PRESETS = [
   { w: 3840, h: 2160, label: 'UHD / 4K' },
 ];
 
+const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'system', label: 'System', icon: Desktop },
+];
+
 export function SettingsView() {
+  const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -112,6 +124,11 @@ export function SettingsView() {
     }
   };
 
+  const handleThemeChange = (next: ThemePreference) => {
+    setTheme(next);
+    setSettings((prev) => ({ ...prev, theme: next }));
+  };
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -167,6 +184,35 @@ export function SettingsView() {
       )}
 
       <div className="space-y-6">
+        {/* Appearance Settings */}
+        <Section title="Appearance">
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+              Theme
+            </label>
+            <div className="flex gap-2">
+              {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => handleThemeChange(value)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md border text-sm transition-all ${
+                    theme === value
+                      ? 'bg-accentGreen/10 border-accentGreen/50 text-accentGreen'
+                      : 'bg-surface/50 border-abyssal text-secondary hover:text-ghost hover:border-accentGreen/30'
+                  }`}
+                >
+                  <Icon size={16} weight={theme === value ? 'fill' : 'regular'} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-charcoal text-xs mt-1.5">
+              Applied immediately. "System" follows your OS light/dark setting.
+            </p>
+          </div>
+        </Section>
+
         {/* Output Settings */}
         <Section title="Output">
           <div className="space-y-4">

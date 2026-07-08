@@ -8,6 +8,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Docurip</title>
+    <script>
+      (function () {
+        var pref = localStorage.getItem('docurip-theme') || 'system';
+        var resolved =
+          pref === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+            : pref;
+        document.documentElement.classList.add(resolved);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

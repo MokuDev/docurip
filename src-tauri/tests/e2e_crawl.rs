@@ -104,6 +104,7 @@ fn make_settings() -> AppSettings {
         default_ssrf_protection: false,
         window_width: 1280,
         window_height: 900,
+        theme: String::from("dark"),
     }
 }
 

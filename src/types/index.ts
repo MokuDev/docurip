@@ -109,6 +109,8 @@ export interface CrawlJob {
   error?: string;
 }
 
+export type ThemePreference = 'dark' | 'light' | 'system';
+
 export interface AppSettings {
   outputDir: string;
   concurrency: number;
@@ -124,6 +126,7 @@ export interface AppSettings {
   defaultSsrfProtection: boolean;
   windowWidth: number;
   windowHeight: number;
+  theme: ThemePreference;
 }
 
 export interface CrawlEvent {

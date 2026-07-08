@@ -440,7 +440,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
       </div>
 
       {/* Right: Live Monitor */}
-      <div className="flex-1 flex flex-col bg-[#050a0f]">
+      <div className="flex-1 flex flex-col bg-deepVoid">
         <div className="h-14 flex items-center px-5 border-b border-abyssal/50">
           <h2 className="text-ghost font-semibold text-base flex items-center">
             <FileText weight="fill" size={18} className="text-accentGreen mr-2" />

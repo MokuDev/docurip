@@ -129,7 +129,7 @@ export function LiveConsole() {
       </div>
 
       {/* Log Content */}
-      <div className="flex-1 overflow-y-auto p-3 font-mono text-[11px] space-y-1 bg-[#050a0f]">
+      <div className="flex-1 overflow-y-auto p-3 font-mono text-[11px] space-y-1 bg-deepVoid">
         {logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-charcoal/30">
             <Terminal size={32} className="mb-2 opacity-30" />

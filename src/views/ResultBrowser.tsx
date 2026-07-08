@@ -201,7 +201,7 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
           </div>
 
           {/* Preview */}
-          <div className="flex-1 bg-[#050a0f]">
+          <div className="flex-1 bg-deepVoid">
             {selectedPage ? (
               contentLoading ? (
                 <div className="flex items-center justify-center h-full text-charcoal text-sm">

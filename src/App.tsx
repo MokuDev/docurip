@@ -34,7 +34,7 @@ function App() {
   }, [activeJobsCount, liveConsoleOpen]);
 
   return (
-    <div className="h-screen bg-[#050a0f] flex flex-col text-smooth font-sans">
+    <div className="h-screen bg-deepVoid flex flex-col text-smooth font-sans">
       <TopStatusBar />
 
       {updateAvailable && (

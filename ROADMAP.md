@@ -121,6 +121,9 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 | **is_transient_error string scanning** | Lowercases the full error string and scans multiple substrings on every retryable failure. The typed downcast path (added in v0.3.4) handles most cases; the string fallback could be lazy-evaluated. | `fetcher/http.rs:47` |
 | **EscapeStack effect deps** | ExportModal's registration effect depends only on `onClose` but closes over `escapeStack` from context. If the context identity ever changed, push/remove would churn. Currently stable (ref-backed), but adding `escapeStack` to deps would be more correct. | `ExportModal.tsx:23` |
 | **ResultTree accessibility** | The keyboard-navigable tree wrapper has `tabIndex={0}` but no `role="tree"` / `aria-activedescendant`. Adding ARIA semantics would improve screen-reader support. | `ResultTree.tsx:161` |
+| **Orchestrator::new complexity** | Constructor accumulates include_set building, path_prefix cloning, output-dir setup, and writer init inline. Could extract config normalization into a dedicated helper or `CrawlConfig` resolver. | `orchestrator.rs:154` |
+| **Include-filter extraction** | Inline `has_include_constraint` / `matches_include` / `matches_prefix` logic could be extracted into a `url_matches_include_rules(&self, &str) -> bool` method for readability and independent testability. | `orchestrator.rs:718` |
+| **Redundant Url::parse in crawl loop** | Path-prefix check re-parses the URL string even though the link was already parsed/resolved earlier. Could pass the parsed `Url` object through or factor filtering into a helper that accepts a pre-parsed URL. | `orchestrator.rs:722` |
 
 ## Open Questions
 

@@ -19,7 +19,7 @@ const MAX_LOGS = 500;
 const DEFAULT_CONFIG: CrawlConfig = {
   url: '',
   maxDepth: 2,
-  pageLimit: 50,
+  pageLimit: 1000,
   downloadAssets: false,
   headlessStrategy: 'never',
   contentSelectors: ['main', 'article', '.content'],

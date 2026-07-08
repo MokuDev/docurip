@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Browser,
   ClockCounterClockwise,
@@ -18,6 +18,8 @@ import { SystemStatusBar } from './components/SystemStatusBar';
 import { ToastContainer } from './components/ToastContainer';
 import { useCrawlEvents } from './hooks/useCrawlEvents';
 import { useUpdater } from './hooks/useUpdater';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useEscapeStack } from './contexts/EscapeStack';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'crawls' | 'history' | 'settings' | 'active-crawl' | 'import'>('dashboard');
@@ -26,6 +28,18 @@ function App() {
   const { activeJobIds } = useCrawlEvents();
   const { updateAvailable, downloading, error: updateError, installUpdate, dismiss } = useUpdater();
   const activeJobsCount = activeJobIds.size;
+  const escapeStack = useEscapeStack();
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useKeyboardShortcuts({
+    onNewCrawl: () => setActiveTab(activeJobsCount > 0 ? 'active-crawl' : 'crawls'),
+    onSearch: () => searchRef.current?.focus(),
+    onEscape: () => {
+      if (!escapeStack.fireTop() && liveConsoleOpen) {
+        setLiveConsoleOpen(false);
+      }
+    },
+  });
 
   useEffect(() => {
     if (activeJobsCount > 0 && !liveConsoleOpen) {
@@ -98,6 +112,7 @@ function App() {
                 label="New Crawl"
                 active={activeTab === 'crawls'}
                 onClick={() => setActiveTab('crawls')}
+                shortcut="Ctrl+N"
               />
             )}
             <NavItem
@@ -123,7 +138,7 @@ function App() {
           {/* Footer */}
           <div className="h-auto flex flex-col items-center justify-center py-3 border-t border-abyssal/50 space-y-1">
             <span className="text-charcoal text-[10px] tracking-widest uppercase">
-              v0.6.0
+              v0.6.1
             </span>
             <span className="text-charcoal text-[10px]">
               made with love by{' '}
@@ -165,13 +180,15 @@ const NavItem = ({
   label,
   active,
   onClick,
-  badge
+  badge,
+  shortcut,
 }: {
   icon: React.ReactNode;
   label: string;
   active: boolean;
   onClick: () => void;
   badge?: string;
+  shortcut?: string;
 }) => (
   <button
     onClick={onClick}
@@ -190,6 +207,11 @@ const NavItem = ({
     {badge && (
       <span className="ml-auto text-[10px] bg-accentGreen/15 text-accentGreen px-1.5 py-0.5 rounded font-mono">
         {badge}
+      </span>
+    )}
+    {shortcut && !badge && (
+      <span className="ml-auto text-[10px] text-charcoal/40 font-mono">
+        {shortcut}
       </span>
     )}
   </button>

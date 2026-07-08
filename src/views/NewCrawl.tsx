@@ -24,6 +24,8 @@ const DEFAULT_CONFIG: CrawlConfig = {
   headlessStrategy: 'never',
   contentSelectors: ['main', 'article', '.content'],
   excludePatterns: [],
+  includePatterns: [],
+  pathPrefix: '',
   respectRobotsTxt: true,
   stayWithinDomain: true,
   ssrfProtection: true,
@@ -150,6 +152,8 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
           headlessStrategy: config.headlessStrategy,
           contentSelectors: config.contentSelectors.filter(Boolean),
           excludePatterns: config.excludePatterns.filter(Boolean),
+          includePatterns: config.includePatterns.filter(Boolean),
+          pathPrefix: config.pathPrefix,
           respectRobotsTxt: config.respectRobotsTxt,
           stayWithinDomain: config.stayWithinDomain,
           ssrfProtection: config.ssrfProtection,
@@ -382,6 +386,44 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
               className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all resize-none"
               placeholder="/admin/*&#10;*.pdf"
             />
+          </div>
+
+          {/* Include Patterns */}
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+              Include patterns (one per line)
+            </label>
+            <textarea
+              value={config.includePatterns.join('\n')}
+              onChange={(e) =>
+                setConfig({ ...config, includePatterns: e.target.value.split('\n') })
+              }
+              disabled={!!activeJob}
+              rows={2}
+              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all resize-none"
+              placeholder="/docs/api/.*&#10;/reference/.*"
+            />
+            <p className="text-[11px] text-charcoal mt-1">
+              Only crawl URLs matching at least one pattern. Leave empty to crawl all.
+            </p>
+          </div>
+
+          {/* Path Prefix */}
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+              Path prefix filter
+            </label>
+            <input
+              type="text"
+              value={config.pathPrefix}
+              onChange={(e) => setConfig({ ...config, pathPrefix: e.target.value })}
+              disabled={!!activeJob}
+              placeholder="/docs/api/"
+              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all"
+            />
+            <p className="text-[11px] text-charcoal mt-1">
+              Only crawl URLs whose path starts with this prefix.
+            </p>
           </div>
         </div>
 

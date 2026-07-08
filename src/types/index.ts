@@ -60,6 +60,8 @@ export interface CrawlConfig {
   headlessStrategy: 'never' | 'auto' | 'always';
   contentSelectors: string[];
   excludePatterns: string[];
+  includePatterns: string[];
+  pathPrefix: string;
   respectRobotsTxt: boolean;
   stayWithinDomain: boolean;
   ssrfProtection: boolean;
@@ -126,6 +128,7 @@ export interface AppSettings {
   defaultSsrfProtection: boolean;
   windowWidth: number;
   windowHeight: number;
+  notificationsEnabled: boolean;
   theme: ThemePreference;
 }
 

@@ -7,6 +7,8 @@ import {
   ArrowClockwise,
   CheckCircle,
   Warning,
+  Bell,
+  BellSlash,
 } from '@phosphor-icons/react';
 import type { AppSettings } from '../types';
 import { useTheme, THEME_ORDER, THEME_META } from '../hooks/useTheme';
@@ -14,11 +16,11 @@ import { useTheme, THEME_ORDER, THEME_META } from '../hooks/useTheme';
 const DEFAULT_SETTINGS: AppSettings = {
   outputDir: '',
   concurrency: 3,
-  requestDelay: 1000,
+  requestDelay: 750,
   timeout: 30000,
-  userAgent: 'Docurip/0.1.0 (Documentation Crawler)',
+  userAgent: 'Docurip/0.6.1 (Documentation Crawler)',
   defaultMaxDepth: 2,
-  defaultPageLimit: 50,
+  defaultPageLimit: 1000,
   defaultDownloadAssets: false,
   defaultHeadlessStrategy: 'auto',
   defaultRespectRobotsTxt: true,
@@ -26,6 +28,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultSsrfProtection: true,
   windowWidth: 1280,
   windowHeight: 900,
+  notificationsEnabled: true,
   theme: 'system',
 };
 
@@ -205,6 +208,40 @@ export function SettingsView() {
               Applied immediately. "System" follows your OS light/dark setting.
             </p>
           </div>
+        </Section>
+
+        {/* Notifications */}
+        <Section title="Notifications">
+          <button
+            type="button"
+            onClick={() => setSettings({ ...settings, notificationsEnabled: !settings.notificationsEnabled })}
+            className="w-full flex items-center justify-between px-1 py-1 group"
+          >
+            <div className="flex items-center gap-3">
+              {settings.notificationsEnabled ? (
+                <Bell size={18} weight="fill" className="text-accentGreen" />
+              ) : (
+                <BellSlash size={18} className="text-charcoal" />
+              )}
+              <div className="text-left">
+                <span className="block text-sm text-ghost">Desktop Notifications</span>
+                <span className="block text-xs text-charcoal mt-0.5">
+                  Show a system notification when a crawl completes or fails
+                </span>
+              </div>
+            </div>
+            <div
+              className={`relative w-10 h-[22px] rounded-full transition-colors ${
+                settings.notificationsEnabled ? 'bg-accentGreen' : 'bg-abyssal'
+              }`}
+            >
+              <div
+                className={`absolute top-[3px] h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                  settings.notificationsEnabled ? 'translate-x-[22px]' : 'translate-x-[3px]'
+                }`}
+              />
+            </div>
+          </button>
         </Section>
 
         {/* Output Settings */}

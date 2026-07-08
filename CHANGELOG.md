@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.6.1 (2026-07-08)
+
+### Added
+- **Include patterns & path prefix filter**: new `includePatterns` (regex list) and `pathPrefix` fields on `CrawlConfig` allow whitelisting URLs during a crawl. When any include constraint is set, only URLs matching at least one include pattern or the path prefix are enqueued. Exclude patterns still override includes. UI fields added to New Crawl view; backend validation rejects malformed regex before the crawl starts.
+- **Keyboard shortcuts**: `Ctrl/Cmd+N` opens New Crawl (or Active Crawl when running), `Ctrl/Cmd+F` focuses the search input, `Escape` closes the topmost modal or Live Console. Shortcuts suppress inside text inputs (except Escape). New `useKeyboardShortcuts` hook and `EscapeStack` context for coordinating Escape across nested modals.
+- **Desktop notifications**: system notifications fire when a crawl completes or fails. Gated by a new `notificationsEnabled` setting (default on) with a toggle in Settings → Notifications. Uses `tauri-plugin-notification` with permission request on first use.
+
+### Tests
+- 8 tests for `useKeyboardShortcuts`: Ctrl+N, Ctrl+F, Escape, modifier requirement, metaKey support, input suppression, Escape-in-input, cleanup on unmount.
+- 5 tests for `useNotifications`: permission-granted send, permission-request flow, permission-denied suppression, failure with/without error message.
+- 4 unit tests for include/path-prefix filtering in `orchestrator.rs`: no-constraint passthrough, include-set filtering, path-prefix filtering, exclude-overrides-include.
+
 ## v0.6.0 (2026-07-08)
 
 ### Added

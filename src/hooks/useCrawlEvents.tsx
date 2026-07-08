@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import type { CrawlEvent } from '../types';
+import { invoke } from '@tauri-apps/api/core';
+import type { AppSettings, CrawlEvent, CrawlJob } from '../types';
+import { notifyCrawlComplete, notifyCrawlFailed } from './useNotifications';
 
 interface CrawlEventsState {
   events: CrawlEvent[];
@@ -28,6 +30,16 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
             nextActive.add(event.jobId);
           } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
             nextActive.delete(event.jobId);
+            invoke<AppSettings>('get_settings').then((settings) => {
+              if (!settings.notificationsEnabled) return;
+              invoke<CrawlJob>('get_job', { jobId: event.jobId }).then((job) => {
+                if (event.status === 'completed') {
+                  notifyCrawlComplete(job.url, job.results.length);
+                } else if (event.status === 'failed') {
+                  notifyCrawlFailed(job.url, job.error);
+                }
+              }).catch(() => {});
+            }).catch(() => {});
           }
         }
         return { ...prev, events: nextEvents, activeJobIds: nextActive };

@@ -44,6 +44,12 @@ fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
                 .map_err(|e| format!("Invalid exclude pattern '{}': {}", pattern, e))?;
         }
     }
+    for pattern in &config.include_patterns {
+        if !pattern.is_empty() {
+            regex::Regex::new(pattern)
+                .map_err(|e| format!("Invalid include pattern '{}': {}", pattern, e))?;
+        }
+    }
     Ok(())
 }
 

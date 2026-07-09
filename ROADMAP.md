@@ -130,6 +130,7 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 | **Include-filter tests test primitives** | Unit tests for include/path-prefix replicate the production logic inline (`RegexSet::is_match`, `starts_with`) rather than exercising the actual orchestrator filter path. Rewrite once the filter is extracted into a helper method. | `orchestrator.rs:859` |
 | **Shared filter-field component** | Include-pattern, exclude-pattern, and content-selector textareas repeat the same label/textarea/help-text layout. Extract a `FilterField` component when more filter types are added. | `NewCrawl.tsx:391` |
 | **ToggleRow/SettingSwitch component** | The notifications toggle is inline JSX in SettingsView. Extract a reusable `ToggleRow` component for when more boolean settings are added (e.g. auto-export in v0.6.2). | `Settings.tsx:213` |
+| **Shortcut label consistency** | The `Ctrl+N` shortcut hint is shown only on the "New Crawl" nav item. When a crawl is active, the same nav item becomes "Active Crawl" without a shortcut indicator. Surface the hint consistently for both states. | `App.tsx:115` |
 
 ## Open Questions
 

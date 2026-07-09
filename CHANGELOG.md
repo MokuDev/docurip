@@ -15,7 +15,7 @@
 - **Keyboard shortcuts case-sensitive**: `Ctrl+N`/`Ctrl+F` matched `e.key === 'n'`/`'f'` literally, so they failed with CapsLock on. Now normalized via `.toLowerCase()`.
 - **ResultTree rowProps invalidating memoization**: `rowProps={{}}` created a fresh object every render, defeating react-window's row memoization. Hoisted to a module-level constant.
 - **`headlessStrategy` cast to `any`**: select onChange used `as any` to bypass TypeScript, hiding potential type mismatches. Now uses the proper `CrawlConfig['headlessStrategy']` union type.
-- **`pathPrefix` submitted with query/fragment**: user-entered path prefixes containing `?` or `#` would never match (the backend compares against `url.path()` only). Now stripped on submit, and a leading `/` is enforced.
+- **`pathPrefix` submitted with query/fragment**: user-entered path prefixes containing `?` or `#` would never match (the backend compares against `url.path()` only). Now normalized on both frontend submit and backend `start_crawl`: trim whitespace, strip query/fragment, enforce leading `/`.
 
 ### Tests
 - 8 tests for `useKeyboardShortcuts`: Ctrl+N, Ctrl+F, Escape, modifier requirement, metaKey support, input suppression, Escape-in-input, cleanup on unmount.

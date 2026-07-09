@@ -109,6 +109,7 @@ fn make_settings() -> AppSettings {
         window_height: 900,
         theme: String::from("dark"),
         notifications_enabled: true,
+        shortcut_overrides: std::collections::HashMap::new(),
     }
 }
 

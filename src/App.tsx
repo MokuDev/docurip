@@ -18,7 +18,8 @@ import { SystemStatusBar } from './components/SystemStatusBar';
 import { ToastContainer } from './components/ToastContainer';
 import { useCrawlEvents } from './hooks/useCrawlEvents';
 import { useUpdater } from './hooks/useUpdater';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useKeyboardShortcuts, resolveBinding, formatCombo } from './hooks/useKeyboardShortcuts';
+import { useShortcutOverrides } from './hooks/useShortcutOverrides';
 import { useEscapeStack } from './contexts/EscapeStack';
 
 function App() {
@@ -30,15 +31,24 @@ function App() {
   const activeJobsCount = activeJobIds.size;
   const escapeStack = useEscapeStack();
   const searchRef = useRef<HTMLInputElement>(null);
+  const shortcutOverrides = useShortcutOverrides();
+  const shortcutHint = (actionId: string) => formatCombo(resolveBinding(actionId, shortcutOverrides));
 
   useKeyboardShortcuts({
-    onNewCrawl: () => setActiveTab(activeJobsCount > 0 ? 'active-crawl' : 'crawls'),
-    onSearch: () => searchRef.current?.focus(),
+    handlers: {
+      'new-crawl': () => setActiveTab(activeJobsCount > 0 ? 'active-crawl' : 'crawls'),
+      search: () => searchRef.current?.focus(),
+      dashboard: () => setActiveTab('dashboard'),
+      history: () => setActiveTab('history'),
+      settings: () => setActiveTab('settings'),
+      import: () => setActiveTab('import'),
+    },
     onEscape: () => {
       if (!escapeStack.fireTop() && liveConsoleOpen) {
         setLiveConsoleOpen(false);
       }
     },
+    overrides: shortcutOverrides,
   });
 
   useEffect(() => {
@@ -97,6 +107,7 @@ function App() {
               active={activeTab === 'dashboard'}
               onClick={() => setActiveTab('dashboard')}
               badge={activeJobsCount > 0 ? activeJobsCount.toString() : undefined}
+              shortcut={shortcutHint('dashboard')}
             />
             {activeJobsCount > 0 ? (
               <NavItem
@@ -112,7 +123,7 @@ function App() {
                 label="New Crawl"
                 active={activeTab === 'crawls'}
                 onClick={() => setActiveTab('crawls')}
-                shortcut="Ctrl+N"
+                shortcut={shortcutHint('new-crawl')}
               />
             )}
             <NavItem
@@ -120,18 +131,21 @@ function App() {
               label="Import"
               active={activeTab === 'import'}
               onClick={() => setActiveTab('import')}
+              shortcut={shortcutHint('import')}
             />
             <NavItem
               icon={<ClockCounterClockwise weight="fill" size={18} />}
               label="History"
               active={activeTab === 'history'}
               onClick={() => setActiveTab('history')}
+              shortcut={shortcutHint('history')}
             />
             <NavItem
               icon={<Gear weight="fill" size={18} />}
               label="Settings"
               active={activeTab === 'settings'}
               onClick={() => setActiveTab('settings')}
+              shortcut={shortcutHint('settings')}
             />
           </nav>
 

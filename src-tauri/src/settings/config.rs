@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use dirs::home_dir;
 use serde::{Deserialize, Serialize};
 
@@ -24,6 +26,11 @@ pub struct AppSettings {
     pub notifications_enabled: bool,
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// User-customized keyboard shortcut bindings, keyed by action id (e.g. "new-crawl").
+    /// A value of "" means the action is explicitly unbound; a missing key falls back
+    /// to the action's built-in default binding.
+    #[serde(default)]
+    pub shortcut_overrides: HashMap<String, String>,
 }
 
 impl Default for AppSettings {
@@ -48,6 +55,7 @@ impl Default for AppSettings {
             window_height: 900,
             notifications_enabled: true,
             theme: default_theme(),
+            shortcut_overrides: HashMap::new(),
         }
     }
 }

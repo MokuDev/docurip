@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Configurable keyboard shortcuts**: shortcuts are now driven by a central action registry (`SHORTCUT_ACTIONS`) instead of being hardcoded. Added four new default bindings for tab navigation — `Ctrl/Cmd+D` Dashboard, `Ctrl/Cmd+H` History, `Ctrl/Cmd+,` Settings, `Ctrl/Cmd+I` Import — alongside the existing New/Active Crawl and Search shortcuts. Every nav item now shows its shortcut hint (previously only "New Crawl" did).
+- **Keyboard Shortcuts settings section**: new Settings → Keyboard Shortcuts panel lists every shortcut with its current binding. Click a binding to rebind it — press any key combination to capture it live. Conflicting bindings are detected and rejected with an inline message naming the other action; Escape cancels editing without side effects. A reset button reverts a rebound action to its default. Bindings persist via the existing `AppSettings` store (`shortcutOverrides`) and take effect app-wide immediately on save.
+
+### Fixed
+- **Shortcut capture leaking to global handlers**: while capturing a new key combination in the Settings rebind UI, the keypress was also being picked up by the app-wide shortcut listener (e.g. capturing `Ctrl+N` would both flag the conflict *and* navigate to New Crawl, closing the settings page). The row's key-capture handler now calls `stopPropagation()` so the global `document`-level listener never sees the event.
+
 ## v0.6.1 (2026-07-09)
 
 ### Added

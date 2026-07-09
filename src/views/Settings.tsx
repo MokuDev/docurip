@@ -9,6 +9,10 @@ import {
   Warning,
   Bell,
   BellSlash,
+  SlidersHorizontal,
+  Keyboard,
+  Globe,
+  HardDrives,
 } from '@phosphor-icons/react';
 import type { AppSettings } from '../types';
 import { EXPORT_OPTIONS } from '../types';
@@ -46,6 +50,15 @@ const WINDOW_PRESETS = [
   { w: 3840, h: 2160, label: 'UHD / 4K' },
 ];
 
+type SettingsCategory = 'general' | 'shortcuts' | 'crawling' | 'network';
+
+const CATEGORIES: { id: SettingsCategory; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+  { id: 'general', label: 'General', icon: SlidersHorizontal },
+  { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
+  { id: 'crawling', label: 'Crawling & Export', icon: Globe },
+  { id: 'network', label: 'Network & Storage', icon: HardDrives },
+];
+
 export function SettingsView() {
   const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -56,6 +69,7 @@ export function SettingsView() {
   const [notice, setNotice] = useState('');
   const [editingShortcut, setEditingShortcut] = useState<string | null>(null);
   const [shortcutConflict, setShortcutConflict] = useState('');
+  const [category, setCategory] = useState<SettingsCategory>('general');
 
   useEffect(() => {
     loadSettings();
@@ -167,52 +181,79 @@ export function SettingsView() {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-8 max-w-3xl">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-ghost">Settings</h1>
-          <p className="text-secondary text-sm mt-1">Configure your crawling preferences</p>
+    <div className="h-full flex flex-col">
+      <div className="px-8 pt-8 pb-5 flex-shrink-0">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h1 className="text-2xl font-display font-bold text-ghost">Settings</h1>
+            <p className="text-secondary text-sm mt-1">Configure your crawling preferences</p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleReset}
+              className="flex items-center space-x-2 px-4 py-2 bg-surface hover:bg-abyssal text-secondary hover:text-ghost border border-abyssal rounded-md transition-all duration-fast"
+            >
+              <ArrowClockwise size={16} />
+              <span>Reset</span>
+            </button>
+            <button
+              onClick={handleSave}
+              className="flex items-center space-x-2 px-4 py-2 bg-accentGreen hover:bg-brightGreen text-slate-900 font-semibold rounded-md transition-all duration-fast hover:shadow-[0_0_15px_rgba(22,224,141,0.3)]"
+            >
+              <FloppyDisk weight="fill" size={16} />
+              <span>Save</span>
+            </button>
+          </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={handleReset}
-            className="flex items-center space-x-2 px-4 py-2 bg-surface hover:bg-abyssal text-secondary hover:text-ghost border border-abyssal rounded-md transition-all duration-fast"
-          >
-            <ArrowClockwise size={16} />
-            <span>Reset</span>
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex items-center space-x-2 px-4 py-2 bg-accentGreen hover:bg-brightGreen text-slate-900 font-semibold rounded-md transition-all duration-fast hover:shadow-[0_0_15px_rgba(22,224,141,0.3)]"
-          >
-            <FloppyDisk weight="fill" size={16} />
-            <span>Save</span>
-          </button>
-        </div>
+
+        {saved && (
+          <div className="flex items-center text-brightGreen text-sm bg-brightGreen/10 border border-brightGreen/20 rounded-md px-4 py-3 mb-3 last:mb-0">
+            <CheckCircle weight="fill" size={16} className="mr-2" />
+            Settings saved successfully
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center text-crimson text-sm bg-crimson/10 border border-crimson/20 rounded-md px-4 py-3 mb-3 last:mb-0">
+            <Warning weight="fill" size={16} className="mr-2" />
+            {error}
+          </div>
+        )}
+
+        {notice && (
+          <div className="flex items-center text-yellow-400 text-sm bg-yellow-400/10 border border-yellow-400/20 rounded-md px-4 py-3 mb-3 last:mb-0">
+            <Warning weight="fill" size={16} className="mr-2" />
+            {notice}
+          </div>
+        )}
       </div>
 
-      {saved && (
-        <div className="mb-6 flex items-center text-brightGreen text-sm bg-brightGreen/10 border border-brightGreen/20 rounded-md px-4 py-3">
-          <CheckCircle weight="fill" size={16} className="mr-2" />
-          Settings saved successfully
-        </div>
-      )}
+      <div className="flex-1 flex overflow-hidden px-8 pb-8 gap-8">
+        <nav className="w-52 flex-shrink-0 space-y-1">
+          {CATEGORIES.map((c) => {
+            const Icon = c.icon;
+            const active = category === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCategory(c.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm transition-all ${
+                  active
+                    ? 'bg-surface text-ghost'
+                    : 'text-secondary hover:text-ghost hover:bg-surface/40'
+                }`}
+              >
+                <Icon size={15} className={active ? 'text-accentGreen' : 'text-charcoal'} />
+                <span>{c.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-      {error && (
-        <div className="mb-6 flex items-center text-crimson text-sm bg-crimson/10 border border-crimson/20 rounded-md px-4 py-3">
-          <Warning weight="fill" size={16} className="mr-2" />
-          {error}
-        </div>
-      )}
-
-      {notice && (
-        <div className="mb-6 flex items-center text-yellow-400 text-sm bg-yellow-400/10 border border-yellow-400/20 rounded-md px-4 py-3">
-          <Warning weight="fill" size={16} className="mr-2" />
-          {notice}
-        </div>
-      )}
-
-      <div className="space-y-6">
+        <div className="flex-1 min-w-0 overflow-y-auto space-y-6 pb-2">
+        {category === 'general' && (
+        <>
         {/* Appearance Settings */}
         <Section title="Appearance">
           <div>
@@ -278,7 +319,11 @@ export function SettingsView() {
             </div>
           </button>
         </Section>
+        </>
+        )}
 
+        {category === 'shortcuts' && (
+        <>
         {/* Keyboard Shortcuts */}
         <Section title="Keyboard Shortcuts">
           <div className="divide-y divide-abyssal/50">
@@ -313,96 +358,13 @@ export function SettingsView() {
             Click a shortcut to rebind it, then press the new key combination. Escape cancels editing.
           </p>
         </Section>
+        </>
+        )}
 
-        {/* Auto-Export */}
-        <Section title="Auto-Export">
-          <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
-            Export format on crawl completion
-          </label>
-          <select
-            value={settings.autoExportFormat ?? ''}
-            onChange={(e) =>
-              setSettings({
-                ...settings,
-                autoExportFormat: e.target.value ? (e.target.value as AppSettings['autoExportFormat']) : null,
-              })
-            }
-            className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all appearance-none"
-          >
-            <option value="">Disabled</option>
-            {EXPORT_OPTIONS.map((opt) => (
-              <option key={opt.format} value={opt.format}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <p className="text-charcoal text-xs mt-1.5">
-            When set, this export runs automatically to the job's formats/ directory every time a crawl completes.
-          </p>
-        </Section>
-
-        {/* Output Settings */}
-        <Section title="Output">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
-                Default Output Directory
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const selected = await open({ directory: true, multiple: false, title: 'Select Default Output Directory' });
-                      if (selected) setSettings({ ...settings, outputDir: selected });
-                    } catch (err) {
-                      console.error('Failed to open directory picker', err);
-                    }
-                  }}
-                  className="flex items-center gap-2 bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm hover:border-accentGreen/50 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all flex-1"
-                >
-                  <FolderOpen className="w-4 h-4 text-charcoal" />
-                  <span>{settings.outputDir || 'Default (~/.docurip)'}</span>
-                </button>
-                {settings.outputDir && (
-                  <button
-                    type="button"
-                    onClick={() => setSettings({ ...settings, outputDir: '' })}
-                    className="text-charcoal hover:text-ghost text-xs transition-colors"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        {/* Window Settings */}
-        <Section title="Window">
-          <div>
-            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
-              Window Size
-            </label>
-            <select
-              value={`${settings.windowWidth}x${settings.windowHeight}`}
-              onChange={(e) => handleWindowSizeChange(e.target.value)}
-              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all appearance-none"
-            >
-              {WINDOW_PRESETS.map((p) => (
-                <option key={`${p.w}x${p.h}`} value={`${p.w}x${p.h}`}>
-                  {p.w} × {p.h} — {p.label}
-                </option>
-              ))}
-            </select>
-            <p className="text-charcoal text-xs mt-1.5">
-              Applied immediately. Resizes and centers the window on your current display.
-            </p>
-          </div>
-        </Section>
-
-        {/* Crawling Settings */}
-        <Section title="Crawling">
+        {category === 'crawling' && (
+        <>
+        {/* Crawl Defaults */}
+        <Section title="Crawl Defaults">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
@@ -487,6 +449,37 @@ export function SettingsView() {
           </div>
         </Section>
 
+        {/* Auto-Export */}
+        <Section title="Auto-Export">
+          <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+            Export format on crawl completion
+          </label>
+          <select
+            value={settings.autoExportFormat ?? ''}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                autoExportFormat: e.target.value ? (e.target.value as AppSettings['autoExportFormat']) : null,
+              })
+            }
+            className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all appearance-none"
+          >
+            <option value="">Disabled</option>
+            {EXPORT_OPTIONS.map((opt) => (
+              <option key={opt.format} value={opt.format}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-charcoal text-xs mt-1.5">
+            When set, this export runs automatically to the job's formats/ directory every time a crawl completes.
+          </p>
+        </Section>
+        </>
+        )}
+
+        {category === 'network' && (
+        <>
         {/* Network Settings */}
         <Section title="Network">
           <div className="space-y-4">
@@ -525,6 +518,69 @@ export function SettingsView() {
             </div>
           </div>
         </Section>
+
+        {/* Output Settings */}
+        <Section title="Output">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+                Default Output Directory
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const selected = await open({ directory: true, multiple: false, title: 'Select Default Output Directory' });
+                      if (selected) setSettings({ ...settings, outputDir: selected });
+                    } catch (err) {
+                      console.error('Failed to open directory picker', err);
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm hover:border-accentGreen/50 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all flex-1"
+                >
+                  <FolderOpen className="w-4 h-4 text-charcoal" />
+                  <span>{settings.outputDir || 'Default (~/.docurip)'}</span>
+                </button>
+                {settings.outputDir && (
+                  <button
+                    type="button"
+                    onClick={() => setSettings({ ...settings, outputDir: '' })}
+                    className="text-charcoal hover:text-ghost text-xs transition-colors"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        {/* Window Settings */}
+        <Section title="Window">
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+              Window Size
+            </label>
+            <select
+              value={`${settings.windowWidth}x${settings.windowHeight}`}
+              onChange={(e) => handleWindowSizeChange(e.target.value)}
+              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all appearance-none"
+            >
+              {WINDOW_PRESETS.map((p) => (
+                <option key={`${p.w}x${p.h}`} value={`${p.w}x${p.h}`}>
+                  {p.w} × {p.h} — {p.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-charcoal text-xs mt-1.5">
+              Applied immediately. Resizes and centers the window on your current display.
+            </p>
+          </div>
+        </Section>
+        </>
+        )}
+        </div>
       </div>
     </div>
   );

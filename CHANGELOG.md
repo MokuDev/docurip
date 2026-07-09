@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.1 (2026-07-08)
+## v0.6.1 (2026-07-09)
 
 ### Added
 - **Include patterns & path prefix filter**: new `includePatterns` (regex list) and `pathPrefix` fields on `CrawlConfig` allow whitelisting URLs during a crawl. When any include constraint is set, only URLs matching at least one include pattern or the path prefix are enqueued. Exclude patterns still override includes. UI fields added to New Crawl view; backend validation rejects malformed regex before the crawl starts.
@@ -17,11 +17,6 @@
 - **`headlessStrategy` cast to `any`**: select onChange used `as any` to bypass TypeScript, hiding potential type mismatches. Now uses the proper `CrawlConfig['headlessStrategy']` union type.
 - **`pathPrefix` submitted with query/fragment**: user-entered path prefixes containing `?` or `#` would never match (the backend compares against `url.path()` only). Now normalized on both frontend submit and backend `start_crawl`: trim whitespace, strip query/fragment, enforce leading `/`.
 - **`listRef` typed as `any` with wrong API calls**: ResultTree used `useRef<any>` and react-window v1's `scrollToItem` method. Replaced with react-window v2's `useListRef` hook (properly typed `ListImperativeAPI`) and `scrollToRow` API. Fixes the only TypeScript error in the codebase.
-
-### Tests
-- 8 tests for `useKeyboardShortcuts`: Ctrl+N, Ctrl+F, Escape, modifier requirement, metaKey support, input suppression, Escape-in-input, cleanup on unmount.
-- 5 tests for `useNotifications`: permission-granted send, permission-request flow, permission-denied suppression, failure with/without error message.
-- 4 unit tests for include/path-prefix filtering in `orchestrator.rs`: no-constraint passthrough, include-set filtering, path-prefix filtering, exclude-overrides-include.
 
 ## v0.6.0 (2026-07-08)
 

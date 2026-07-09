@@ -130,6 +130,7 @@ export interface AppSettings {
   windowHeight: number;
   notificationsEnabled: boolean;
   theme: ThemePreference;
+  shortcutOverrides: Record<string, string>;
 }
 
 export interface CrawlEvent {

@@ -12,6 +12,9 @@ import {
 } from '@phosphor-icons/react';
 import type { AppSettings } from '../types';
 import { useTheme, THEME_ORDER, THEME_META } from '../hooks/useTheme';
+import { SHORTCUT_ACTIONS, resolveBinding } from '../hooks/useKeyboardShortcuts';
+import { SHORTCUTS_UPDATED_EVENT } from '../hooks/useShortcutOverrides';
+import { ShortcutRow } from '../components/ShortcutRow';
 
 const DEFAULT_SETTINGS: AppSettings = {
   outputDir: '',
@@ -30,6 +33,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   windowHeight: 900,
   notificationsEnabled: true,
   theme: 'system',
+  shortcutOverrides: {},
 };
 
 const WINDOW_PRESETS = [
@@ -48,6 +52,8 @@ export function SettingsView() {
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
+  const [editingShortcut, setEditingShortcut] = useState<string | null>(null);
+  const [shortcutConflict, setShortcutConflict] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -89,6 +95,7 @@ export function SettingsView() {
       // possibly-stale copy to avoid reverting a theme change made elsewhere
       // (e.g. the TopStatusBar quick toggle) while this page was open.
       await invoke('update_settings', { settings: { ...settings, theme } });
+      window.dispatchEvent(new Event(SHORTCUTS_UPDATED_EVENT));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -103,6 +110,8 @@ export function SettingsView() {
     setError('');
     setErrors({});
     setNotice('');
+    setEditingShortcut(null);
+    setShortcutConflict('');
     invoke('set_window_size', { width: DEFAULT_SETTINGS.windowWidth, height: DEFAULT_SETTINGS.windowHeight }).catch(() => {});
   };
 
@@ -121,6 +130,30 @@ export function SettingsView() {
     } catch (err) {
       console.error('Failed to resize window', err);
     }
+  };
+
+  const handleCaptureShortcut = (actionId: string, combo: string) => {
+    const conflict = SHORTCUT_ACTIONS.find(
+      (a) => a.id !== actionId && resolveBinding(a.id, settings.shortcutOverrides) === combo
+    );
+    if (conflict) {
+      setShortcutConflict(`Already used by "${conflict.label}"`);
+      return;
+    }
+    setSettings((prev) => ({
+      ...prev,
+      shortcutOverrides: { ...prev.shortcutOverrides, [actionId]: combo },
+    }));
+    setEditingShortcut(null);
+    setShortcutConflict('');
+  };
+
+  const handleResetShortcut = (actionId: string) => {
+    setSettings((prev) => {
+      const next = { ...prev.shortcutOverrides };
+      delete next[actionId];
+      return { ...prev, shortcutOverrides: next };
+    });
   };
 
   if (loading) {
@@ -242,6 +275,41 @@ export function SettingsView() {
               />
             </div>
           </button>
+        </Section>
+
+        {/* Keyboard Shortcuts */}
+        <Section title="Keyboard Shortcuts">
+          <div className="divide-y divide-abyssal/50">
+            {SHORTCUT_ACTIONS.map((action) => (
+              <ShortcutRow
+                key={action.id}
+                action={action}
+                combo={resolveBinding(action.id, settings.shortcutOverrides)}
+                isCustom={action.id in settings.shortcutOverrides}
+                isEditing={editingShortcut === action.id}
+                conflictError={editingShortcut === action.id ? shortcutConflict : undefined}
+                onStartEdit={() => {
+                  setEditingShortcut(action.id);
+                  setShortcutConflict('');
+                }}
+                onCapture={(combo) => handleCaptureShortcut(action.id, combo)}
+                onCancelEdit={() => {
+                  setEditingShortcut(null);
+                  setShortcutConflict('');
+                }}
+                onReset={() => handleResetShortcut(action.id)}
+              />
+            ))}
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm text-ghost">Close Modal / Panel</span>
+              <span className="min-w-[92px] text-center px-3 py-1.5 rounded-md border border-abyssal/50 text-charcoal text-xs font-mono">
+                Esc
+              </span>
+            </div>
+          </div>
+          <p className="text-charcoal text-xs mt-3">
+            Click a shortcut to rebind it, then press the new key combination. Escape cancels editing.
+          </p>
         </Section>
 
         {/* Output Settings */}

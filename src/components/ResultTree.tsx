@@ -1,6 +1,6 @@
 import { FileText, CaretRight, CaretDown } from '@phosphor-icons/react';
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { List } from 'react-window';
+import { useState, useMemo, useEffect } from 'react';
+import { List, useListRef } from 'react-window';
 import type { PageMeta } from '../types';
 
 interface TreeNode {
@@ -69,7 +69,7 @@ const ROW_PROPS = {};
 export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: ResultTreeProps) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [focusedIndex, setFocusedIndex] = useState(-1);
-  const listRef = useRef<any>(null);
+  const listRef = useListRef(null);
 
   const filtered = useMemo(() => {
     if (!filterQuery) return pages;
@@ -114,7 +114,7 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
 
   useEffect(() => {
     if (focusedIndex >= 0 && listRef.current) {
-      listRef.current.scrollToItem(focusedIndex);
+      listRef.current.scrollToRow({ index: focusedIndex });
     }
   }, [focusedIndex]);
 
@@ -161,7 +161,7 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
   return (
     <div tabIndex={0} onKeyDown={handleKeyDown} className="outline-none h-full">
       <List
-        ref={listRef}
+        listRef={listRef}
         rowCount={visibleNodes.length}
         rowHeight={ROW_HEIGHT}
         rowProps={ROW_PROPS}

@@ -153,7 +153,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
           contentSelectors: config.contentSelectors.map(s => s.trim()).filter(Boolean),
           excludePatterns: config.excludePatterns.map(s => s.trim()).filter(Boolean),
           includePatterns: config.includePatterns.map(s => s.trim()).filter(Boolean),
-          pathPrefix: config.pathPrefix.trim(),
+          pathPrefix: config.pathPrefix.trim().replace(/[?#].*$/, '').replace(/^(?!\/)/, '/').replace(/^\/$/, ''),
           respectRobotsTxt: config.respectRobotsTxt,
           stayWithinDomain: config.stayWithinDomain,
           ssrfProtection: config.ssrfProtection,
@@ -344,7 +344,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
             </label>
             <select
               value={config.headlessStrategy}
-              onChange={(e) => setConfig({ ...config, headlessStrategy: e.target.value as any })}
+              onChange={(e) => setConfig({ ...config, headlessStrategy: e.target.value as CrawlConfig['headlessStrategy'] })}
               disabled={!!activeJob}
               className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
             >

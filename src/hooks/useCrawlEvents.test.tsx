@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
+import { invoke } from '@tauri-apps/api/core';
 import { CrawlEventsProvider, useCrawlEvents } from './useCrawlEvents';
-import type { CrawlEvent } from '../types';
+import { ToastProvider } from './useToasts';
+import type { AppSettings, CrawlEvent, CrawlJob } from '../types';
 
 // Mock the Tauri event system
 vi.mock('@tauri-apps/api/event', () => ({
@@ -13,13 +15,43 @@ vi.mock('@tauri-apps/api/event', () => ({
   }),
 }));
 
+// get_settings/get_job/export_job_v2 are called on terminal job events;
+// each test configures the mock's per-command behavior as needed.
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+
+const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
+
+const baseSettings: AppSettings = {
+  outputDir: '', concurrency: 1, requestDelay: 0, timeout: 1000, userAgent: '',
+  defaultMaxDepth: 1, defaultPageLimit: 1, defaultDownloadAssets: false,
+  defaultHeadlessStrategy: 'never', defaultRespectRobotsTxt: true, defaultStayWithinDomain: true,
+  defaultSsrfProtection: true, windowWidth: 1280, windowHeight: 900,
+  notificationsEnabled: false, theme: 'dark', shortcutOverrides: {}, autoExportFormat: null,
+};
+
+const baseJob: CrawlJob = {
+  id: 'job-1', url: 'https://example.com', status: 'completed',
+  config: {
+    maxDepth: 1, pageLimit: 1, downloadAssets: false, headlessStrategy: 'never',
+    contentSelectors: [], excludePatterns: [], includePatterns: [], pathPrefix: '',
+    respectRobotsTxt: true, stayWithinDomain: true, ssrfProtection: true, outputDir: '', profile: null,
+  },
+  progress: { pagesCrawled: 1, pageLimit: 1, currentUrl: '', depth: 0, maxDepth: 1, startTime: '' },
+  results: [],
+};
+
 describe('useCrawlEvents', () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <CrawlEventsProvider>{children}</CrawlEventsProvider>
+    <ToastProvider>
+      <CrawlEventsProvider>{children}</CrawlEventsProvider>
+    </ToastProvider>
   );
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInvoke.mockImplementation(() => Promise.reject(new Error('not available in test')));
     (window as any).__tauriEventHandlers = {};
   });
 
@@ -156,5 +188,62 @@ describe('useCrawlEvents', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(result.current.activeJobIds.size).toBe(0);
+  });
+
+  it('triggers export_job_v2 when a job completes and autoExportFormat is set', async () => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === 'get_settings') return Promise.resolve({ ...baseSettings, autoExportFormat: 'merged_md' });
+      if (cmd === 'get_job') return Promise.resolve(baseJob);
+      if (cmd === 'export_job_v2') return Promise.resolve('/output/formats');
+      return Promise.reject(new Error(`unexpected command: ${cmd}`));
+    });
+
+    renderHook(() => useCrawlEvents(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const handler = (window as any).__tauriEventHandlers?.['crawl-event'];
+    handler({ payload: { type: 'jobStatusChanged', jobId: 'job-1', status: 'completed' } as CrawlEvent });
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('export_job_v2', {
+        jobId: 'job-1',
+        format: 'merged_md',
+        destination: null,
+      });
+    });
+  });
+
+  it('does not trigger export_job_v2 when autoExportFormat is unset', async () => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === 'get_settings') return Promise.resolve(baseSettings);
+      if (cmd === 'get_job') return Promise.resolve(baseJob);
+      return Promise.reject(new Error(`unexpected command: ${cmd}`));
+    });
+
+    renderHook(() => useCrawlEvents(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const handler = (window as any).__tauriEventHandlers?.['crawl-event'];
+    handler({ payload: { type: 'jobStatusChanged', jobId: 'job-1', status: 'completed' } as CrawlEvent });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockInvoke).not.toHaveBeenCalledWith('export_job_v2', expect.anything());
+  });
+
+  it('does not trigger export_job_v2 for a failed job even if autoExportFormat is set', async () => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === 'get_settings') return Promise.resolve({ ...baseSettings, notificationsEnabled: true, autoExportFormat: 'merged_md' });
+      if (cmd === 'get_job') return Promise.resolve({ ...baseJob, status: 'failed' });
+      return Promise.reject(new Error(`unexpected command: ${cmd}`));
+    });
+
+    renderHook(() => useCrawlEvents(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const handler = (window as any).__tauriEventHandlers?.['crawl-event'];
+    handler({ payload: { type: 'jobStatusChanged', jobId: 'job-1', status: 'failed' } as CrawlEvent });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockInvoke).not.toHaveBeenCalledWith('export_job_v2', expect.anything());
   });
 });

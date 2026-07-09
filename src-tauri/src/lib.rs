@@ -28,7 +28,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let persist_dir = app.path().app_data_dir()?.join("jobs");
-            let app_state = Arc::new(state::AppState::init(persist_dir)?);
+            let templates_dir = app.path().app_data_dir()?.join("templates");
+            let app_state = Arc::new(state::AppState::init(persist_dir, templates_dir)?);
             app.manage(app_state);
 
             use tauri_plugin_store::StoreExt;
@@ -57,6 +58,9 @@ pub fn run() {
             commands::list_jobs,
             commands::get_dashboard_stats,
             commands::delete_job,
+            commands::list_templates,
+            commands::save_template,
+            commands::delete_template,
             commands::get_settings,
             commands::update_settings,
             commands::set_theme,

@@ -13,6 +13,7 @@ use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
 use crate::exports::{self, RecentExport};
 use crate::settings::config::{AppSettings, CrawlConfig};
+use crate::settings::templates::CrawlTemplate;
 use crate::state::{AppState, JobHandle};
 use crate::system::SystemStats;
 use url::Url;
@@ -415,6 +416,45 @@ pub async fn delete_job(job_id: String, state: State<'_, Arc<AppState>>) -> Resu
         jobs.remove(&job_id);
     }
     state.remove_persisted_job(&job_id).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn list_templates(state: State<'_, Arc<AppState>>) -> Result<Vec<CrawlTemplate>, String> {
+    let templates = state.templates.read().await;
+    let mut list: Vec<CrawlTemplate> = templates.values().cloned().collect();
+    list.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(list)
+}
+
+#[tauri::command]
+pub async fn save_template(
+    name: String,
+    url: String,
+    config: CrawlConfig,
+    state: State<'_, Arc<AppState>>,
+) -> Result<CrawlTemplate, String> {
+    let trimmed_name = name.trim();
+    if trimmed_name.is_empty() {
+        return Err("Template name must not be empty".to_string());
+    }
+    if Url::parse(&url).is_err() {
+        return Err("Template URL is invalid".to_string());
+    }
+    let template = CrawlTemplate {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: trimmed_name.to_string(),
+        url,
+        config,
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+    state.persist_template(&template).await.map_err(|e| e.to_string())?;
+    Ok(template)
+}
+
+#[tauri::command]
+pub async fn delete_template(template_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    state.remove_persisted_template(&template_id).await.map_err(|e| e.to_string())?;
     Ok(())
 }
 

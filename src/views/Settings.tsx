@@ -11,6 +11,7 @@ import {
   BellSlash,
 } from '@phosphor-icons/react';
 import type { AppSettings } from '../types';
+import { EXPORT_OPTIONS } from '../types';
 import { useTheme, THEME_ORDER, THEME_META } from '../hooks/useTheme';
 import { SHORTCUT_ACTIONS, resolveBinding } from '../hooks/useKeyboardShortcuts';
 import { SHORTCUTS_UPDATED_EVENT } from '../hooks/useShortcutOverrides';
@@ -21,7 +22,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   concurrency: 3,
   requestDelay: 750,
   timeout: 30000,
-  userAgent: 'Docurip/0.6.1 (Documentation Crawler)',
+  userAgent: 'Docurip/0.6.2 (Documentation Crawler)',
   defaultMaxDepth: 2,
   defaultPageLimit: 1000,
   defaultDownloadAssets: false,
@@ -34,6 +35,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   notificationsEnabled: true,
   theme: 'system',
   shortcutOverrides: {},
+  autoExportFormat: null,
 };
 
 const WINDOW_PRESETS = [
@@ -309,6 +311,33 @@ export function SettingsView() {
           </div>
           <p className="text-charcoal text-xs mt-3">
             Click a shortcut to rebind it, then press the new key combination. Escape cancels editing.
+          </p>
+        </Section>
+
+        {/* Auto-Export */}
+        <Section title="Auto-Export">
+          <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+            Export format on crawl completion
+          </label>
+          <select
+            value={settings.autoExportFormat ?? ''}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                autoExportFormat: e.target.value ? (e.target.value as AppSettings['autoExportFormat']) : null,
+              })
+            }
+            className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all appearance-none"
+          >
+            <option value="">Disabled</option>
+            {EXPORT_OPTIONS.map((opt) => (
+              <option key={opt.format} value={opt.format}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-charcoal text-xs mt-1.5">
+            When set, this export runs automatically to the job's formats/ directory every time a crawl completes.
           </p>
         </Section>
 

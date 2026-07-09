@@ -31,6 +31,9 @@ pub struct AppSettings {
     /// to the action's built-in default binding.
     #[serde(default)]
     pub shortcut_overrides: HashMap<String, String>,
+    /// When set, this export format runs automatically after every crawl completes.
+    #[serde(default)]
+    pub auto_export_format: Option<crate::export::ExportFormat>,
 }
 
 impl Default for AppSettings {
@@ -43,7 +46,7 @@ impl Default for AppSettings {
             concurrency: 3,
             request_delay: 750,
             timeout: 30000,
-            user_agent: String::from("Docurip/0.6.1 (Documentation Crawler)"),
+            user_agent: String::from("Docurip/0.6.2 (Documentation Crawler)"),
             default_max_depth: 2,
             default_page_limit: 1000,
             default_download_assets: false,
@@ -56,6 +59,7 @@ impl Default for AppSettings {
             notifications_enabled: true,
             theme: default_theme(),
             shortcut_overrides: HashMap::new(),
+            auto_export_format: None,
         }
     }
 }

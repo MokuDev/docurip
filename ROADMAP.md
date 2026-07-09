@@ -42,15 +42,15 @@ Broken into incremental sub-releases, each building on the previous:
 - Dark / Light / System theme toggle with CSS variable infrastructure.
 - WCAG AA contrast fixes for light mode.
 
-#### v0.6.1 – Filtering & Foundations
+#### v0.6.1 – Filtering & Foundations ✅
 - **Include-patterns + path-prefix filter**: whitelist URLs by regex or simple path prefix (e.g. `/docs/api/` only), complementing the existing exclude-patterns.
-- **Keyboard shortcuts**: power-user navigation (`Ctrl+N` New Crawl, `Ctrl+F` search, `Esc` close modal, arrow keys in ResultTree).
+- **Keyboard shortcuts**: power-user navigation (`Ctrl+N` New Crawl, `Ctrl+F` search, `Esc` close modal, arrow keys in ResultTree). Extended to freely-configurable, full tab-navigation shortcuts with a rebind UI in Settings.
 - **Desktop notifications**: system-level notification on crawl completion/failure via `tauri-plugin-notification`. Essential for batch and scheduled crawls.
 
-#### v0.6.2 – Templates & Re-Crawl
-- **Job templates**: save a named crawl configuration (URL + all settings) and re-apply it later. Extends the existing `CrawlProfile` system with user-defined templates.
-- **Re-crawl with same settings**: one-click "crawl again" on completed jobs, pre-filling all original settings.
-- **Auto-export after crawl**: configure a default export format (ZIP, Merged MD, etc.) that runs automatically when a crawl completes.
+#### v0.6.2 – Templates & Re-Crawl ✅
+- **Job templates**: save a named crawl configuration (URL + all settings) and re-apply it later. Persisted as JSON files (mirrors job persistence), managed from a `TemplateBar` in New Crawl.
+- **Re-crawl with same settings**: one-click "crawl again" on completed/failed/cancelled jobs from History, pre-filling all original settings via a `prefillConfig` prop.
+- **Auto-export after crawl**: `autoExportFormat` setting runs the existing `export_job_v2` pipeline automatically when a crawl completes (frontend-triggered from the same terminal-event handler that fires notifications).
 
 #### v0.6.3 – Batch & Sitemap
 - **Multi-URL queue (batch crawl)**: enter multiple URLs (textarea or dynamic input list) that are crawled sequentially with shared or per-URL settings.
@@ -124,13 +124,15 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 | **Orchestrator::new complexity** | Constructor accumulates include_set building, path_prefix cloning, output-dir setup, and writer init inline. Could extract config normalization into a dedicated helper or `CrawlConfig` resolver. | `orchestrator.rs:154` |
 | **Include-filter extraction** | Inline `has_include_constraint` / `matches_include` / `matches_prefix` logic could be extracted into a `url_matches_include_rules(&self, &str) -> bool` method for readability and independent testability. | `orchestrator.rs:718` |
 | **Redundant Url::parse in crawl loop** | Path-prefix check re-parses the URL string even though the link was already parsed/resolved earlier. Could pass the parsed `Url` object through or factor filtering into a helper that accepts a pre-parsed URL. | `orchestrator.rs:722` |
-| **start_crawl payload helper** | The config object sent to `invoke('start_crawl')` manually enumerates every field. A `toCrawlConfigPayload(config)` helper would keep the mapping in one place and prevent field omissions as CrawlConfig grows. | `NewCrawl.tsx:155` |
-| **Unused profile default methods** | `default_include_patterns` and `default_path_prefix` on `CrawlProfile` always return empty values and are not called anywhere yet. Prepared for v0.6.2 (job templates); remove or wire up when templates land. | `profiles.rs:92` |
+| **Unused profile default methods** | `default_include_patterns` and `default_path_prefix` on `CrawlProfile` always return empty values and are not called anywhere yet. v0.6.2's job templates ended up as a separate user-defined-template system rather than extending `CrawlProfile` defaults, so these are still dead; remove or wire up. | `profiles.rs:92` |
 | **Regex validation DRY** | `validate_crawl_input` has two nearly identical loops for exclude and include patterns. Could extract a `validate_pattern_list(patterns, label) -> Result` helper. | `commands.rs:47` |
 | **Include-filter tests test primitives** | Unit tests for include/path-prefix replicate the production logic inline (`RegexSet::is_match`, `starts_with`) rather than exercising the actual orchestrator filter path. Rewrite once the filter is extracted into a helper method. | `orchestrator.rs:859` |
 | **Shared filter-field component** | Include-pattern, exclude-pattern, and content-selector textareas repeat the same label/textarea/help-text layout. Extract a `FilterField` component when more filter types are added. | `NewCrawl.tsx:391` |
 | **ToggleRow/SettingSwitch component** | The notifications toggle is inline JSX in SettingsView. Extract a reusable `ToggleRow` component for when more boolean settings are added (e.g. auto-export in v0.6.2). | `Settings.tsx:213` |
 | **ShortcutRow reset-vs-clear** | `ShortcutRow` only offers "reset to default"; there's no way to explicitly unbind an action (empty combo) from the UI, even though the data model (`shortcutOverrides[id] = ''`) supports it. Add a "Clear" affordance if users ask for it. | `ShortcutRow.tsx` |
+| **Template/job persistence duplication** | `save_template_to_disk`/`load_all_templates`/`delete_template_from_disk` in `state.rs` mirror the job persistence methods almost line-for-line. Now that there are two JSON-file-backed collections, a small generic `JsonStore<T>` helper would remove the duplication. | `state.rs` |
+| **Template rename/edit** | `save_template` only creates new templates; there's no `update_template` command, so "renaming" a template means deleting and re-saving it (which also changes its `createdAt` and loses its position in the sorted list). Add an update path if users want in-place edits. | `commands.rs` |
+| **TemplateBar naming input UX** | The inline "Save current" input has no duplicate-name warning — saving two templates with the same name silently creates two entries distinguishable only by id. Consider warning or requiring unique names. | `TemplateBar.tsx` |
 
 ## Open Questions
 

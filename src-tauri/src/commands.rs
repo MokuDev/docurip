@@ -17,6 +17,22 @@ use crate::state::{AppState, JobHandle};
 use crate::system::SystemStats;
 use url::Url;
 
+fn normalize_path_prefix(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let no_query = trimmed.split(&['?', '#'][..]).next().unwrap_or("");
+    if no_query.is_empty() {
+        return String::new();
+    }
+    if no_query.starts_with('/') {
+        no_query.to_string()
+    } else {
+        format!("/{}", no_query)
+    }
+}
+
 fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
     let parsed = Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
@@ -61,6 +77,8 @@ pub async fn start_crawl(
     app: AppHandle,
 ) -> Result<String, String> {
     validate_crawl_input(&url, &config)?;
+    let mut config = config;
+    config.path_prefix = normalize_path_prefix(&config.path_prefix);
     let job_id = uuid::Uuid::new_v4().to_string();
 
     let job = CrawlJob {

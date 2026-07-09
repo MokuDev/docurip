@@ -20,6 +20,8 @@ pub struct AppSettings {
     pub default_ssrf_protection: bool,
     pub window_width: u32,
     pub window_height: u32,
+    #[serde(default = "default_true")]
+    pub notifications_enabled: bool,
     #[serde(default = "default_theme")]
     pub theme: String,
 }
@@ -34,7 +36,7 @@ impl Default for AppSettings {
             concurrency: 3,
             request_delay: 750,
             timeout: 30000,
-            user_agent: String::from("Docurip/0.3.3 (Documentation Crawler)"),
+            user_agent: String::from("Docurip/0.6.1 (Documentation Crawler)"),
             default_max_depth: 2,
             default_page_limit: 1000,
             default_download_assets: false,
@@ -44,6 +46,7 @@ impl Default for AppSettings {
             default_ssrf_protection: true,
             window_width: 1280,
             window_height: 900,
+            notifications_enabled: true,
             theme: default_theme(),
         }
     }
@@ -63,6 +66,10 @@ pub struct CrawlConfig {
     pub headless_strategy: String,
     pub content_selectors: Vec<String>,
     pub exclude_patterns: Vec<String>,
+    #[serde(default)]
+    pub include_patterns: Vec<String>,
+    #[serde(default)]
+    pub path_prefix: String,
     pub respect_robots_txt: bool,
     #[serde(default = "default_true")]
     pub stay_within_domain: bool,

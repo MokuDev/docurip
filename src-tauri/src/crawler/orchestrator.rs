@@ -95,6 +95,8 @@ pub struct Orchestrator {
     converter: HtmlToMarkdown,
     writer: FsWriter,
     exclude_set: Option<RegexSet>,
+    include_set: Option<RegexSet>,
+    path_prefix: String,
     robots: RobotsTxt,
     config: CrawlConfig,
     settings: AppSettings,
@@ -149,6 +151,23 @@ impl Orchestrator {
             }
         };
 
+        let include_set = if resolved_config.include_patterns.is_empty() {
+            None
+        } else {
+            let patterns: Vec<&str> = resolved_config.include_patterns
+                .iter()
+                .filter(|p| !p.is_empty())
+                .map(|p| p.as_str())
+                .collect();
+            if patterns.is_empty() {
+                None
+            } else {
+                Some(RegexSet::new(&patterns)
+                    .map_err(|e| anyhow::anyhow!("Invalid include pattern: {}", e))?)
+            }
+        };
+        let path_prefix = resolved_config.path_prefix.clone();
+
     Ok(Self {
         handle,
         base_url,
@@ -158,6 +177,8 @@ impl Orchestrator {
         converter,
         writer,
         exclude_set,
+        include_set,
+        path_prefix,
         robots: RobotsTxt::default(),
         config: resolved_config,
         settings,
@@ -694,6 +715,19 @@ impl Orchestrator {
                             continue;
                         }
                     }
+                    let has_include_constraint = self.include_set.is_some() || !self.path_prefix.is_empty();
+                    if has_include_constraint {
+                        let matches_include = self.include_set.as_ref()
+                            .map_or(false, |set| set.is_match(&link));
+                        let matches_prefix = if !self.path_prefix.is_empty() {
+                            Url::parse(&link).map_or(false, |u| u.path().starts_with(&self.path_prefix))
+                        } else {
+                            false
+                        };
+                        if !matches_include && !matches_prefix {
+                            continue;
+                        }
+                    }
                     if queue.len() >= MAX_QUEUE_SIZE {
                         let job_id = self.handle.job.read().await.id.clone();
                         let _ = self.handle.event_bus.emit(CrawlEvent::Log {
@@ -819,5 +853,38 @@ mod tests {
 
         let network = anyhow::anyhow!("connection refused");
         assert!(!is_disk_error(&network));
+    }
+
+    #[test]
+    fn include_set_none_admits_all() {
+        let include_set: Option<RegexSet> = None;
+        let path_prefix = String::new();
+        let has_constraint = include_set.is_some() || !path_prefix.is_empty();
+        assert!(!has_constraint, "No constraints should admit all URLs");
+    }
+
+    #[test]
+    fn include_set_filters_non_matching() {
+        let set = RegexSet::new(&[r"/docs/api/.*"]).unwrap();
+        assert!(set.is_match("https://example.com/docs/api/v1"));
+        assert!(!set.is_match("https://example.com/blog/post"));
+    }
+
+    #[test]
+    fn path_prefix_filters_correctly() {
+        let prefix = "/docs/api/";
+        let url_match = Url::parse("https://example.com/docs/api/v1").unwrap();
+        let url_miss = Url::parse("https://example.com/blog/post").unwrap();
+        assert!(url_match.path().starts_with(prefix));
+        assert!(!url_miss.path().starts_with(prefix));
+    }
+
+    #[test]
+    fn exclude_overrides_include() {
+        let include = RegexSet::new(&[r".*docs.*"]).unwrap();
+        let exclude = RegexSet::new(&[r".*/docs/internal/.*"]).unwrap();
+        let url = "https://example.com/docs/internal/secret";
+        assert!(include.is_match(url), "Include should match");
+        assert!(exclude.is_match(url), "Exclude should also match, and takes priority");
     }
 }

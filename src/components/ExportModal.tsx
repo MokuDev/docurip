@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, SpinnerGap } from '@phosphor-icons/react';
 import { useToasts } from '../hooks/useToasts';
+import { useEscapeStack } from '../contexts/EscapeStack';
 import { EXPORT_OPTIONS } from '../types';
 import type { ExportFormat } from '../types';
 
@@ -17,6 +18,12 @@ export function ExportModal({ jobId, onClose }: ExportModalProps) {
   const [headlessSupported, setHeadlessSupported] = useState(false);
   const [exporting, setExporting] = useState(false);
   const { pushToast } = useToasts();
+  const escapeStack = useEscapeStack();
+
+  useEffect(() => {
+    const id = escapeStack.push(onClose);
+    return () => escapeStack.remove(id);
+  }, [onClose]);
 
   useEffect(() => {
     invoke<boolean>('check_headless_support').then(setHeadlessSupported).catch(() => {});

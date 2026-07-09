@@ -82,9 +82,12 @@ fn make_config(output_dir: &str) -> CrawlConfig {
         headless_strategy: "never".to_string(),
         content_selectors: vec![],
         exclude_patterns: vec![],
+        include_patterns: vec![],
+        path_prefix: String::new(),
         respect_robots_txt: false,
         stay_within_domain: true,
         ssrf_protection: false,
+        profile: None,
     }
 }
 
@@ -105,6 +108,7 @@ fn make_settings() -> AppSettings {
         window_width: 1280,
         window_height: 900,
         theme: String::from("dark"),
+        notifications_enabled: true,
     }
 }
 

@@ -25,6 +25,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let persist_dir = app.path().app_data_dir()?.join("jobs");
             let app_state = Arc::new(state::AppState::init(persist_dir)?);

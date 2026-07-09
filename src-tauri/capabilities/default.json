@@ -13,6 +13,7 @@
     "fs:allow-read-dir",
     "fs:allow-mkdir",
     "updater:default",
-    "process:default"
+    "process:default",
+    "notification:default"
   ]
 }

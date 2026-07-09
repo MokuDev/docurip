@@ -128,6 +128,8 @@ mod tests {
                 headless_strategy: "auto".to_string(),
                 content_selectors: vec![],
                 exclude_patterns: vec![],
+                include_patterns: vec![],
+                path_prefix: String::new(),
                 respect_robots_txt: true,
                 stay_within_domain: true,
                 ssrf_protection: true,

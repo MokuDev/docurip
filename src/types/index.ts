@@ -121,6 +121,8 @@ export interface CrawlJob {
   startTime?: string;
   endTime?: string;
   error?: string;
+  /** Set when this job is a child of a batch crawl. */
+  batchId?: string;
 }
 
 export type ThemePreference = 'dark' | 'light' | 'system';

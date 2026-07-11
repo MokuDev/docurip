@@ -52,9 +52,9 @@ Broken into incremental sub-releases, each building on the previous:
 - **Re-crawl with same settings**: one-click "crawl again" on completed/failed/cancelled jobs from History, pre-filling all original settings via a `prefillConfig` prop.
 - **Auto-export after crawl**: `autoExportFormat` setting runs the existing `export_job_v2` pipeline automatically when a crawl completes (frontend-triggered from the same terminal-event handler that fires notifications).
 
-#### v0.6.3 – Batch & Sitemap
-- **Multi-URL queue (batch crawl)**: enter multiple URLs (textarea or dynamic input list) that are crawled sequentially with shared or per-URL settings.
-- **Sitemap import as URL source**: fetch and parse `sitemap.xml` from a target domain, present URLs as a selectable list to seed the crawl queue.
+#### v0.6.3 – Batch & Sitemap ✅
+- **Multi-URL queue (batch crawl)**: New Crawl gains a Single/Batch mode toggle. Batch mode takes one URL per line with live validation, an optional name, and per-batch on-failure override (Continue vs. Stop, default from Settings). Backend `BatchJob` + `BatchRunner` run child crawls sequentially, each tagged with a `batchId`; batches persist and appear as collapsible groups in History.
+- **Sitemap import & auto-discovery**: on entering a URL, Docurip probes `robots.txt` and well-known sitemap locations. A picker fetches, parses (urlset + sitemapindex + gzip + CDATA), filters (free text + path prefix), and imports selected URLs — a single pick fills the URL field, multiple picks pre-fill the batch list. Guarded by 10 k URL cap (truncates), 50 sub-sitemaps, depth 2, 50 MB body cap, 30 s timeout, SSRF protection.
 
 #### v0.6.4 – Result Browser Upgrade
 - **Bookmarks**: mark/favorite individual pages in the result browser for quick access.
@@ -130,7 +130,7 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 | **Shared filter-field component** | Include-pattern, exclude-pattern, and content-selector textareas repeat the same label/textarea/help-text layout. Extract a `FilterField` component when more filter types are added. | `NewCrawl.tsx:391` |
 | **ToggleRow/SettingSwitch component** | The notifications toggle is inline JSX in SettingsView. Extract a reusable `ToggleRow` component for when more boolean settings are added (e.g. auto-export in v0.6.2). | `Settings.tsx:213` |
 | **ShortcutRow reset-vs-clear** | `ShortcutRow` only offers "reset to default"; there's no way to explicitly unbind an action (empty combo) from the UI, even though the data model (`shortcutOverrides[id] = ''`) supports it. Add a "Clear" affordance if users ask for it. | `ShortcutRow.tsx` |
-| **Template/job persistence duplication** | `save_template_to_disk`/`load_all_templates`/`delete_template_from_disk` in `state.rs` mirror the job persistence methods almost line-for-line. Now that there are two JSON-file-backed collections, a small generic `JsonStore<T>` helper would remove the duplication. | `state.rs` |
+| ~~**Template/job persistence duplication**~~ | ~~`save_template_to_disk`/`load_all_templates`/`delete_template_from_disk` in `state.rs` mirror the job persistence methods almost line-for-line. Now that there are two JSON-file-backed collections, a small generic `JsonStore<T>` helper would remove the duplication.~~ Resolved in v0.6.3. | `state.rs` |
 | **Template rename/edit** | `save_template` only creates new templates; there's no `update_template` command, so "renaming" a template means deleting and re-saving it (which also changes its `createdAt` and loses its position in the sorted list). Add an update path if users want in-place edits. | `commands.rs` |
 | **TemplateBar naming input UX** | The inline "Save current" input has no duplicate-name warning — saving two templates with the same name silently creates two entries distinguishable only by id. Consider warning or requiring unique names. | `TemplateBar.tsx` |
 

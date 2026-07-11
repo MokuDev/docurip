@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.3 (unreleased)
+
+### Added
+- **Sitemap import & auto-discovery**: New Crawl now checks `robots.txt` and the well-known `/sitemap.xml` / `/sitemap_index.xml` locations 700 ms after a valid URL is entered (toggleable in Settings → Sitemap Discovery). When a sitemap is found, a banner offers to open a picker that fetches, parses (both `<urlset>` and `<sitemapindex>`, incl. gzipped `.xml.gz` and CDATA `<loc>`), filters (free-text + path-prefix), and imports selected URLs. Safety caps: 10 k URLs (result truncates rather than errors), 50 sub-sitemaps, depth 2, 50 MB response body, 30 s timeout, SSRF-protected. Selecting one URL fills the single-URL field; selecting many switches into Batch mode with the picks pre-filled.
+- **Batch crawl mode**: New Crawl has a Single/Batch toggle. Batch mode takes one URL per line (with live count, duplicate/invalid detection, and a 500-URL cap), an optional name, and a per-batch on-failure override. `start_batch` spawns child crawls sequentially, each tagged with a `batchId` so history, export, and persistence work unchanged. The default on-failure behavior — Continue with next URL vs. Stop the batch — is set in Settings → Batch Crawls and can be overridden at launch. Backend adds `BatchJob`, `BatchRunner`, and `start_batch` / `stop_batch` / `get_batch` / `list_batches` / `delete_batch` commands. The Live Monitor grows a Batch Progress bar over the child-crawl progress; batches survive a page reload via `sessionStorage`.
+- **Batch grouping in History**: child jobs are collapsed under their parent batch card (name, `M/N URLs`, status, progress, on-failure mode). Deleting a batch also drops its child jobs. New "Batches only" filter option.
+
+### Changed
+- **`JsonStore<T>` unifies persistence for jobs, templates, and batches**: extracts the per-type `save_*_to_disk` / `delete_*_from_disk` / `RwLock<HashMap>` / init-from-directory machinery into a single generic helper keyed by a `HasId` trait. `AppState.persisted_jobs` was renamed to `AppState.jobs` (a `JsonStore<CrawlJob>`); `state.templates` and the new `state.batches` follow the same shape. The `persist_job` / `persist_template` methods stay as thin wrappers so orchestrator call sites don't need to move. Closes the "Template/job persistence duplication" cleanup item from the ROADMAP.
+- **`start_crawl` internals extracted into a `spawn_crawl` helper** shared by the single-URL command and the batch runner, so both paths produce identical bookkeeping.
+
 ## v0.6.2 (2026-07-11)
 
 ### Added

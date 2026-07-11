@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.3 (unreleased)
+## v0.6.3 (2026-07-12)
 
 ### Added
 - **Sitemap import & auto-discovery**: New Crawl now checks `robots.txt` and the well-known `/sitemap.xml` / `/sitemap_index.xml` locations 700 ms after a valid URL is entered (toggleable in Settings → Sitemap Discovery). When a sitemap is found, a banner offers to open a picker that fetches, parses (both `<urlset>` and `<sitemapindex>`, incl. gzipped `.xml.gz` and CDATA `<loc>`), filters (free-text + path-prefix), and imports selected URLs. Safety caps: 10 k URLs (result truncates rather than errors), 50 sub-sitemaps, depth 2, 50 MB response body, 30 s timeout, SSRF-protected. Selecting one URL fills the single-URL field; selecting many switches into Batch mode with the picks pre-filled.

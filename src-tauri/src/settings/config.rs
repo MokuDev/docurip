@@ -65,7 +65,7 @@ impl Default for AppSettings {
             concurrency: 3,
             request_delay: 750,
             timeout: 30000,
-            user_agent: String::from("Docurip/0.6.2 (Documentation Crawler)"),
+            user_agent: String::from("Docurip/0.6.3 (Documentation Crawler)"),
             default_max_depth: 2,
             default_page_limit: 1000,
             default_download_assets: false,

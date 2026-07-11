@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   concurrency: 3,
   requestDelay: 750,
   timeout: 30000,
-  userAgent: 'Docurip/0.6.2 (Documentation Crawler)',
+  userAgent: 'Docurip/0.6.3 (Documentation Crawler)',
   defaultMaxDepth: 2,
   defaultPageLimit: 1000,
   defaultDownloadAssets: false,

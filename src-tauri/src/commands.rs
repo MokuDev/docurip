@@ -181,7 +181,7 @@ pub async fn get_job(job_id: String, state: State<'_, Arc<AppState>>) -> Result<
     }
     drop(jobs);
 
-    let persisted = state.persisted_jobs.read().await;
+    let persisted = state.jobs.read().await;
     if let Some(job) = persisted.get(&job_id) {
         return Ok(job.clone());
     }
@@ -202,7 +202,7 @@ pub async fn list_jobs(state: State<'_, Arc<AppState>>) -> Result<Vec<CrawlJob>,
     }
     drop(active_jobs);
 
-    let persisted_jobs = state.persisted_jobs.read().await;
+    let persisted_jobs = state.jobs.read().await;
     for (_, job) in persisted_jobs.iter() {
         if !seen_ids.contains(&job.id) {
             result.push(job.clone());
@@ -278,7 +278,7 @@ async fn collect_all_jobs(state: &AppState) -> Vec<CrawlJob> {
     }
 
     {
-        let persisted = state.persisted_jobs.read().await;
+        let persisted = state.jobs.read().await;
         for (_, job) in persisted.iter() {
             if !seen.contains(&job.id) {
                 result.push(job.clone());
@@ -518,7 +518,7 @@ pub async fn export_job(
         if let Some(handle) = jobs.get(&job_id) {
             handle.job.read().await.clone()
         } else {
-            let jobs = state.persisted_jobs.read().await;
+            let jobs = state.jobs.read().await;
             jobs.get(&job_id).cloned().ok_or("Job not found")?
         }
     };
@@ -550,7 +550,7 @@ pub async fn export_job_v2(
         if let Some(handle) = jobs.get(&job_id) {
             handle.job.read().await.clone()
         } else {
-            let jobs = state.persisted_jobs.read().await;
+            let jobs = state.jobs.read().await;
             jobs.get(&job_id).cloned().ok_or("Job not found")?
         }
     };
@@ -749,7 +749,7 @@ pub async fn list_exports(
         }
     }
     {
-        let persisted = state.persisted_jobs.read().await;
+        let persisted = state.jobs.read().await;
         for job in persisted.values() {
             let dir = std::path::PathBuf::from(&job.config.output_dir);
             if !output_dirs.contains(&dir) {

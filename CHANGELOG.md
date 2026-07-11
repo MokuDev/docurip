@@ -1,11 +1,6 @@
 # Changelog
 
-## Unreleased
-
-### Fixed
-- **Result Browser crashes to a white screen when clicking a folder**: `ResultTree` tracked *expanded* paths in a set where "empty set" meant "everything expanded" as a special case. The moment any single folder was toggled, that special case stopped applying, so every other branch — including the clicked folder's own ancestors — collapsed at once. The resulting sudden, large shrink in visible rows left `focusedIndex` pointing far past the new list length; a `useEffect` then called react-window's `scrollToRow` with that stale, out-of-bounds index, which throws a `RangeError`. With no `ErrorBoundary` anywhere in the app, the uncaught error unmounted the entire UI. Fixed by inverting the model to track *collapsed* paths instead (toggling one folder no longer affects unrelated branches — normal file-explorer behavior) and by merging the clamp-and-scroll effects into one, so an out-of-bounds `focusedIndex` is always corrected before `scrollToRow` can be called with it.
-
-## v0.6.2 (2026-07-09)
+## v0.6.2 (2026-07-11)
 
 ### Added
 - **Job templates**: save the current New Crawl form (URL + full config) as a named template from a new `TemplateBar`, then re-apply or delete it later. Persisted as JSON files under `templates/` in the app data dir, mirroring the existing job-persistence pattern. New `list_templates` / `save_template` / `delete_template` commands.
@@ -19,14 +14,10 @@
 - **Shortcut capture leaking to global handlers**: while capturing a new key combination in the Settings rebind UI, the keypress was also being picked up by the app-wide shortcut listener (e.g. capturing `Ctrl+N` would both flag the conflict *and* navigate to New Crawl, closing the settings page). The row's key-capture handler now calls `stopPropagation()` so the global `document`-level listener never sees the event.
 - **`CrawlJob.config` typed with a `url` field it never has at runtime**: the frontend `CrawlConfig` type includes `url`, but the backend's `CrawlConfig` struct — and therefore every `job.config` returned over IPC — never carries one (a job's URL only ever lives at `job.url`). Introduced a `TemplateConfig` type (`Omit<CrawlConfig, 'url'>`) matching what the backend actually returns and retyped `CrawlJob.config` to it, so any future `job.config.url` access is now a compile error instead of a silent `undefined`.
 - **Low-contrast micro-labels app-wide**: the `charcoal` text token (used for ~124 uppercase labels — `TopStatusBar`, `SystemStatusBar`, Dashboard stat cards, Settings field labels, etc.) only cleared ~3.7:1 contrast against card surfaces in dark mode and ~4.6:1 in light mode, both at or below WCAG AA's 4.5:1 minimum for the 10-11px text it's typically used at. Lightened dark-mode `charcoal` to `rgb(130 146 168)` (~5.6:1 vs. card surfaces, ~6.2:1 vs. the page background) and darkened light-mode `charcoal` to `rgb(80 96 116)` (~6.4:1 vs. white, ~6.1:1 vs. the page background) — comfortably past AA, while staying visibly more muted than the `secondary` token (~7:1) so the two-tier text hierarchy still reads. Also bumped the smallest (10px) status-bar labels — Session/Uptime/Jobs, CPU/RAM/Output — to `font-medium` for extra legibility at that size.
+- **Result Browser crashes to a white screen when clicking a folder**: `ResultTree` tracked *expanded* paths in a set where "empty set" meant "everything expanded" as a special case. The moment any single folder was toggled, that special case stopped applying, so every other branch — including the clicked folder's own ancestors — collapsed at once. The resulting sudden, large shrink in visible rows left `focusedIndex` pointing far past the new list length; a `useEffect` then called react-window's `scrollToRow` with that stale, out-of-bounds index, which throws a `RangeError`. With no `ErrorBoundary` anywhere in the app, the uncaught error unmounted the entire UI. Fixed by inverting the model to track *collapsed* paths instead (toggling one folder no longer affects unrelated branches — normal file-explorer behavior) and by merging the clamp-and-scroll effects into one, so an out-of-bounds `focusedIndex` is always corrected before `scrollToRow` can be called with it.
 
 ### Changed
 - **`start_crawl` / `save_template` payload construction unified**: both now go through a shared `toBackendConfig()` helper in `NewCrawl.tsx` instead of duplicating the field-by-field mapping (trim/filter patterns, normalize `pathPrefix`), closing out a standing ROADMAP item.
-
-### Tests
-- 8 tests for `TemplateBar`: chip rendering, empty state, apply/delete callbacks, naming flow (save/blank/cancel), disabled state.
-- 3 new tests for `useCrawlEvents` auto-export gating: fires `export_job_v2` on completion when configured, stays silent when unset, stays silent on failure even if configured.
-- 3 new Rust tests for template persistence in `state.rs`: save/persist, remove, and load-on-init.
 
 ## v0.6.1 (2026-07-09)
 

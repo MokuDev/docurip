@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Result Browser crashes to a white screen when clicking a folder**: `ResultTree` tracked *expanded* paths in a set where "empty set" meant "everything expanded" as a special case. The moment any single folder was toggled, that special case stopped applying, so every other branch — including the clicked folder's own ancestors — collapsed at once. The resulting sudden, large shrink in visible rows left `focusedIndex` pointing far past the new list length; a `useEffect` then called react-window's `scrollToRow` with that stale, out-of-bounds index, which throws a `RangeError`. With no `ErrorBoundary` anywhere in the app, the uncaught error unmounted the entire UI. Fixed by inverting the model to track *collapsed* paths instead (toggling one folder no longer affects unrelated branches — normal file-explorer behavior) and by merging the clamp-and-scroll effects into one, so an out-of-bounds `focusedIndex` is always corrected before `scrollToRow` can be called with it.
+
 ## v0.6.2 (2026-07-09)
 
 ### Added

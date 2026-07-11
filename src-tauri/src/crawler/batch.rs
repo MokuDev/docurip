@@ -73,6 +73,19 @@ use crate::state::{AppState, BatchHandle};
 /// How often the batch runner polls a running child job for terminal status.
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
 
+/// Upper bound on how long the batch runner waits for a single child
+/// job to reach a terminal state. If a crawl hangs (fetcher deadlock,
+/// unresponsive server, orchestrator panic) the runner would otherwise
+/// block the whole batch forever. After this elapses, the batch
+/// abandons the child (with a fresh stop signal) and treats it as failed
+/// so the batch can move on.
+const CHILD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+/// Grace window after the stop signal is forwarded during a timeout
+/// before we declare the child abandoned. Gives a well-behaved
+/// orchestrator time to notice and update its status.
+const STOP_GRACE: Duration = Duration::from_secs(5);
+
 /// Kick off a batch. Returns immediately after spawning the runner task —
 /// the batch's progress is reported through events and the persisted
 /// `BatchJob` state.
@@ -134,7 +147,11 @@ async fn run_batch(
     let _ = state.batches.insert(batch_arc.read().await.clone()).await;
 
     let mut final_status = BatchStatus::Completed;
-    let mut error_msg: Option<String> = None;
+    // Every child failure and every spawn failure is recorded here so
+    // a Continue-mode batch of 100 URLs where 30 fail shows the user
+    // all 30 messages, not just the first — otherwise the failure
+    // pattern is invisible until the user opens each child's job page.
+    let mut errors: Vec<String> = Vec::new();
 
     for (idx, url) in urls.iter().enumerate() {
         if should_stop.load(Ordering::Relaxed) {
@@ -156,8 +173,7 @@ async fn run_batch(
             Ok(id) => id,
             Err(e) => {
                 // Treat spawn failure like a failed child job.
-                let msg = format!("Failed to spawn crawl for '{}': {}", url, e);
-                error_msg.get_or_insert(msg);
+                errors.push(format!("Failed to spawn crawl for '{}': {}", url, e));
                 if on_failure == BatchFailureMode::Stop {
                     final_status = BatchStatus::Failed;
                     break;
@@ -188,7 +204,13 @@ async fn run_batch(
 
         match terminal_status {
             Some(JobStatus::Failed) => {
-                error_msg.get_or_insert_with(|| format!("Child job '{}' failed", job_id));
+                let child_err = state
+                    .jobs
+                    .get(&job_id)
+                    .await
+                    .and_then(|j| j.error)
+                    .unwrap_or_else(|| "unknown error".to_string());
+                errors.push(format!("{}: {}", url, child_err));
                 if on_failure == BatchFailureMode::Stop {
                     final_status = BatchStatus::Failed;
                     // Advance index one past the last attempted so UI shows N/N.
@@ -219,8 +241,17 @@ async fn run_batch(
         let mut b = batch_arc.write().await;
         b.status = final_status.clone();
         b.end_time = Some(chrono::Utc::now().to_rfc3339());
-        if let Some(err) = error_msg {
-            b.error = Some(err);
+        if !errors.is_empty() {
+            // Prefix with the count so a batch with many failures is
+            // immediately obvious at a glance; the joined messages
+            // follow for detail.
+            let n = errors.len();
+            b.error = Some(format!(
+                "{} child failure{}:\n{}",
+                n,
+                if n == 1 { "" } else { "s" },
+                errors.join("\n"),
+            ));
         }
         // Ensure current_index reflects completion.
         if final_status == BatchStatus::Completed {
@@ -349,16 +380,24 @@ mod tests {
 ///
 /// If `should_stop` is raised, forwards the stop signal to the child
 /// job's handle so it can shut down cleanly, then keeps polling until
-/// the child actually reaches a terminal state.
+/// the child actually reaches a terminal state. If [`CHILD_TIMEOUT`]
+/// elapses without a terminal status, forwards a stop signal and — if
+/// the child still hasn't caught up after [`STOP_GRACE`] — abandons
+/// with `JobStatus::Failed` so the batch can proceed.
 async fn wait_for_terminal(
     state: &AppState,
     job_id: &str,
     batch_should_stop: &AtomicBool,
 ) -> Option<JobStatus> {
     let mut stop_forwarded = false;
+    let mut timeout_hit_at: Option<std::time::Instant> = None;
+    let started = std::time::Instant::now();
     loop {
-        // Forward a batch stop to the running child once.
-        if !stop_forwarded && batch_should_stop.load(Ordering::Relaxed) {
+        // Forward a batch stop to the running child once — either because
+        // the user cancelled or because we hit CHILD_TIMEOUT.
+        let should_forward = !stop_forwarded
+            && (batch_should_stop.load(Ordering::Relaxed) || timeout_hit_at.is_some());
+        if should_forward {
             let jobs = state.active_jobs.read().await;
             if let Some(handle) = jobs.get(job_id) {
                 handle.should_stop.store(true, Ordering::Relaxed);
@@ -380,7 +419,18 @@ async fn wait_for_terminal(
         };
         match status {
             Some(s) if is_terminal(&s) => return Some(s),
-            Some(_) => tokio::time::sleep(POLL_INTERVAL).await,
+            Some(_) => {
+                if let Some(hit_at) = timeout_hit_at {
+                    // We've already forwarded stop and given the child a
+                    // grace window; if it's still not terminal, abandon.
+                    if hit_at.elapsed() >= STOP_GRACE {
+                        return Some(JobStatus::Failed);
+                    }
+                } else if started.elapsed() >= CHILD_TIMEOUT {
+                    timeout_hit_at = Some(std::time::Instant::now());
+                }
+                tokio::time::sleep(POLL_INTERVAL).await;
+            }
             // Job vanished from active_jobs — try the persisted store,
             // then bail out.
             None => {

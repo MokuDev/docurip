@@ -65,18 +65,30 @@ where
 {
     /// Load all `*.json` files from `dir` into the cache. Invalid files
     /// are silently skipped so a single corrupt entry doesn't prevent
-    /// startup.
+    /// startup — this now also applies to per-file IO errors
+    /// (permission denied, file locked, transient read failure) which
+    /// would otherwise abort `init` and prevent the app from starting.
+    /// A failure to list the directory itself is still fatal — that
+    /// typically means the app data dir is misconfigured or the disk
+    /// is missing, and we'd rather surface that than start silently.
     pub fn init(dir: PathBuf) -> anyhow::Result<Self> {
         let mut entries: HashMap<String, T> = HashMap::new();
         if dir.exists() {
             for entry in std::fs::read_dir(&dir)? {
-                let entry = entry?;
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
                 let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    let contents = std::fs::read_to_string(&path)?;
-                    if let Ok(item) = serde_json::from_str::<T>(&contents) {
-                        entries.insert(item.id().to_string(), item);
-                    }
+                if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                    continue;
+                }
+                let contents = match std::fs::read_to_string(&path) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+                if let Ok(item) = serde_json::from_str::<T>(&contents) {
+                    entries.insert(item.id().to_string(), item);
                 }
             }
         }
@@ -305,6 +317,31 @@ mod tests {
         let entries = store.read().await;
         assert_eq!(entries.len(), 1);
         assert!(entries.contains_key("good"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn json_store_init_skips_unreadable_files_on_unix() {
+        // A file we can't read (permissions) must not abort init — on
+        // Windows this manifests as ERROR_SHARING_VIOLATION when another
+        // process has the file open; the same tolerance is what protects
+        // startup there.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new().unwrap();
+        {
+            let store: JsonStore<CrawlJob> = JsonStore::init(dir.path().to_path_buf()).unwrap();
+            store.insert(create_test_job("readable")).await.unwrap();
+        }
+        // Make a second, unreadable file
+        let bad_path = dir.path().join("locked.json");
+        std::fs::write(&bad_path, "{}").unwrap();
+        std::fs::set_permissions(&bad_path, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+        let store: JsonStore<CrawlJob> = JsonStore::init(dir.path().to_path_buf()).unwrap();
+        let entries = store.read().await;
+        assert!(entries.contains_key("readable"));
+        // Restore perms so tempdir cleanup can remove the file.
+        std::fs::set_permissions(&bad_path, std::fs::Permissions::from_mode(0o600)).unwrap();
     }
 
     #[tokio::test]

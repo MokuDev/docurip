@@ -4,7 +4,7 @@
 
 Docurip is a Tauri v2 desktop application for crawling documentation websites and converting them into offline Markdown archives. It combines a Rust backend (high-performance crawling, security filtering, and disk I/O) with a React 19 / TypeScript / Tailwind CSS frontend.
 
-- **Current version:** v0.6.2
+- **Current version:** v0.6.3
 - **Platforms:** Windows (primary target), built with Tauri v2
 - **Architecture:** Rust backend + React 19 frontend
 - **Default output directory:** `~/.docurip` (falls back to `./output` if the home directory cannot be resolved)

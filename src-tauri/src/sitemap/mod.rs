@@ -38,6 +38,11 @@ pub const MAX_DEPTH: u8 = 2;
 /// Cap on a single sitemap response body (post-decompression for gzip).
 pub const MAX_BODY_BYTES: usize = 50 * 1024 * 1024;
 
+/// Cap on a `robots.txt` response body — separate from [`MAX_BODY_BYTES`]
+/// because a real robots.txt should never approach a megabyte. A hostile
+/// server returning a multi-GB body should be cut off much earlier here.
+pub const MAX_ROBOTS_BYTES: usize = 1024 * 1024;
+
 /// Per-request timeout.
 pub const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -201,18 +206,43 @@ fn local_name(qname: &[u8]) -> String {
     s.rsplit(':').next().unwrap_or(s).to_ascii_lowercase()
 }
 
-fn build_client() -> reqwest::Client {
+fn build_client(ssrf: bool) -> reqwest::Client {
+    // When SSRF is on we can't just check the initial URL — reqwest's
+    // default redirect policy follows up to 10 hops, so a hostile server
+    // can 302 to `http://127.0.0.1/admin` and the request lands there
+    // silently. Install a custom policy that runs `is_private_target`
+    // on every redirect target.
+    let policy = if ssrf {
+        reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 10 {
+                return attempt.error("too many redirects");
+            }
+            if is_private_target(attempt.url().as_str()) {
+                return attempt.error("redirect target is a private address");
+            }
+            attempt.follow()
+        })
+    } else {
+        reqwest::redirect::Policy::default()
+    };
     reqwest::Client::builder()
+        .redirect(policy)
         .timeout(FETCH_TIMEOUT)
         .user_agent(USER_AGENT)
         .build()
         .unwrap_or_default()
 }
 
-/// Fetch a URL, rejecting oversized responses either via `Content-Length`
-/// or a post-hoc length check on the fully-buffered body.
-async fn fetch_capped(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, SitemapError> {
-    let resp = client
+/// Fetch a URL, streaming the response body chunk-by-chunk and rejecting
+/// as soon as the running total exceeds `cap` — do NOT buffer the whole
+/// body first, because `Content-Length` is trivially spoofable (a hostile
+/// server can omit it, lie, or use chunked transfer encoding).
+async fn fetch_capped(
+    client: &reqwest::Client,
+    url: &str,
+    cap: usize,
+) -> Result<Vec<u8>, SitemapError> {
+    let mut resp = client
         .get(url)
         .send()
         .await
@@ -222,20 +252,27 @@ async fn fetch_capped(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, Si
         return Err(SitemapError::Status { url: url.to_string(), status: resp.status().as_u16() });
     }
 
+    // Advertised length is only used to short-circuit obvious over-caps;
+    // do not trust it as an upper bound — the streaming loop below is the
+    // real enforcement.
     if let Some(len) = resp.content_length() {
-        if len as usize > MAX_BODY_BYTES {
+        if len as usize > cap {
             return Err(SitemapError::TooLarge);
         }
     }
 
-    let bytes = resp
-        .bytes()
+    let mut buf: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp
+        .chunk()
         .await
-        .map_err(|source| SitemapError::Http { url: url.to_string(), source })?;
-    if bytes.len() > MAX_BODY_BYTES {
-        return Err(SitemapError::TooLarge);
+        .map_err(|source| SitemapError::Http { url: url.to_string(), source })?
+    {
+        if buf.len().saturating_add(chunk.len()) > cap {
+            return Err(SitemapError::TooLarge);
+        }
+        buf.extend_from_slice(&chunk);
     }
-    Ok(bytes.to_vec())
+    Ok(buf)
 }
 
 /// Decompress if `body` is gzip-encoded (magic 0x1f 0x8b) or the URL hints at it.
@@ -268,7 +305,7 @@ async fn fetch_and_parse(
     if ssrf && is_private_target(url) {
         return Err(SitemapError::Ssrf(url.to_string()));
     }
-    let body = fetch_capped(client, url).await?;
+    let body = fetch_capped(client, url, MAX_BODY_BYTES).await?;
     let body = maybe_decompress(url, body)?;
     parse_sitemap_xml(&body)
 }
@@ -278,9 +315,19 @@ async fn fetch_and_parse(
 /// Enforces [`MAX_SUB_SITEMAPS`], [`MAX_DEPTH`], and [`MAX_URLS`]. Returns
 /// a truncated list (with `truncated = true`) rather than erroring when
 /// [`MAX_URLS`] is reached.
-pub async fn fetch_sitemap(url: &str, ssrf: bool) -> Result<SitemapResult, SitemapError> {
+///
+/// Pass a `should_stop` handle (typically the same `AtomicBool` shared
+/// with a crawl orchestrator, or a fresh one owned by the caller) to
+/// abandon the recursion between fetches. Callers with no cancellation
+/// story can use [`fetch_sitemap`].
+pub async fn fetch_sitemap_with_stop(
+    url: &str,
+    ssrf: bool,
+    should_stop: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<SitemapResult, SitemapError> {
+    use std::sync::atomic::Ordering;
     let _ = Url::parse(url).map_err(|_| SitemapError::InvalidUrl(url.to_string()))?;
-    let client = build_client();
+    let client = build_client(ssrf);
 
     let mut entries: Vec<SitemapEntry> = Vec::new();
     let mut seen_urls: HashSet<String> = HashSet::new();
@@ -293,6 +340,14 @@ pub async fn fetch_sitemap(url: &str, ssrf: bool) -> Result<SitemapResult, Sitem
     let mut queue: Vec<(String, u8)> = vec![(url.to_string(), 0)];
 
     while let Some((sm_url, depth)) = queue.pop() {
+        // Cancellation check *before* each network fetch — the caller
+        // can abandon a deep recursion without waiting on remaining
+        // sub-sitemaps. Returns a truncated result rather than an error
+        // so the caller can still use whatever was collected.
+        if should_stop.map(|s| s.load(Ordering::Relaxed)).unwrap_or(false) {
+            truncated = true;
+            break;
+        }
         if !visited_sources.insert(sm_url.clone()) {
             continue;
         }
@@ -332,6 +387,12 @@ pub async fn fetch_sitemap(url: &str, ssrf: bool) -> Result<SitemapResult, Sitem
     Ok(SitemapResult { entries, truncated, sources })
 }
 
+/// Thin wrapper over [`fetch_sitemap_with_stop`] for callers with no
+/// cancellation handle.
+pub async fn fetch_sitemap(url: &str, ssrf: bool) -> Result<SitemapResult, SitemapError> {
+    fetch_sitemap_with_stop(url, ssrf, None).await
+}
+
 /// Discover sitemap URLs for a site.
 ///
 /// Combines:
@@ -347,7 +408,7 @@ pub async fn discover_sitemap(base_url: &str, ssrf: bool) -> Result<Vec<String>,
     if ssrf && is_private_target(base_url) {
         return Err(SitemapError::Ssrf(base_url.to_string()));
     }
-    let client = build_client();
+    let client = build_client(ssrf);
 
     let mut found: Vec<String> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
@@ -377,12 +438,16 @@ async fn discover_from_robots_txt(client: &reqwest::Client, base: &Url) -> Vec<S
     robots_url.set_path("/robots.txt");
     robots_url.set_query(None);
 
-    let body = match client.get(robots_url.as_str()).send().await {
-        Ok(r) if r.status().is_success() => match r.text().await {
-            Ok(t) => t,
-            Err(_) => return Vec::new(),
-        },
-        _ => return Vec::new(),
+    // Reuse the streaming-capped fetcher with the tighter robots.txt
+    // cap — a real robots.txt is a few kilobytes; anything larger is a
+    // server hosing us and we'd rather cut off early than absorb it.
+    let bytes = match fetch_capped(client, robots_url.as_str(), MAX_ROBOTS_BYTES).await {
+        Ok(b) => b,
+        Err(_) => return Vec::new(),
+    };
+    let body = match std::str::from_utf8(&bytes) {
+        Ok(s) => s.to_string(),
+        Err(_) => return Vec::new(),
     };
 
     let mut out = Vec::new();
@@ -631,6 +696,48 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, SitemapError::Ssrf(_)));
+    }
+
+    // Two related fixes — the custom redirect policy that runs
+    // `is_private_target` on each hop, and the chunked streaming that
+    // ignores a lying `Content-Length` — are covered by inspection
+    // rather than end-to-end tests because both require infrastructure
+    // wiremock cannot easily produce (a mock server on a non-private
+    // address, or chunked transfer that reqwest reads past a header
+    // lie). The existing `fetch_sitemap_body_too_large` covers the
+    // honest-oversize case; the streaming loop is a straight port from
+    // that.
+
+    #[tokio::test]
+    async fn fetch_sitemap_cancellation_stops_between_fetches() {
+        use std::sync::atomic::AtomicBool;
+        use wiremock::{MockServer, ResponseTemplate};
+        use wiremock::matchers::{method, path};
+
+        let mock = MockServer::start().await;
+        let index_body = format!(
+            r#"<?xml version="1.0"?><sitemapindex><sitemap><loc>{}/sub.xml</loc></sitemap></sitemapindex>"#,
+            mock.uri()
+        );
+        wiremock::Mock::given(method("GET"))
+            .and(path("/sitemap.xml"))
+            .respond_with(ResponseTemplate::new(200)
+                .set_body_raw(index_body.into_bytes(), "application/xml"))
+            .mount(&mock)
+            .await;
+        // Sub sitemap that would normally add another entry — should
+        // be skipped because we cancel before the second fetch.
+        let stop = AtomicBool::new(true);
+        let result = fetch_sitemap_with_stop(
+            &format!("{}/sitemap.xml", mock.uri()),
+            false,
+            Some(&stop),
+        )
+        .await
+        .unwrap();
+        // Cancellation surfaces as truncated=true with whatever was collected.
+        assert!(result.truncated);
+        assert_eq!(result.entries.len(), 0);
     }
 
     #[tokio::test]

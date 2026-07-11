@@ -54,11 +54,17 @@ function App() {
     overrides: shortcutOverrides,
   });
 
+  // Auto-open only on a 0→N transition, not every render where the
+  // count stays > 0. Without the ref, closing the console (Escape or
+  // the minus button) would immediately re-open it while any crawl or
+  // batch is still active — leaving the user no way to hide it.
+  const prevActiveCount = useRef(0);
   useEffect(() => {
-    if (activeCount > 0 && !liveConsoleOpen) {
+    if (prevActiveCount.current === 0 && activeCount > 0) {
       setLiveConsoleOpen(true);
     }
-  }, [activeCount, liveConsoleOpen]);
+    prevActiveCount.current = activeCount;
+  }, [activeCount]);
 
   const handleCrawlAgain = (job: CrawlJob) => {
     setPendingUrl('');

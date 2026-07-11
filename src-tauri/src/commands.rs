@@ -920,6 +920,13 @@ pub async fn set_window_size(
 
 // ---- Batch crawl commands ----
 
+/// Server-side cap on the number of URLs a single batch can contain.
+/// Mirrors the frontend's `BATCH_MAX_URLS` — enforced here too because
+/// the frontend cap only protects legitimate UI flows; a direct
+/// `invoke("start_batch", ...)` from a devtools console or another
+/// caller would otherwise bypass it and could exhaust memory / disk.
+pub const MAX_BATCH_URLS: usize = 500;
+
 #[tauri::command]
 pub async fn start_batch(
     urls: Vec<String>,
@@ -932,14 +939,19 @@ pub async fn start_batch(
     if urls.is_empty() {
         return Err("At least one URL is required".into());
     }
-    validate_crawl_input(urls.first().unwrap(), &config)?;
-    // Validate every URL up-front so the user gets fast feedback rather
-    // than a batch that fails midway.
+    if urls.len() > MAX_BATCH_URLS {
+        return Err(format!(
+            "Batch of {} URLs exceeds the cap of {}",
+            urls.len(),
+            MAX_BATCH_URLS
+        ));
+    }
+    // Full validation on every URL, not just the first — the loop
+    // previously only checked the scheme, so URLs 2..N could carry a
+    // private-address host that would bypass SSRF because `spawn_crawl`
+    // trusts its callers to have validated already.
     for url in &urls {
-        let parsed = Url::parse(url).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
-        if parsed.scheme() != "http" && parsed.scheme() != "https" {
-            return Err(format!("URL scheme must be http or https: {}", url));
-        }
+        validate_crawl_input(url, &config)?;
     }
 
     let on_failure = match on_failure {

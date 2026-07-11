@@ -23,7 +23,7 @@
 
   <br />
 
-  [![Version](https://img.shields.io/badge/version-0.6.1-00ff88?style=flat-square&labelColor=0a0a0f)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-0.6.2-00ff88?style=flat-square&labelColor=0a0a0f)](CHANGELOG.md)
   [![License](https://img.shields.io/badge/license-MIT-00ff88?style=flat-square&labelColor=0a0a0f)](LICENSE)
   [![Platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square&labelColor=0a0a0f)](https://docurip.moku.cx/download.html)
   [![Rust](https://img.shields.io/badge/rust-1.95+-f74c00?style=flat-square&labelColor=0a0a0f)](https://www.rust-lang.org/)
@@ -134,6 +134,20 @@ Built-in debounced full-text search finds files by content. A sandboxed preview 
 | **Hardened CSP** | No `unsafe-inline` scripts; HTML sanitized through DOMPurify; preview pane sandboxed |
 | **Disk Guard** | Pauses on disk full, permission denied, or read-only errors — fix the issue, hit Resume, keep your progress |
 | **Asset safety** | 50 MB size cap, MIME-type allow-list, path sanitization, directory-traversal prevention |
+
+### Built for Power Users thanks to Templates, Filters & Automation
+
+Docurip remembers your workflow so you don't have to reconfigure it every time. Whitelist exactly the URLs you need, save a crawl as a reusable template, and let automation handle the rest.
+
+| | |
+|---|---|
+| **Include / exclude filters** | Whitelist by regex or path prefix (e.g. `/docs/api/` only), or blacklist noise — exclude patterns always win |
+| **Job templates** | Save a named crawl configuration (URL + full settings) and re-apply it in one click |
+| **Re-crawl** | One-click "crawl again" on any past job — completed, failed, or cancelled — pre-filling every original setting |
+| **Auto-export** | Configure a default export format that runs automatically the moment a crawl completes |
+| **Configurable shortcuts** | Full keyboard navigation with a live rebind UI — `Ctrl+N` new crawl, `Ctrl+F` search, and more |
+| **Desktop notifications** | System notification when a crawl completes or fails — no need to babysit the window |
+| **Dark / Light / System theme** | WCAG AA-compliant contrast in both themes, follows your OS preference by default |
 
 ### Unified PDF & EPUB Conversion thanks to a Boilerplate-Stripping Importer
 
@@ -285,7 +299,7 @@ Crawl the site, then **Export → Merged PDF**. One searchable PDF containing al
 |-------|-----------|
 | Backend | Rust 1.95+, Tauri v2, tokio, reqwest, scraper, html2md, pulldown-cmark, pdf-extract, epub |
 | Frontend | React 19, TypeScript 5, Vite 6, Tailwind CSS 3.4, framer-motion, react-window |
-| Tauri Plugins | shell, fs, dialog, store, updater |
+| Tauri Plugins | shell, fs, dialog, store, updater, notification |
 | System | sysinfo, uuid, DOMPurify |
 | Optional | headless_chrome (behind `--features headless`) |
 
@@ -297,7 +311,8 @@ Crawl the site, then **Export → Merged PDF**. One searchable PDF containing al
 
 - [x] **v0.4** — Foundations: stability, test coverage, memory bounds, backpressure
 - [x] **v0.5** — Import & Export: PDF/EPUB → Markdown, JSON/HTML export, crawl profiles, text cleaning, virtualized tree
-- [ ] **v0.6** — UX & Automation: scheduled crawls, URL rules, full-text search improvements, optional OCR
+- [x] **v0.6.0–v0.6.2** — UX & Automation: dark/light/system theme, include/exclude URL filters, configurable keyboard shortcuts, desktop notifications, job templates, one-click re-crawl, auto-export
+- [ ] **v0.6.3+** — Batch crawling, sitemap import as a URL source, result-browser upgrades (bookmarks, annotations), scheduled/recurring crawls, crawl diffing, optional OCR
 - [ ] **v0.7** — Distribution: robust installer, auto-updater, macOS/Linux build preparation
 - [ ] **v1.0** — CLI mode, 5k-page crawls, stable release
 
@@ -309,7 +324,7 @@ Full plan in [ROADMAP.md](ROADMAP.md). See the [open issues](https://github.com/
 
 ## Contributing
 
-Issues and pull requests are welcome. Please run `cargo test` and `npm run lint` before opening a PR.
+Issues and pull requests are welcome. Please run `cargo test` (backend) and `npm test` (frontend) before opening a PR.
 
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)

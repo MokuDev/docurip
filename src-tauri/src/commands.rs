@@ -817,6 +817,26 @@ pub async fn get_system_stats() -> Result<SystemStats, String> {
 }
 
 #[tauri::command]
+pub async fn fetch_sitemap(
+    url: String,
+    ssrf_protection: Option<bool>,
+) -> Result<crate::sitemap::SitemapResult, String> {
+    crate::sitemap::fetch_sitemap(&url, ssrf_protection.unwrap_or(true))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn discover_sitemap(
+    url: String,
+    ssrf_protection: Option<bool>,
+) -> Result<Vec<String>, String> {
+    crate::sitemap::discover_sitemap(&url, ssrf_protection.unwrap_or(true))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_session_info(
     state: State<'_, Arc<AppState>>,
 ) -> Result<SessionInfo, String> {

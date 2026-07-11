@@ -39,6 +39,9 @@ tauri-plugin-notification = "2"
 pdf-extract = "0.12"
 lopdf = "0.42"
 epub = "2.1"
+quick-xml = "0.38"
+flate2 = "1"
+thiserror = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util"] }

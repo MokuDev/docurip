@@ -12,6 +12,7 @@ pub mod settings;
 pub mod state;
 pub mod system;
 pub mod importer;
+pub mod sitemap;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -76,6 +77,8 @@ pub fn run() {
             commands::get_session_info,
             commands::set_window_size,
             commands::import_file,
+            commands::fetch_sitemap,
+            commands::discover_sitemap,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

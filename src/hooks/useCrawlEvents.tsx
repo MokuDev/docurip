@@ -28,18 +28,19 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
       setState((prev) => {
         const nextEvents = [...prev.events, event].slice(-500);
         const nextActive = new Set(prev.activeJobIds);
-        if (event.type === 'jobStatusChanged') {
+        if (event.type === 'jobStatusChanged' && event.jobId) {
+          const jobId = event.jobId;
           if (event.status === 'running' || event.status === 'queued') {
-            nextActive.add(event.jobId);
+            nextActive.add(jobId);
           } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
-            nextActive.delete(event.jobId);
-            if (!terminalJobsHandled.current.has(event.jobId)) {
-              terminalJobsHandled.current.add(event.jobId);
+            nextActive.delete(jobId);
+            if (!terminalJobsHandled.current.has(jobId)) {
+              terminalJobsHandled.current.add(jobId);
               invoke<AppSettings>('get_settings').then((settings) => {
                 const wantsNotification = settings.notificationsEnabled;
                 const wantsAutoExport = event.status === 'completed' && !!settings.autoExportFormat;
                 if (!wantsNotification && !wantsAutoExport) return;
-                invoke<CrawlJob>('get_job', { jobId: event.jobId }).then((job) => {
+                invoke<CrawlJob>('get_job', { jobId }).then((job) => {
                   if (wantsNotification) {
                     if (event.status === 'completed') {
                       notifyCrawlComplete(job.url, job.results.length);
@@ -49,7 +50,7 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
                   }
                   if (wantsAutoExport) {
                     const format = settings.autoExportFormat;
-                    invoke('export_job_v2', { jobId: event.jobId, format, destination: null })
+                    invoke('export_job_v2', { jobId, format, destination: null })
                       .then(() => pushToast('success', `Auto-exported ${job.url} as ${format}`))
                       .catch((err) => pushToast('error', `Auto-export failed: ${err}`));
                   }

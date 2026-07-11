@@ -23,6 +23,13 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
   const { pushToast } = useToasts();
 
   useEffect(() => {
+    // React.StrictMode double-mounts this effect in dev. `listen()` is
+    // async, so the first cleanup runs while `unlisten` is still
+    // undefined; without a cancel flag both listens survive and every
+    // event lands twice. Guard by cancelling the second attachment as
+    // soon as the cleanup fires — whichever `listen` resolves after
+    // that gets unsubscribed immediately.
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
 
     listen<CrawlEvent>('crawl-event', (raw) => {
@@ -72,10 +79,19 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
         return { events: nextEvents, activeJobIds: nextActive, activeBatchIds: nextActiveBatches };
       });
     })
-      .then((fn) => { unlisten = fn; })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
       .catch((err) => { console.warn('Tauri event listener not available:', err); });
 
-    return () => unlisten?.();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [pushToast]);
 
   return <CrawlEventsContext.Provider value={state}>{children}</CrawlEventsContext.Provider>;

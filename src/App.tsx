@@ -28,9 +28,10 @@ function App() {
   const [pendingUrl, setPendingUrl] = useState('');
   const [pendingConfig, setPendingConfig] = useState<CrawlConfig | null>(null);
   const [liveConsoleOpen, setLiveConsoleOpen] = useState(false);
-  const { activeJobIds } = useCrawlEvents();
+  const { activeJobIds, activeBatchIds } = useCrawlEvents();
   const { updateAvailable, downloading, error: updateError, installUpdate, dismiss } = useUpdater();
   const activeJobsCount = activeJobIds.size;
+  const activeCount = activeJobsCount + activeBatchIds.size;
   const escapeStack = useEscapeStack();
   const searchRef = useRef<HTMLInputElement>(null);
   const shortcutOverrides = useShortcutOverrides();
@@ -53,11 +54,17 @@ function App() {
     overrides: shortcutOverrides,
   });
 
+  // Auto-open only on a 0→N transition, not every render where the
+  // count stays > 0. Without the ref, closing the console (Escape or
+  // the minus button) would immediately re-open it while any crawl or
+  // batch is still active — leaving the user no way to hide it.
+  const prevActiveCount = useRef(0);
   useEffect(() => {
-    if (activeJobsCount > 0 && !liveConsoleOpen) {
+    if (prevActiveCount.current === 0 && activeCount > 0) {
       setLiveConsoleOpen(true);
     }
-  }, [activeJobsCount, liveConsoleOpen]);
+    prevActiveCount.current = activeCount;
+  }, [activeCount]);
 
   const handleCrawlAgain = (job: CrawlJob) => {
     setPendingUrl('');

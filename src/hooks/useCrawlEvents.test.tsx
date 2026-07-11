@@ -29,6 +29,7 @@ const baseSettings: AppSettings = {
   defaultHeadlessStrategy: 'never', defaultRespectRobotsTxt: true, defaultStayWithinDomain: true,
   defaultSsrfProtection: true, windowWidth: 1280, windowHeight: 900,
   notificationsEnabled: false, theme: 'dark', shortcutOverrides: {}, autoExportFormat: null,
+  sitemapAutoDiscover: true, batchOnFailure: 'continue',
 };
 
 const baseJob: CrawlJob = {

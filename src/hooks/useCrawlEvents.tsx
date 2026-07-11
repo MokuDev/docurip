@@ -8,19 +8,28 @@ import { useToasts } from './useToasts';
 interface CrawlEventsState {
   events: CrawlEvent[];
   activeJobIds: Set<string>;
+  activeBatchIds: Set<string>;
 }
 
 const CrawlEventsContext = createContext<CrawlEventsState>({
   events: [],
   activeJobIds: new Set(),
+  activeBatchIds: new Set(),
 });
 
 export function CrawlEventsProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<CrawlEventsState>({ events: [], activeJobIds: new Set() });
+  const [state, setState] = useState<CrawlEventsState>({ events: [], activeJobIds: new Set(), activeBatchIds: new Set() });
   const terminalJobsHandled = useRef(new Set<string>());
   const { pushToast } = useToasts();
 
   useEffect(() => {
+    // React.StrictMode double-mounts this effect in dev. `listen()` is
+    // async, so the first cleanup runs while `unlisten` is still
+    // undefined; without a cancel flag both listens survive and every
+    // event lands twice. Guard by cancelling the second attachment as
+    // soon as the cleanup fires — whichever `listen` resolves after
+    // that gets unsubscribed immediately.
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
 
     listen<CrawlEvent>('crawl-event', (raw) => {
@@ -28,18 +37,27 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
       setState((prev) => {
         const nextEvents = [...prev.events, event].slice(-500);
         const nextActive = new Set(prev.activeJobIds);
-        if (event.type === 'jobStatusChanged') {
+        const nextActiveBatches = new Set(prev.activeBatchIds);
+        if (event.type === 'batchStatusChanged' && event.batchId) {
           if (event.status === 'running' || event.status === 'queued') {
-            nextActive.add(event.jobId);
+            nextActiveBatches.add(event.batchId);
+          } else {
+            nextActiveBatches.delete(event.batchId);
+          }
+        }
+        if (event.type === 'jobStatusChanged' && event.jobId) {
+          const jobId = event.jobId;
+          if (event.status === 'running' || event.status === 'queued') {
+            nextActive.add(jobId);
           } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
-            nextActive.delete(event.jobId);
-            if (!terminalJobsHandled.current.has(event.jobId)) {
-              terminalJobsHandled.current.add(event.jobId);
+            nextActive.delete(jobId);
+            if (!terminalJobsHandled.current.has(jobId)) {
+              terminalJobsHandled.current.add(jobId);
               invoke<AppSettings>('get_settings').then((settings) => {
                 const wantsNotification = settings.notificationsEnabled;
                 const wantsAutoExport = event.status === 'completed' && !!settings.autoExportFormat;
                 if (!wantsNotification && !wantsAutoExport) return;
-                invoke<CrawlJob>('get_job', { jobId: event.jobId }).then((job) => {
+                invoke<CrawlJob>('get_job', { jobId }).then((job) => {
                   if (wantsNotification) {
                     if (event.status === 'completed') {
                       notifyCrawlComplete(job.url, job.results.length);
@@ -49,7 +67,7 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
                   }
                   if (wantsAutoExport) {
                     const format = settings.autoExportFormat;
-                    invoke('export_job_v2', { jobId: event.jobId, format, destination: null })
+                    invoke('export_job_v2', { jobId, format, destination: null })
                       .then(() => pushToast('success', `Auto-exported ${job.url} as ${format}`))
                       .catch((err) => pushToast('error', `Auto-export failed: ${err}`));
                   }
@@ -58,13 +76,22 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
             }
           }
         }
-        return { ...prev, events: nextEvents, activeJobIds: nextActive };
+        return { events: nextEvents, activeJobIds: nextActive, activeBatchIds: nextActiveBatches };
       });
     })
-      .then((fn) => { unlisten = fn; })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
       .catch((err) => { console.warn('Tauri event listener not available:', err); });
 
-    return () => unlisten?.();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [pushToast]);
 
   return <CrawlEventsContext.Provider value={state}>{children}</CrawlEventsContext.Provider>;

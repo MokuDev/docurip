@@ -6,13 +6,14 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::RwLock;
 
+use crate::crawler::batch::{spawn_batch, BatchJob, BatchStatus};
 use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
 use crate::importer::ImportResult;
 use crate::writer::fs::FsWriter;
 use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
 use crate::exports::{self, RecentExport};
-use crate::settings::config::{AppSettings, CrawlConfig};
+use crate::settings::config::{AppSettings, BatchFailureMode, CrawlConfig};
 use crate::settings::templates::CrawlTemplate;
 use crate::state::{AppState, JobHandle};
 use crate::system::SystemStats;
@@ -70,15 +71,19 @@ fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub async fn start_crawl(
+/// Build a `CrawlJob` and spawn its orchestrator, wiring the job into
+/// `AppState`. Returns the new job id.
+///
+/// Shared by the `start_crawl` command and the batch runner so both
+/// paths produce identical bookkeeping. Callers are responsible for
+/// input validation (`validate_crawl_input`).
+pub(crate) async fn spawn_crawl(
     url: String,
-    config: CrawlConfig,
-    state: State<'_, Arc<AppState>>,
+    mut config: CrawlConfig,
+    state: Arc<AppState>,
     app: AppHandle,
+    batch_id: Option<String>,
 ) -> Result<String, String> {
-    validate_crawl_input(&url, &config)?;
-    let mut config = config;
     config.path_prefix = normalize_path_prefix(&config.path_prefix);
     let job_id = uuid::Uuid::new_v4().to_string();
 
@@ -99,6 +104,7 @@ pub async fn start_crawl(
         error: None,
         start_time: None,
         end_time: None,
+        batch_id,
     };
 
     let job_arc = Arc::new(RwLock::new(job));
@@ -130,10 +136,21 @@ pub async fn start_crawl(
 
     state.persist_job(&*job_arc.read().await).await.map_err(|e| e.to_string())?;
 
-    let settings = get_settings(app).await.map_err(|e| e)?;
-    Orchestrator::spawn(url, config, settings, handle, Some(state.inner().clone()));
+    let settings = get_settings(app).await?;
+    Orchestrator::spawn(url, config, settings, handle, Some(state.clone()));
 
     Ok(job_id)
+}
+
+#[tauri::command]
+pub async fn start_crawl(
+    url: String,
+    config: CrawlConfig,
+    state: State<'_, Arc<AppState>>,
+    app: AppHandle,
+) -> Result<String, String> {
+    validate_crawl_input(&url, &config)?;
+    spawn_crawl(url, config, state.inner().clone(), app, None).await
 }
 
 #[tauri::command]
@@ -181,7 +198,7 @@ pub async fn get_job(job_id: String, state: State<'_, Arc<AppState>>) -> Result<
     }
     drop(jobs);
 
-    let persisted = state.persisted_jobs.read().await;
+    let persisted = state.jobs.read().await;
     if let Some(job) = persisted.get(&job_id) {
         return Ok(job.clone());
     }
@@ -202,7 +219,7 @@ pub async fn list_jobs(state: State<'_, Arc<AppState>>) -> Result<Vec<CrawlJob>,
     }
     drop(active_jobs);
 
-    let persisted_jobs = state.persisted_jobs.read().await;
+    let persisted_jobs = state.jobs.read().await;
     for (_, job) in persisted_jobs.iter() {
         if !seen_ids.contains(&job.id) {
             result.push(job.clone());
@@ -278,7 +295,7 @@ async fn collect_all_jobs(state: &AppState) -> Vec<CrawlJob> {
     }
 
     {
-        let persisted = state.persisted_jobs.read().await;
+        let persisted = state.jobs.read().await;
         for (_, job) in persisted.iter() {
             if !seen.contains(&job.id) {
                 result.push(job.clone());
@@ -462,10 +479,18 @@ pub async fn delete_template(template_id: String, state: State<'_, Arc<AppState>
 pub async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
     use tauri_plugin_store::StoreExt;
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
-    let settings = store
+    let mut settings: AppSettings = store
         .get("settings")
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
+    // The frontend represents "use default output directory" as an empty
+    // string. Resolve it to the real path (`<home>/.docurip`) here so
+    // every consumer — the orchestrator, the Settings UI, folder-open
+    // links in History — sees an absolute path instead of a bare "" that
+    // gets naively concatenated into something like "/example.com".
+    if settings.output_dir.trim().is_empty() {
+        settings.output_dir = AppSettings::default().output_dir;
+    }
     Ok(settings)
 }
 
@@ -518,7 +543,7 @@ pub async fn export_job(
         if let Some(handle) = jobs.get(&job_id) {
             handle.job.read().await.clone()
         } else {
-            let jobs = state.persisted_jobs.read().await;
+            let jobs = state.jobs.read().await;
             jobs.get(&job_id).cloned().ok_or("Job not found")?
         }
     };
@@ -550,7 +575,7 @@ pub async fn export_job_v2(
         if let Some(handle) = jobs.get(&job_id) {
             handle.job.read().await.clone()
         } else {
-            let jobs = state.persisted_jobs.read().await;
+            let jobs = state.jobs.read().await;
             jobs.get(&job_id).cloned().ok_or("Job not found")?
         }
     };
@@ -749,7 +774,7 @@ pub async fn list_exports(
         }
     }
     {
-        let persisted = state.persisted_jobs.read().await;
+        let persisted = state.jobs.read().await;
         for job in persisted.values() {
             let dir = std::path::PathBuf::from(&job.config.output_dir);
             if !output_dirs.contains(&dir) {
@@ -817,6 +842,26 @@ pub async fn get_system_stats() -> Result<SystemStats, String> {
 }
 
 #[tauri::command]
+pub async fn fetch_sitemap(
+    url: String,
+    ssrf_protection: Option<bool>,
+) -> Result<crate::sitemap::SitemapResult, String> {
+    crate::sitemap::fetch_sitemap(&url, ssrf_protection.unwrap_or(true))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn discover_sitemap(
+    url: String,
+    ssrf_protection: Option<bool>,
+) -> Result<Vec<String>, String> {
+    crate::sitemap::discover_sitemap(&url, ssrf_protection.unwrap_or(true))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_session_info(
     state: State<'_, Arc<AppState>>,
 ) -> Result<SessionInfo, String> {
@@ -871,4 +916,132 @@ pub async fn set_window_size(
         applied_width: clamped_w,
         applied_height: clamped_h,
     })
+}
+
+// ---- Batch crawl commands ----
+
+/// Server-side cap on the number of URLs a single batch can contain.
+/// Mirrors the frontend's `BATCH_MAX_URLS` — enforced here too because
+/// the frontend cap only protects legitimate UI flows; a direct
+/// `invoke("start_batch", ...)` from a devtools console or another
+/// caller would otherwise bypass it and could exhaust memory / disk.
+pub const MAX_BATCH_URLS: usize = 500;
+
+#[tauri::command]
+pub async fn start_batch(
+    urls: Vec<String>,
+    config: CrawlConfig,
+    name: Option<String>,
+    on_failure: Option<BatchFailureMode>,
+    state: State<'_, Arc<AppState>>,
+    app: AppHandle,
+) -> Result<String, String> {
+    if urls.is_empty() {
+        return Err("At least one URL is required".into());
+    }
+    if urls.len() > MAX_BATCH_URLS {
+        return Err(format!(
+            "Batch of {} URLs exceeds the cap of {}",
+            urls.len(),
+            MAX_BATCH_URLS
+        ));
+    }
+    // Full validation on every URL, not just the first — the loop
+    // previously only checked the scheme, so URLs 2..N could carry a
+    // private-address host that would bypass SSRF because `spawn_crawl`
+    // trusts its callers to have validated already.
+    for url in &urls {
+        validate_crawl_input(url, &config)?;
+    }
+
+    let on_failure = match on_failure {
+        Some(m) => m,
+        None => get_settings(app.clone()).await?.batch_on_failure,
+    };
+
+    let batch = BatchJob {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: name.and_then(|n| {
+            let t = n.trim().to_string();
+            if t.is_empty() { None } else { Some(t) }
+        }),
+        urls,
+        config,
+        on_failure,
+        child_job_ids: Vec::new(),
+        status: BatchStatus::Queued,
+        current_index: 0,
+        created_at: chrono::Utc::now().to_rfc3339(),
+        error: None,
+        start_time: None,
+        end_time: None,
+    };
+
+    spawn_batch(batch, state.inner().clone(), app)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn stop_batch(batch_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    let active = state.active_batches.read().await;
+    if let Some(handle) = active.get(&batch_id) {
+        handle.should_stop.store(true, Ordering::Relaxed);
+        Ok(())
+    } else {
+        Err("Batch not found or already completed".into())
+    }
+}
+
+#[tauri::command]
+pub async fn get_batch(
+    batch_id: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<BatchJob, String> {
+    // Prefer the live version so in-progress state is fresh.
+    {
+        let active = state.active_batches.read().await;
+        if let Some(handle) = active.get(&batch_id) {
+            return Ok(handle.batch.read().await.clone());
+        }
+    }
+    state
+        .batches
+        .get(&batch_id)
+        .await
+        .ok_or_else(|| "Batch not found".into())
+}
+
+#[tauri::command]
+pub async fn list_batches(state: State<'_, Arc<AppState>>) -> Result<Vec<BatchJob>, String> {
+    let mut out: Vec<BatchJob> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    {
+        let active = state.active_batches.read().await;
+        for (id, handle) in active.iter() {
+            seen.insert(id.clone());
+            out.push(handle.batch.read().await.clone());
+        }
+    }
+    let persisted = state.batches.read().await;
+    for (id, b) in persisted.iter() {
+        if !seen.contains(id) {
+            out.push(b.clone());
+        }
+    }
+    // Newest first.
+    out.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn delete_batch(batch_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    {
+        let active = state.active_batches.read().await;
+        if let Some(handle) = active.get(&batch_id) {
+            handle.should_stop.store(true, Ordering::Relaxed);
+        }
+    }
+    state.batches.remove(&batch_id).await.map_err(|e| e.to_string())?;
+    Ok(())
 }

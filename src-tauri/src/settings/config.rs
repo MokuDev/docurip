@@ -34,6 +34,25 @@ pub struct AppSettings {
     /// When set, this export format runs automatically after every crawl completes.
     #[serde(default)]
     pub auto_export_format: Option<crate::export::ExportFormat>,
+    /// When true, NewCrawl probes the entered URL's `/robots.txt` and
+    /// well-known sitemap locations to surface a "sitemap found" banner.
+    #[serde(default = "default_true")]
+    pub sitemap_auto_discover: bool,
+    /// What a batch crawl does when one of its child jobs fails: keep
+    /// crawling the remaining URLs, or abort the batch.
+    #[serde(default)]
+    pub batch_on_failure: BatchFailureMode,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum BatchFailureMode {
+    Continue,
+    Stop,
+}
+
+impl Default for BatchFailureMode {
+    fn default() -> Self { BatchFailureMode::Continue }
 }
 
 impl Default for AppSettings {
@@ -46,7 +65,7 @@ impl Default for AppSettings {
             concurrency: 3,
             request_delay: 750,
             timeout: 30000,
-            user_agent: String::from("Docurip/0.6.2 (Documentation Crawler)"),
+            user_agent: String::from("Docurip/0.6.3 (Documentation Crawler)"),
             default_max_depth: 2,
             default_page_limit: 1000,
             default_download_assets: false,
@@ -60,6 +79,8 @@ impl Default for AppSettings {
             theme: default_theme(),
             shortcut_overrides: HashMap::new(),
             auto_export_format: None,
+            sitemap_auto_discover: true,
+            batch_on_failure: BatchFailureMode::Continue,
         }
     }
 }

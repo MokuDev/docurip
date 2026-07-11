@@ -1,3 +1,4 @@
+pub mod batch;
 pub mod job;
 pub mod orchestrator;
 pub mod robots;

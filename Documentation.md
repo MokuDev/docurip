@@ -4,7 +4,7 @@
 
 Docurip is a Tauri v2 desktop application for crawling documentation websites and converting them into offline Markdown archives. It combines a Rust backend (high-performance crawling, security filtering, and disk I/O) with a React 19 / TypeScript / Tailwind CSS frontend.
 
-- **Current version:** v0.6.2
+- **Current version:** v0.6.3
 - **Platforms:** Windows (primary target), built with Tauri v2
 - **Architecture:** Rust backend + React 19 frontend
 - **Default output directory:** `~/.docurip` (falls back to `./output` if the home directory cannot be resolved)
@@ -172,6 +172,24 @@ Since v0.6.2, any completed, failed, or cancelled job in **History** has a **Cra
 ### Auto-Export
 
 Since v0.6.2, Settings → Crawling & Export includes an **Auto-Export** dropdown. When set to a format other than "Disabled", that export runs automatically the moment any crawl completes — no need to open the Export dialog manually. The export lands in the job's `formats/` directory, same as a manual export. Auto-export only fires on successful completion, not on failed or cancelled jobs.
+
+### Sitemap Import
+
+Since v0.6.3, New Crawl watches the target URL and — 700 ms after a valid URL is entered — probes the site's `robots.txt` (looking for `Sitemap:` directives) and the standard `/sitemap.xml` and `/sitemap_index.xml` locations. When a sitemap is found, a banner appears under the URL field with an **Import URLs** action. The picker fetches and parses the sitemap (supporting both `<urlset>` and `<sitemapindex>`, gzipped `.xml.gz` responses, CDATA `<loc>` values), and lets you filter by free-text search and path prefix, then select which URLs to import. A single selection fills the URL field; multiple selections switch the view into **Batch mode** with the picks pre-filled.
+
+There is also a **Load sitemap manually** button under the URL field for sites that don't advertise a sitemap. Auto-discovery is toggleable in Settings → Sitemap Discovery.
+
+**Safety caps** (enforced backend-side): max 10 000 URLs (result is truncated rather than erroring, with a warning), max 50 sub-sitemaps in an index, max recursion depth 2, max 50 MB response body (before and after gzip decompression, to bound zip-bomb-style amplification), 30 s per request, SSRF blocked when the setting is on.
+
+### Batch Crawls
+
+Since v0.6.3, New Crawl has a **Single / Batch** mode toggle. In Batch mode you enter one URL per line (with a live count, invalid-URL / duplicate detection, and a "Clean up" action) plus an optional batch name. The **On failure** dropdown decides what happens when a child crawl fails: **Continue with the next URL** (default) or **Stop the batch**. This overrides the app-wide default from Settings → Batch Crawls for that one batch.
+
+All other configuration fields — profile, depth, page limit, options, selectors, patterns — are shared across every child crawl. The Live Monitor shows a **Batch Progress** bar (`N/M URLs`, current URL, any error) above the per-page progress; the batch survives a page reload via `sessionStorage`.
+
+In **History**, child jobs are grouped inside a collapsible batch card showing the name, `M/N URLs`, status, progress bar, and on-failure mode. Deleting a batch also deletes its child jobs. Use the **Batches only** filter to see just batch groups.
+
+Batches persist as JSON files under `%APPDATA%/com.docurip.app/batches/{batchId}.json`, alongside jobs and templates. All three collections are backed by the same generic `JsonStore<T>` helper introduced in v0.6.3.
 
 ### Keyboard Shortcuts
 

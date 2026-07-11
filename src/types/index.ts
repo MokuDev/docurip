@@ -121,6 +121,8 @@ export interface CrawlJob {
   startTime?: string;
   endTime?: string;
   error?: string;
+  /** Set when this job is a child of a batch crawl. */
+  batchId?: string;
 }
 
 export type ThemePreference = 'dark' | 'light' | 'system';
@@ -144,17 +146,57 @@ export interface AppSettings {
   theme: ThemePreference;
   shortcutOverrides: Record<string, string>;
   autoExportFormat: ExportFormat | null;
+  sitemapAutoDiscover: boolean;
+  batchOnFailure: BatchFailureMode;
+}
+
+export type BatchFailureMode = 'continue' | 'stop';
+
+export type BatchStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface BatchJob {
+  id: string;
+  name?: string;
+  urls: string[];
+  config: CrawlConfig;
+  onFailure: BatchFailureMode;
+  childJobIds: string[];
+  status: BatchStatus;
+  currentIndex: number;
+  createdAt: string;
+  error?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface SitemapEntry {
+  url: string;
+  lastmod?: string;
+  priority?: number;
+}
+
+export interface SitemapResult {
+  entries: SitemapEntry[];
+  /** True if the URL list was truncated at the backend's 10k cap. */
+  truncated: boolean;
+  /** Source sitemap URLs actually fetched (top-level + any sub-sitemaps). */
+  sources: string[];
 }
 
 export interface CrawlEvent {
-  type: 'progress' | 'log' | 'pageComplete' | 'jobStatusChanged' | 'error';
-  jobId: string;
+  type: 'progress' | 'log' | 'pageComplete' | 'jobStatusChanged' | 'error' | 'batchProgress' | 'batchStatusChanged';
+  jobId?: string;
   message?: string;
   level?: string;
   progress?: CrawlProgress;
   page?: PageMeta;
-  status?: JobStatus;
+  status?: JobStatus | BatchStatus;
   kind?: ErrorKind;
+  // Batch-only fields
+  batchId?: string;
+  currentIndex?: number;
+  total?: number;
+  currentJobId?: string;
 }
 
 export interface SearchMatch {

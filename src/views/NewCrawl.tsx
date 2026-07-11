@@ -9,11 +9,24 @@ import {
   CheckCircle,
   SpinnerGap,
   Pause,
+  TreeStructure,
+  X,
+  ListNumbers,
 } from '@phosphor-icons/react';
-import type { CrawlConfig, CrawlJob, CrawlProfile, CrawlTemplate } from '../types';
+import type {
+  AppSettings,
+  BatchFailureMode,
+  BatchJob,
+  CrawlConfig,
+  CrawlJob,
+  CrawlProfile,
+  CrawlTemplate,
+} from '../types';
 import { CRAWL_PROFILES } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { TemplateBar } from '../components/TemplateBar';
+import { SitemapPickerModal } from '../components/SitemapPickerModal';
+import { BatchUrlList, sanitizeBatchUrls } from '../components/BatchUrlList';
 
 const MAX_LOGS = 500;
 
@@ -77,6 +90,21 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
   const logs = logsRef.current;
   const [templates, setTemplates] = useState<CrawlTemplate[]>([]);
 
+  // Sitemap discovery + picker
+  const [autoDiscover, setAutoDiscover] = useState(true);
+  const [discoveredSitemaps, setDiscoveredSitemaps] = useState<string[]>([]);
+  const [dismissedDiscoveryFor, setDismissedDiscoveryFor] = useState<string>('');
+  const [pickerUrl, setPickerUrl] = useState<string | null>(null);
+  const [seedUrls, setSeedUrls] = useState<string[]>([]);
+  const discoveryReqRef = useRef(0);
+
+  // Batch mode
+  const [mode, setMode] = useState<'single' | 'batch'>('single');
+  const [batchUrls, setBatchUrls] = useState<string[]>([]);
+  const [batchName, setBatchName] = useState('');
+  const [batchOnFailure, setBatchOnFailure] = useState<BatchFailureMode>('continue');
+  const [activeBatch, setActiveBatch] = useState<BatchJob | null>(null);
+
   // Initialize activeJob from sessionStorage on mount
   useEffect(() => {
     if (activeJob) return;
@@ -135,7 +163,55 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
 
   useEffect(() => {
     loadTemplates();
+    invoke<AppSettings>('get_settings')
+      .then((s) => {
+        setAutoDiscover(s.sitemapAutoDiscover ?? true);
+        setBatchOnFailure(s.batchOnFailure ?? 'continue');
+      })
+      .catch(() => {});
   }, []);
+
+  // Debounced sitemap auto-discovery on URL change.
+  useEffect(() => {
+    if (!autoDiscover || activeJob) return;
+    const url = config.url.trim();
+    if (!validateUrl(url)) {
+      setDiscoveredSitemaps([]);
+      return;
+    }
+    if (dismissedDiscoveryFor === url) return;
+    const reqId = ++discoveryReqRef.current;
+    const timeout = setTimeout(() => {
+      invoke<string[]>('discover_sitemap', { url, ssrfProtection: config.ssrfProtection })
+        .then((found) => {
+          if (reqId === discoveryReqRef.current) setDiscoveredSitemaps(found);
+        })
+        .catch(() => {
+          if (reqId === discoveryReqRef.current) setDiscoveredSitemaps([]);
+        });
+    }, 700);
+    return () => clearTimeout(timeout);
+  }, [config.url, config.ssrfProtection, autoDiscover, activeJob, dismissedDiscoveryFor]);
+
+  const handleSitemapConfirm = (urls: string[]) => {
+    if (urls.length === 0) {
+      setPickerUrl(null);
+      return;
+    }
+    setDiscoveredSitemaps([]);
+    setPickerUrl(null);
+    if (urls.length === 1) {
+      setConfig((prev) => ({ ...prev, url: urls[0] }));
+      setSeedUrls([]);
+      appendLog(`Loaded 1 URL from sitemap as start URL.`);
+      return;
+    }
+    // Multi-URL selection → batch mode.
+    setMode('batch');
+    setBatchUrls(urls);
+    setSeedUrls([]);
+    appendLog(`Loaded ${urls.length} URLs from sitemap into batch queue.`);
+  };
 
   const handleApplyTemplate = (template: CrawlTemplate) => {
     setConfig({ ...template.config, url: template.url });
@@ -188,6 +264,54 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
     return () => clearInterval(id);
   }, [activeJob?.id]);
 
+  // Restore active batch from sessionStorage on mount.
+  useEffect(() => {
+    if (activeBatch) return;
+    const storedBatchId = sessionStorage.getItem('docurip_active_batch');
+    if (!storedBatchId) return;
+    invoke<BatchJob>('get_batch', { batchId: storedBatchId })
+      .then((batch) => {
+        if (batch.status === 'running' || batch.status === 'queued') {
+          setActiveBatch(batch);
+          setMode('batch');
+        } else {
+          sessionStorage.removeItem('docurip_active_batch');
+        }
+      })
+      .catch(() => sessionStorage.removeItem('docurip_active_batch'));
+  }, []);
+
+  // Poll active batch, and mirror its current child job into the live
+  // monitor so per-page progress remains visible.
+  useEffect(() => {
+    if (!activeBatch) return;
+    const id = setInterval(async () => {
+      try {
+        const batch: BatchJob = await invoke('get_batch', { batchId: activeBatch.id });
+        setActiveBatch(batch);
+        // Track the current child job for the Live Monitor pane.
+        const currentChildId = batch.childJobIds[batch.currentIndex];
+        if (currentChildId && currentChildId !== activeJob?.id) {
+          try {
+            const job: CrawlJob = await invoke('get_job', { jobId: currentChildId });
+            setActiveJob(job);
+          } catch { /* child not yet visible */ }
+        } else if (activeJob?.id) {
+          try {
+            const job: CrawlJob = await invoke('get_job', { jobId: activeJob.id });
+            setActiveJob(job);
+          } catch { /* ignore */ }
+        }
+        if (batch.status === 'completed' || batch.status === 'failed' || batch.status === 'cancelled') {
+          sessionStorage.removeItem('docurip_active_batch');
+        }
+      } catch (err) {
+        console.warn('[NewCrawl] get_batch polling failed:', err);
+      }
+    }, 1500);
+    return () => clearInterval(id);
+  }, [activeBatch?.id]);
+
   const validateUrl = (url: string): boolean => {
     try {
       new URL(url);
@@ -198,6 +322,10 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
   };
 
   const handleStart = async () => {
+    if (mode === 'batch') {
+      await handleStartBatch();
+      return;
+    }
     if (!validateUrl(config.url)) {
       setUrlError('Please enter a valid URL (e.g., https://example.com)');
       return;
@@ -223,7 +351,44 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
     }
   };
 
+  const handleStartBatch = async () => {
+    const urls = sanitizeBatchUrls(batchUrls);
+    if (urls.length === 0) {
+      setUrlError('Enter at least one valid http(s) URL.');
+      return;
+    }
+    setUrlError('');
+    setIsStarting(true);
+    clearLogs();
+
+    try {
+      const batchId: string = await invoke('start_batch', {
+        urls,
+        config: toBackendConfig(config),
+        name: batchName.trim() || null,
+        onFailure: batchOnFailure,
+      });
+      const batch: BatchJob = await invoke('get_batch', { batchId });
+      setActiveBatch(batch);
+      sessionStorage.setItem('docurip_active_batch', batchId);
+      appendLog(`Started batch: ${urls.length} URLs (${batchOnFailure} on failure).`);
+    } catch (err) {
+      appendLog(`Error starting batch: ${String(err)}`);
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
   const handleCancel = async () => {
+    if (activeBatch) {
+      try {
+        await invoke('stop_batch', { batchId: activeBatch.id });
+        appendLog(`Cancelling batch: ${activeBatch.id}`);
+      } catch (err) {
+        console.error('Failed to stop batch', err);
+      }
+      return;
+    }
     if (!activeJob) return;
     try {
       await invoke('stop_crawl', { jobId: activeJob.id });
@@ -254,12 +419,29 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
 
   const handleReset = () => {
     setActiveJob(null);
+    setActiveBatch(null);
     clearLogs();
     setConfig(DEFAULT_CONFIG);
+    setBatchUrls([]);
+    setBatchName('');
+    setSeedUrls([]);
+    setMode('single');
   };
+
+  const isBusy = !!activeJob || !!activeBatch;
+  const inactiveJobFor = (s: CrawlJob['status'] | undefined) =>
+    s === 'completed' || s === 'failed' || s === 'cancelled' || s === undefined;
 
   return (
     <div className="h-full flex">
+      {pickerUrl && (
+        <SitemapPickerModal
+          sitemapUrl={pickerUrl}
+          ssrfProtection={config.ssrfProtection}
+          onClose={() => setPickerUrl(null)}
+          onConfirm={handleSitemapConfirm}
+        />
+      )}
       {/* Left: Config Panel */}
       <div className="w-[420px] flex-shrink-0 border-r border-abyssal/50 bg-deepVoid/30 flex flex-col">
         <div className="h-14 flex items-center px-5 border-b border-abyssal/50">
@@ -267,6 +449,43 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* Mode toggle */}
+          <div className="grid grid-cols-2 gap-1 p-1 bg-surface/50 border border-abyssal rounded-md">
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => setMode('single')}
+              className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded text-xs font-medium transition-all ${
+                mode === 'single'
+                  ? 'bg-accentGreen/20 text-accentGreen'
+                  : 'text-charcoal hover:text-ghost'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <Globe size={12} />
+              Single URL
+            </button>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => setMode('batch')}
+              className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded text-xs font-medium transition-all ${
+                mode === 'batch'
+                  ? 'bg-accentGreen/20 text-accentGreen'
+                  : 'text-charcoal hover:text-ghost'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <ListNumbers size={12} />
+              Batch
+              {batchUrls.filter((u) => u.trim()).length > 0 && (
+                <span className="ml-1 text-[10px] text-charcoal">
+                  {batchUrls.filter((u) => u.trim()).length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {mode === 'single' && (
+          <>
           {/* URL */}
           <div>
             <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
@@ -279,17 +498,137 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
                 value={config.url}
                 onChange={(e) => setConfig({ ...config, url: e.target.value })}
                 placeholder="https://docs.example.com"
-                disabled={!!activeJob}
+                disabled={isBusy}
                 className="w-full bg-surface/50 border border-abyssal rounded-md pl-9 pr-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all"
               />
             </div>
           {urlError && <p className="text-crimson text-xs mt-1">{urlError}</p>}
+
+          {/* Sitemap discovery banner */}
+          {!activeJob && discoveredSitemaps.length > 0 && (
+            <div className="mt-2 flex items-start gap-2 px-3 py-2 bg-accentGreen/10 border border-accentGreen/30 rounded-md">
+              <TreeStructure size={14} className="text-accentGreen mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-ghost">
+                  Sitemap found for this site
+                  {discoveredSitemaps.length > 1 ? ` (${discoveredSitemaps.length} sources)` : ''}
+                </p>
+                <button
+                  onClick={() => setPickerUrl(discoveredSitemaps[0])}
+                  className="text-xs text-accentGreen hover:text-brightGreen font-medium mt-0.5"
+                >
+                  Import URLs →
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setDismissedDiscoveryFor(config.url.trim());
+                  setDiscoveredSitemaps([]);
+                }}
+                className="text-charcoal hover:text-ghost transition-colors flex-shrink-0"
+                aria-label="Dismiss"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Seed URLs preview — switch into batch mode to consume them. */}
+          {seedUrls.length > 0 && (
+            <div className="mt-2 flex items-center justify-between gap-2 px-3 py-2 bg-surface/50 border border-abyssal rounded-md">
+              <span className="text-xs text-charcoal truncate">
+                <span className="text-accentGreen">+{seedUrls.length}</span> URLs queued
+              </span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    const startUrl = config.url.trim();
+                    setBatchUrls(startUrl ? [startUrl, ...seedUrls] : seedUrls);
+                    setSeedUrls([]);
+                    setMode('batch');
+                  }}
+                  className="text-xs text-accentGreen hover:text-brightGreen transition-colors"
+                >
+                  Use as batch
+                </button>
+                <button
+                  onClick={() => setSeedUrls([])}
+                  className="text-charcoal hover:text-ghost transition-colors"
+                  aria-label="Clear queued URLs"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Manual "Load sitemap" trigger */}
+          {!activeJob && validateUrl(config.url) && (
+            <button
+              type="button"
+              onClick={() => {
+                const url = config.url.trim();
+                try {
+                  const u = new URL(url);
+                  setPickerUrl(`${u.origin}/sitemap.xml`);
+                } catch {
+                  /* invalid URL — button is only shown when valid */
+                }
+              }}
+              className="mt-2 flex items-center gap-1.5 text-xs text-charcoal hover:text-accentGreen transition-colors"
+            >
+              <TreeStructure size={12} />
+              Load sitemap manually
+            </button>
+          )}
         </div>
+          </>
+          )}
+
+          {mode === 'batch' && (
+          <>
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+              Batch name (optional)
+            </label>
+            <input
+              type="text"
+              value={batchName}
+              onChange={(e) => setBatchName(e.target.value)}
+              disabled={isBusy}
+              placeholder="e.g., API docs v1 + v2"
+              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all"
+            />
+          </div>
+
+          <BatchUrlList
+            value={batchUrls}
+            onChange={setBatchUrls}
+            disabled={isBusy}
+          />
+
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+              On failure
+            </label>
+            <select
+              value={batchOnFailure}
+              onChange={(e) => setBatchOnFailure(e.target.value as BatchFailureMode)}
+              disabled={isBusy}
+              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
+            >
+              <option value="continue">Continue with the next URL</option>
+              <option value="stop">Stop the batch</option>
+            </select>
+          </div>
+          {urlError && <p className="text-crimson text-xs mt-1">{urlError}</p>}
+          </>
+          )}
 
           {/* Templates */}
           <TemplateBar
             templates={templates}
-            disabled={!!activeJob}
+            disabled={isBusy}
             onApply={handleApplyTemplate}
             onSave={handleSaveTemplate}
             onDelete={handleDeleteTemplate}
@@ -303,7 +642,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
             <select
               value={config.profile || 'documentation'}
               onChange={(e) => setConfig(applyProfile(e.target.value as CrawlProfile, config))}
-              disabled={!!activeJob}
+              disabled={isBusy}
               className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
             >
               {CRAWL_PROFILES.map((p) => (
@@ -329,7 +668,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
                 max={10}
                 value={config.maxDepth}
                 onChange={(e) => setConfig({ ...config, maxDepth: parseInt(e.target.value) || 1 })}
-                disabled={!!activeJob}
+                disabled={isBusy}
                 className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
               />
             </div>
@@ -343,7 +682,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
                 max={10000}
                 value={config.pageLimit}
                 onChange={(e) => setConfig({ ...config, pageLimit: parseInt(e.target.value) || 1 })}
-                disabled={!!activeJob}
+                disabled={isBusy}
                 className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
               />
             </div>
@@ -356,7 +695,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
                 type="checkbox"
                 checked={config.downloadAssets}
                 onChange={(e) => setConfig({ ...config, downloadAssets: e.target.checked })}
-                disabled={!!activeJob}
+                disabled={isBusy}
                 className="w-4 h-4 rounded border-abyssal bg-surface text-accentGreen focus:ring-accentGreen/20"
               />
               <span className="text-sm text-secondary">Download images & stylesheets</span>
@@ -367,7 +706,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
                 type="checkbox"
                 checked={config.respectRobotsTxt}
                 onChange={(e) => setConfig({ ...config, respectRobotsTxt: e.target.checked })}
-                disabled={!!activeJob}
+                disabled={isBusy}
                 className="w-4 h-4 rounded border-abyssal bg-surface text-accentGreen focus:ring-accentGreen/20"
               />
               <span className="text-sm text-secondary">Respect robots.txt</span>
@@ -378,7 +717,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
                 type="checkbox"
                 checked={config.stayWithinDomain}
                 onChange={(e) => setConfig({ ...config, stayWithinDomain: e.target.checked })}
-                disabled={!!activeJob}
+                disabled={isBusy}
                 className="w-4 h-4 rounded border-abyssal bg-surface text-accentGreen focus:ring-accentGreen/20"
               />
               <span className="text-sm text-secondary">Stay within domain</span>
@@ -389,7 +728,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
                 type="checkbox"
                 checked={config.ssrfProtection}
                 onChange={(e) => setConfig({ ...config, ssrfProtection: e.target.checked })}
-                disabled={!!activeJob}
+                disabled={isBusy}
                 className="w-4 h-4 rounded border-abyssal bg-surface text-accentGreen focus:ring-accentGreen/20"
               />
               <span className="text-sm text-secondary">SSRF protection</span>
@@ -404,7 +743,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
             <select
               value={config.headlessStrategy}
               onChange={(e) => setConfig({ ...config, headlessStrategy: e.target.value as CrawlConfig['headlessStrategy'] })}
-              disabled={!!activeJob}
+              disabled={isBusy}
               className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
             >
               <option value="never">Disabled (raw HTML)</option>
@@ -423,7 +762,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
               onChange={(e) =>
                 setConfig({ ...config, contentSelectors: e.target.value.split('\n') })
               }
-              disabled={!!activeJob}
+              disabled={isBusy}
               rows={3}
               className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all resize-none"
               placeholder="main&#10;article&#10;.content"
@@ -440,7 +779,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
               onChange={(e) =>
                 setConfig({ ...config, excludePatterns: e.target.value.split('\n') })
               }
-              disabled={!!activeJob}
+              disabled={isBusy}
               rows={2}
               className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all resize-none"
               placeholder="/admin/*&#10;*.pdf"
@@ -457,7 +796,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
               onChange={(e) =>
                 setConfig({ ...config, includePatterns: e.target.value.split('\n') })
               }
-              disabled={!!activeJob}
+              disabled={isBusy}
               rows={2}
               className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all resize-none"
               placeholder="/docs/api/.*&#10;/reference/.*"
@@ -476,7 +815,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
               type="text"
               value={config.pathPrefix}
               onChange={(e) => setConfig({ ...config, pathPrefix: e.target.value })}
-              disabled={!!activeJob}
+              disabled={isBusy}
               placeholder="/docs/api/"
               className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all"
             />
@@ -488,7 +827,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
 
         {/* Action Bar */}
         <div className="h-16 border-t border-abyssal/50 px-5 flex items-center space-x-3">
-          {!activeJob ? (
+          {!isBusy ? (
             <button
               onClick={handleStart}
               disabled={isStarting}
@@ -499,11 +838,35 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
               ) : (
                 <Play weight="fill" size={18} />
               )}
-              <span>{isStarting ? 'Starting...' : 'Start Crawl'}</span>
+              <span>
+                {isStarting
+                  ? 'Starting...'
+                  : mode === 'batch'
+                  ? `Start Batch${batchUrls.filter((u) => u.trim()).length > 0 ? ` (${batchUrls.filter((u) => u.trim()).length})` : ''}`
+                  : 'Start Crawl'}
+              </span>
             </button>
+          ) : activeBatch ? (
+            <>
+              <button
+                onClick={handleCancel}
+                disabled={activeBatch.status !== 'queued' && activeBatch.status !== 'running'}
+                className="flex-1 px-4 py-2.5 bg-crimson/80 hover:bg-crimson text-ghost font-semibold rounded-md flex items-center justify-center space-x-2 transition-all duration-fast disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Stop weight="fill" size={16} />
+                <span>Cancel Batch</span>
+              </button>
+              <button
+                onClick={handleReset}
+                className="px-4 py-2.5 bg-surface hover:bg-abyssal text-secondary hover:text-ghost border border-abyssal rounded-md flex items-center space-x-2 transition-all duration-fast"
+              >
+                <ArrowClockwise size={16} />
+                <span>New</span>
+              </button>
+            </>
           ) : (
             <>
-              {activeJob.status === 'running' && (
+              {activeJob!.status === 'running' && (
                 <button
                   onClick={handlePause}
                   className="flex-1 bg-amber/80 hover:bg-amber text-slate-900 font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast"
@@ -512,7 +875,7 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
                   <span>Pause</span>
                 </button>
               )}
-              {activeJob.status === 'paused' && (
+              {activeJob!.status === 'paused' && (
                 <button
                   onClick={handleResume}
                   className="flex-1 bg-accentGreen/80 hover:bg-accentGreen text-slate-900 font-semibold py-2.5 px-4 rounded-md flex items-center justify-center space-x-2 transition-all duration-fast"
@@ -547,7 +910,18 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
             <FileText weight="fill" size={18} className="text-accentGreen mr-2" />
             Live Monitor
           </h2>
-          {activeJob && (
+          {activeBatch && (
+            <div className="ml-auto flex items-center space-x-3">
+              <span className="text-xs text-charcoal">Batch</span>
+              <StatusBadge
+                status={activeBatch.status as unknown as CrawlJob['status']}
+              />
+              {(activeBatch.status === 'running' || activeBatch.status === 'queued') && (
+                <SpinnerGap className="animate-spin text-accentGreen" size={16} />
+              )}
+            </div>
+          )}
+          {!activeBatch && activeJob && (
             <div className="ml-auto flex items-center space-x-3">
               <StatusBadge status={activeJob.status} />
               {activeJob.status === 'running' && (
@@ -556,6 +930,51 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
             </div>
           )}
         </div>
+
+        {/* Batch progress */}
+        {activeBatch && (
+          <div className="px-5 py-4 border-b border-abyssal/30">
+            <div className="flex items-center justify-between text-xs text-charcoal mb-2">
+              <span>
+                {activeBatch.name && (
+                  <span className="text-ghost font-medium mr-2">{activeBatch.name}</span>
+                )}
+                Batch: {Math.min(activeBatch.currentIndex, activeBatch.urls.length)} / {activeBatch.urls.length} URLs
+              </span>
+              <span>
+                {inactiveJobFor(activeJob?.status) && activeBatch.status === 'running'
+                  ? 'Preparing next…'
+                  : ''}
+              </span>
+            </div>
+            <div className="h-2 bg-surface/50 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-slow ${
+                  activeBatch.status === 'failed'
+                    ? 'bg-crimson'
+                    : activeBatch.status === 'cancelled'
+                    ? 'bg-amber'
+                    : 'bg-accentGreen'
+                }`}
+                style={{
+                  width: `${Math.min(
+                    (activeBatch.currentIndex / Math.max(activeBatch.urls.length, 1)) * 100,
+                    100,
+                  )}%`,
+                }}
+              />
+            </div>
+            {activeBatch.urls[activeBatch.currentIndex] && activeBatch.status === 'running' && (
+              <p className="text-xs text-charcoal mt-2 truncate">
+                <span className="text-secondary">Now crawling:</span>{' '}
+                {activeBatch.urls[activeBatch.currentIndex]}
+              </p>
+            )}
+            {activeBatch.error && (
+              <p className="text-xs text-crimson mt-2 truncate">{activeBatch.error}</p>
+            )}
+          </div>
+        )}
 
         {/* Progress */}
         {activeJob && (

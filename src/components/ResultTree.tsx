@@ -67,7 +67,7 @@ const ROW_HEIGHT = 32;
 const ROW_PROPS = {};
 
 export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: ResultTreeProps) {
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const listRef = useListRef(null);
 
@@ -82,8 +82,14 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
 
   const tree = useMemo(() => buildTree(filtered), [filtered]);
 
+  // Tracks explicitly *collapsed* folders rather than expanded ones, so an
+  // empty set naturally means "everything expanded" with no special-casing,
+  // and toggling one folder never implicitly collapses unrelated branches
+  // (a whitelist-of-expanded-paths model would require every ancestor path
+  // to also be tracked, which previously caused the whole tree to collapse
+  // to the root on the very first click of a non-root folder).
   const toggleExpanded = (path: string) => {
-    setExpandedPaths((prev) => {
+    setCollapsedPaths((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
@@ -96,7 +102,7 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
     function walk(nodes: TreeNode[], depth: number) {
       for (const node of nodes) {
         result.push({ node, depth });
-        const isExpanded = expandedPaths.size === 0 || expandedPaths.has(node.path);
+        const isExpanded = !collapsedPaths.has(node.path);
         if (isExpanded && node.children.length > 0) {
           walk(node.children, depth + 1);
         }
@@ -104,19 +110,23 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
     }
     walk(tree, 0);
     return result;
-  }, [tree, expandedPaths]);
+  }, [tree, collapsedPaths]);
 
+  // Clamping and scrolling must happen in the same effect: if focusedIndex
+  // is out of bounds (e.g. a collapse just shrank the list), we correct it
+  // and bail out instead of letting a second effect call react-window's
+  // scrollToRow with the stale, now-invalid index — that throws a RangeError
+  // with no ErrorBoundary anywhere in the app to catch it, which blanks the
+  // whole page.
   useEffect(() => {
     if (focusedIndex >= visibleNodes.length) {
       setFocusedIndex(Math.max(visibleNodes.length - 1, -1));
+      return;
     }
-  }, [visibleNodes.length, focusedIndex]);
-
-  useEffect(() => {
     if (focusedIndex >= 0 && listRef.current) {
       listRef.current.scrollToRow({ index: focusedIndex });
     }
-  }, [focusedIndex]);
+  }, [focusedIndex, visibleNodes.length]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     switch (e.key) {
@@ -131,18 +141,18 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
       case 'ArrowRight': {
         const node = visibleNodes[focusedIndex]?.node;
         if (node?.children.length > 0) {
-          setExpandedPaths((prev) => new Set([...prev, node.path]));
+          setCollapsedPaths((prev) => {
+            const next = new Set(prev);
+            next.delete(node.path);
+            return next;
+          });
         }
         break;
       }
       case 'ArrowLeft': {
         const node = visibleNodes[focusedIndex]?.node;
         if (node) {
-          setExpandedPaths((prev) => {
-            const next = new Set(prev);
-            next.delete(node.path);
-            return next;
-          });
+          setCollapsedPaths((prev) => new Set([...prev, node.path]));
         }
         break;
       }
@@ -170,7 +180,7 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
           const isSelected = node.page?.url === selectedUrl;
           const isFocused = index === focusedIndex;
           const hasChildren = node.children.length > 0;
-          const isExpanded = expandedPaths.size === 0 || expandedPaths.has(node.path);
+          const isExpanded = !collapsedPaths.has(node.path);
 
           return (
             <div style={style}>

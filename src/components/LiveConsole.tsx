@@ -57,14 +57,18 @@ export function LiveConsole() {
                 ? ev.message || ''
                 : ev.type === 'jobStatusChanged'
                   ? `Job status: ${ev.status || ''}`
-                  : 'Unknown event';
+                  : ev.type === 'batchStatusChanged'
+                    ? `Batch status: ${ev.status || ''}`
+                    : ev.type === 'batchProgress'
+                      ? `Batch progress: ${ev.currentIndex ?? 0}/${ev.total ?? 0}${ev.currentJobId ? ` (child ${ev.currentJobId.slice(0, 8)})` : ''}`
+                      : 'Unknown event';
 
       newEntries.push({
         id: logIdCounter.current++,
         timestamp: new Date().toLocaleTimeString(),
         level,
         message,
-        jobId: ev.jobId,
+        jobId: ev.jobId ?? ev.batchId,
         kind: ev.type === 'error' ? ev.kind : undefined,
       });
     }

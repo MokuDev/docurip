@@ -8,15 +8,17 @@ import { useToasts } from './useToasts';
 interface CrawlEventsState {
   events: CrawlEvent[];
   activeJobIds: Set<string>;
+  activeBatchIds: Set<string>;
 }
 
 const CrawlEventsContext = createContext<CrawlEventsState>({
   events: [],
   activeJobIds: new Set(),
+  activeBatchIds: new Set(),
 });
 
 export function CrawlEventsProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<CrawlEventsState>({ events: [], activeJobIds: new Set() });
+  const [state, setState] = useState<CrawlEventsState>({ events: [], activeJobIds: new Set(), activeBatchIds: new Set() });
   const terminalJobsHandled = useRef(new Set<string>());
   const { pushToast } = useToasts();
 
@@ -28,6 +30,14 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
       setState((prev) => {
         const nextEvents = [...prev.events, event].slice(-500);
         const nextActive = new Set(prev.activeJobIds);
+        const nextActiveBatches = new Set(prev.activeBatchIds);
+        if (event.type === 'batchStatusChanged' && event.batchId) {
+          if (event.status === 'running' || event.status === 'queued') {
+            nextActiveBatches.add(event.batchId);
+          } else {
+            nextActiveBatches.delete(event.batchId);
+          }
+        }
         if (event.type === 'jobStatusChanged' && event.jobId) {
           const jobId = event.jobId;
           if (event.status === 'running' || event.status === 'queued') {
@@ -59,7 +69,7 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
             }
           }
         }
-        return { ...prev, events: nextEvents, activeJobIds: nextActive };
+        return { events: nextEvents, activeJobIds: nextActive, activeBatchIds: nextActiveBatches };
       });
     })
       .then((fn) => { unlisten = fn; })

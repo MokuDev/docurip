@@ -28,9 +28,10 @@ function App() {
   const [pendingUrl, setPendingUrl] = useState('');
   const [pendingConfig, setPendingConfig] = useState<CrawlConfig | null>(null);
   const [liveConsoleOpen, setLiveConsoleOpen] = useState(false);
-  const { activeJobIds } = useCrawlEvents();
+  const { activeJobIds, activeBatchIds } = useCrawlEvents();
   const { updateAvailable, downloading, error: updateError, installUpdate, dismiss } = useUpdater();
   const activeJobsCount = activeJobIds.size;
+  const activeCount = activeJobsCount + activeBatchIds.size;
   const escapeStack = useEscapeStack();
   const searchRef = useRef<HTMLInputElement>(null);
   const shortcutOverrides = useShortcutOverrides();
@@ -54,10 +55,10 @@ function App() {
   });
 
   useEffect(() => {
-    if (activeJobsCount > 0 && !liveConsoleOpen) {
+    if (activeCount > 0 && !liveConsoleOpen) {
       setLiveConsoleOpen(true);
     }
-  }, [activeJobsCount, liveConsoleOpen]);
+  }, [activeCount, liveConsoleOpen]);
 
   const handleCrawlAgain = (job: CrawlJob) => {
     setPendingUrl('');

@@ -479,10 +479,18 @@ pub async fn delete_template(template_id: String, state: State<'_, Arc<AppState>
 pub async fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
     use tauri_plugin_store::StoreExt;
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
-    let settings = store
+    let mut settings: AppSettings = store
         .get("settings")
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
+    // The frontend represents "use default output directory" as an empty
+    // string. Resolve it to the real path (`<home>/.docurip`) here so
+    // every consumer — the orchestrator, the Settings UI, folder-open
+    // links in History — sees an absolute path instead of a bare "" that
+    // gets naively concatenated into something like "/example.com".
+    if settings.output_dir.trim().is_empty() {
+        settings.output_dir = AppSettings::default().output_dir;
+    }
     Ok(settings)
 }
 

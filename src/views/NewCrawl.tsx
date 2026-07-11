@@ -9,11 +9,14 @@ import {
   CheckCircle,
   SpinnerGap,
   Pause,
+  TreeStructure,
+  X,
 } from '@phosphor-icons/react';
-import type { CrawlConfig, CrawlJob, CrawlProfile, CrawlTemplate } from '../types';
+import type { AppSettings, CrawlConfig, CrawlJob, CrawlProfile, CrawlTemplate } from '../types';
 import { CRAWL_PROFILES } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { TemplateBar } from '../components/TemplateBar';
+import { SitemapPickerModal } from '../components/SitemapPickerModal';
 
 const MAX_LOGS = 500;
 
@@ -77,6 +80,14 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
   const logs = logsRef.current;
   const [templates, setTemplates] = useState<CrawlTemplate[]>([]);
 
+  // Sitemap discovery + picker
+  const [autoDiscover, setAutoDiscover] = useState(true);
+  const [discoveredSitemaps, setDiscoveredSitemaps] = useState<string[]>([]);
+  const [dismissedDiscoveryFor, setDismissedDiscoveryFor] = useState<string>('');
+  const [pickerUrl, setPickerUrl] = useState<string | null>(null);
+  const [seedUrls, setSeedUrls] = useState<string[]>([]);
+  const discoveryReqRef = useRef(0);
+
   // Initialize activeJob from sessionStorage on mount
   useEffect(() => {
     if (activeJob) return;
@@ -135,7 +146,49 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
 
   useEffect(() => {
     loadTemplates();
+    invoke<AppSettings>('get_settings')
+      .then((s) => setAutoDiscover(s.sitemapAutoDiscover ?? true))
+      .catch(() => {});
   }, []);
+
+  // Debounced sitemap auto-discovery on URL change.
+  useEffect(() => {
+    if (!autoDiscover || activeJob) return;
+    const url = config.url.trim();
+    if (!validateUrl(url)) {
+      setDiscoveredSitemaps([]);
+      return;
+    }
+    if (dismissedDiscoveryFor === url) return;
+    const reqId = ++discoveryReqRef.current;
+    const timeout = setTimeout(() => {
+      invoke<string[]>('discover_sitemap', { url, ssrfProtection: config.ssrfProtection })
+        .then((found) => {
+          if (reqId === discoveryReqRef.current) setDiscoveredSitemaps(found);
+        })
+        .catch(() => {
+          if (reqId === discoveryReqRef.current) setDiscoveredSitemaps([]);
+        });
+    }, 700);
+    return () => clearTimeout(timeout);
+  }, [config.url, config.ssrfProtection, autoDiscover, activeJob, dismissedDiscoveryFor]);
+
+  const handleSitemapConfirm = (urls: string[]) => {
+    if (urls.length === 0) {
+      setPickerUrl(null);
+      return;
+    }
+    const [first, ...rest] = urls;
+    setConfig((prev) => ({ ...prev, url: first }));
+    setSeedUrls(rest);
+    setDiscoveredSitemaps([]);
+    setPickerUrl(null);
+    appendLog(
+      rest.length > 0
+        ? `Loaded ${urls.length} URLs from sitemap. First set as start URL; batch queue: ${rest.length} URLs (batch mode ships in a later v0.6.3 release).`
+        : `Loaded 1 URL from sitemap as start URL.`,
+    );
+  };
 
   const handleApplyTemplate = (template: CrawlTemplate) => {
     setConfig({ ...template.config, url: template.url });
@@ -260,6 +313,14 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
 
   return (
     <div className="h-full flex">
+      {pickerUrl && (
+        <SitemapPickerModal
+          sitemapUrl={pickerUrl}
+          ssrfProtection={config.ssrfProtection}
+          onClose={() => setPickerUrl(null)}
+          onConfirm={handleSitemapConfirm}
+        />
+      )}
       {/* Left: Config Panel */}
       <div className="w-[420px] flex-shrink-0 border-r border-abyssal/50 bg-deepVoid/30 flex flex-col">
         <div className="h-14 flex items-center px-5 border-b border-abyssal/50">
@@ -284,6 +345,72 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
               />
             </div>
           {urlError && <p className="text-crimson text-xs mt-1">{urlError}</p>}
+
+          {/* Sitemap discovery banner */}
+          {!activeJob && discoveredSitemaps.length > 0 && (
+            <div className="mt-2 flex items-start gap-2 px-3 py-2 bg-accentGreen/10 border border-accentGreen/30 rounded-md">
+              <TreeStructure size={14} className="text-accentGreen mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-ghost">
+                  Sitemap found for this site
+                  {discoveredSitemaps.length > 1 ? ` (${discoveredSitemaps.length} sources)` : ''}
+                </p>
+                <button
+                  onClick={() => setPickerUrl(discoveredSitemaps[0])}
+                  className="text-xs text-accentGreen hover:text-brightGreen font-medium mt-0.5"
+                >
+                  Import URLs →
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setDismissedDiscoveryFor(config.url.trim());
+                  setDiscoveredSitemaps([]);
+                }}
+                className="text-charcoal hover:text-ghost transition-colors flex-shrink-0"
+                aria-label="Dismiss"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Seed URLs preview (batch queue for future phase) */}
+          {seedUrls.length > 0 && (
+            <div className="mt-2 flex items-center justify-between gap-2 px-3 py-2 bg-surface/50 border border-abyssal rounded-md">
+              <span className="text-xs text-charcoal truncate">
+                <span className="text-accentGreen">+{seedUrls.length}</span> URLs queued for batch
+                mode
+              </span>
+              <button
+                onClick={() => setSeedUrls([])}
+                className="text-charcoal hover:text-ghost transition-colors"
+                aria-label="Clear queued URLs"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          {/* Manual "Load sitemap" trigger */}
+          {!activeJob && validateUrl(config.url) && (
+            <button
+              type="button"
+              onClick={() => {
+                const url = config.url.trim();
+                try {
+                  const u = new URL(url);
+                  setPickerUrl(`${u.origin}/sitemap.xml`);
+                } catch {
+                  /* invalid URL — button is only shown when valid */
+                }
+              }}
+              className="mt-2 flex items-center gap-1.5 text-xs text-charcoal hover:text-accentGreen transition-colors"
+            >
+              <TreeStructure size={12} />
+              Load sitemap manually
+            </button>
+          )}
         </div>
 
           {/* Templates */}

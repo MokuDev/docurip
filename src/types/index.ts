@@ -144,6 +144,21 @@ export interface AppSettings {
   theme: ThemePreference;
   shortcutOverrides: Record<string, string>;
   autoExportFormat: ExportFormat | null;
+  sitemapAutoDiscover: boolean;
+}
+
+export interface SitemapEntry {
+  url: string;
+  lastmod?: string;
+  priority?: number;
+}
+
+export interface SitemapResult {
+  entries: SitemapEntry[];
+  /** True if the URL list was truncated at the backend's 10k cap. */
+  truncated: boolean;
+  /** Source sitemap URLs actually fetched (top-level + any sub-sitemaps). */
+  sources: string[];
 }
 
 export interface CrawlEvent {

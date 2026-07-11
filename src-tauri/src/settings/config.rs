@@ -34,6 +34,10 @@ pub struct AppSettings {
     /// When set, this export format runs automatically after every crawl completes.
     #[serde(default)]
     pub auto_export_format: Option<crate::export::ExportFormat>,
+    /// When true, NewCrawl probes the entered URL's `/robots.txt` and
+    /// well-known sitemap locations to surface a "sitemap found" banner.
+    #[serde(default = "default_true")]
+    pub sitemap_auto_discover: bool,
 }
 
 impl Default for AppSettings {
@@ -60,6 +64,7 @@ impl Default for AppSettings {
             theme: default_theme(),
             shortcut_overrides: HashMap::new(),
             auto_export_format: None,
+            sitemap_auto_discover: true,
         }
     }
 }

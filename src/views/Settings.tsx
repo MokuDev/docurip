@@ -40,6 +40,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   shortcutOverrides: {},
   autoExportFormat: null,
+  sitemapAutoDiscover: true,
 };
 
 const WINDOW_PRESETS = [
@@ -474,6 +475,25 @@ export function SettingsView() {
           <p className="text-charcoal text-xs mt-1.5">
             When set, this export runs automatically to the job's formats/ directory every time a crawl completes.
           </p>
+        </Section>
+
+        {/* Sitemap Discovery */}
+        <Section title="Sitemap Discovery">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.sitemapAutoDiscover}
+              onChange={(e) => setSettings({ ...settings, sitemapAutoDiscover: e.target.checked })}
+              className="w-4 h-4 mt-0.5 rounded border-abyssal bg-surface text-accentGreen focus:ring-accentGreen/20"
+            />
+            <div>
+              <div className="text-sm text-ghost">Auto-discover sitemap on New Crawl</div>
+              <p className="text-charcoal text-xs mt-0.5">
+                When you enter a URL, Docurip checks the site's robots.txt and standard
+                sitemap locations, then offers to import URLs from any sitemap it finds.
+              </p>
+            </div>
+          </label>
         </Section>
         </>
         )}

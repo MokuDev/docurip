@@ -1,13 +1,27 @@
 # Changelog
 
-## Unreleased
+## v0.6.2 (2026-07-09)
 
 ### Added
+- **Job templates**: save the current New Crawl form (URL + full config) as a named template from a new `TemplateBar`, then re-apply or delete it later. Persisted as JSON files under `templates/` in the app data dir, mirroring the existing job-persistence pattern. New `list_templates` / `save_template` / `delete_template` commands.
+- **Re-crawl with same settings**: History gets a "Crawl again" action on completed, failed, and cancelled jobs — jumps to New Crawl with the job's original URL and full config pre-filled via a new `prefillConfig` prop.
+- **Auto-export after crawl**: new `autoExportFormat` setting (Settings → Auto-Export) runs the existing export pipeline automatically against a job's `formats/` directory the moment it completes. Triggered from the same terminal-event handler that already fires desktop notifications, reusing one `get_settings`/`get_job` round trip for both.
 - **Configurable keyboard shortcuts**: shortcuts are now driven by a central action registry (`SHORTCUT_ACTIONS`) instead of being hardcoded. Added four new default bindings for tab navigation — `Ctrl/Cmd+D` Dashboard, `Ctrl/Cmd+H` History, `Ctrl/Cmd+,` Settings, `Ctrl/Cmd+I` Import — alongside the existing New/Active Crawl and Search shortcuts. Every nav item now shows its shortcut hint (previously only "New Crawl" did).
 - **Keyboard Shortcuts settings section**: new Settings → Keyboard Shortcuts panel lists every shortcut with its current binding. Click a binding to rebind it — press any key combination to capture it live. Conflicting bindings are detected and rejected with an inline message naming the other action; Escape cancels editing without side effects. A reset button reverts a rebound action to its default. Bindings persist via the existing `AppSettings` store (`shortcutOverrides`) and take effect app-wide immediately on save.
+- **Settings sub-navigation**: replaced the single endless column of Settings sections with a category sidebar — General (Appearance + Notifications), Shortcuts, Crawling & Export (Crawl Defaults + Auto-Export), Network & Storage (Network + Output + Window). Only the selected category renders, so the page no longer requires scrolling to reach settings near the bottom. No behavior changes — same fields, same handlers, purely a layout restructure informed by 3 mocked-up alternatives (sub-nav, grouped grid, quick-bar + accordion).
 
 ### Fixed
 - **Shortcut capture leaking to global handlers**: while capturing a new key combination in the Settings rebind UI, the keypress was also being picked up by the app-wide shortcut listener (e.g. capturing `Ctrl+N` would both flag the conflict *and* navigate to New Crawl, closing the settings page). The row's key-capture handler now calls `stopPropagation()` so the global `document`-level listener never sees the event.
+- **`CrawlJob.config` typed with a `url` field it never has at runtime**: the frontend `CrawlConfig` type includes `url`, but the backend's `CrawlConfig` struct — and therefore every `job.config` returned over IPC — never carries one (a job's URL only ever lives at `job.url`). Introduced a `TemplateConfig` type (`Omit<CrawlConfig, 'url'>`) matching what the backend actually returns and retyped `CrawlJob.config` to it, so any future `job.config.url` access is now a compile error instead of a silent `undefined`.
+- **Low-contrast micro-labels app-wide**: the `charcoal` text token (used for ~124 uppercase labels — `TopStatusBar`, `SystemStatusBar`, Dashboard stat cards, Settings field labels, etc.) only cleared ~3.7:1 contrast against card surfaces in dark mode and ~4.6:1 in light mode, both at or below WCAG AA's 4.5:1 minimum for the 10-11px text it's typically used at. Lightened dark-mode `charcoal` to `rgb(130 146 168)` (~5.6:1 vs. card surfaces, ~6.2:1 vs. the page background) and darkened light-mode `charcoal` to `rgb(80 96 116)` (~6.4:1 vs. white, ~6.1:1 vs. the page background) — comfortably past AA, while staying visibly more muted than the `secondary` token (~7:1) so the two-tier text hierarchy still reads. Also bumped the smallest (10px) status-bar labels — Session/Uptime/Jobs, CPU/RAM/Output — to `font-medium` for extra legibility at that size.
+
+### Changed
+- **`start_crawl` / `save_template` payload construction unified**: both now go through a shared `toBackendConfig()` helper in `NewCrawl.tsx` instead of duplicating the field-by-field mapping (trim/filter patterns, normalize `pathPrefix`), closing out a standing ROADMAP item.
+
+### Tests
+- 8 tests for `TemplateBar`: chip rendering, empty state, apply/delete callbacks, naming flow (save/blank/cancel), disabled state.
+- 3 new tests for `useCrawlEvents` auto-export gating: fires `export_job_v2` on completion when configured, stays silent when unset, stays silent on failure even if configured.
+- 3 new Rust tests for template persistence in `state.rs`: save/persist, remove, and load-on-init.
 
 ## v0.6.1 (2026-07-09)
 

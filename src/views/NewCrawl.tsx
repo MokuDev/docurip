@@ -10,9 +10,10 @@ import {
   SpinnerGap,
   Pause,
 } from '@phosphor-icons/react';
-import type { CrawlConfig, CrawlJob, CrawlProfile } from '../types';
+import type { CrawlConfig, CrawlJob, CrawlProfile, CrawlTemplate } from '../types';
 import { CRAWL_PROFILES } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
+import { TemplateBar } from '../components/TemplateBar';
 
 const MAX_LOGS = 500;
 
@@ -45,7 +46,26 @@ const applyProfile = (profileId: CrawlProfile, current: CrawlConfig): CrawlConfi
   };
 };
 
-export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
+/** Normalizes UI-only config shape (raw textarea lines, unenforced pathPrefix)
+ * into the payload the backend's CrawlConfig expects — shared by start_crawl
+ * and save_template so both stay in sync as fields are added. */
+const toBackendConfig = (config: CrawlConfig) => ({
+  maxDepth: config.maxDepth,
+  pageLimit: config.pageLimit,
+  downloadAssets: config.downloadAssets,
+  headlessStrategy: config.headlessStrategy,
+  contentSelectors: config.contentSelectors.map((s) => s.trim()).filter(Boolean),
+  excludePatterns: config.excludePatterns.map((s) => s.trim()).filter(Boolean),
+  includePatterns: config.includePatterns.map((s) => s.trim()).filter(Boolean),
+  pathPrefix: config.pathPrefix.trim().replace(/[?#].*$/, '').replace(/^(?!\/)/, '/').replace(/^\/$/, ''),
+  respectRobotsTxt: config.respectRobotsTxt,
+  stayWithinDomain: config.stayWithinDomain,
+  ssrfProtection: config.ssrfProtection,
+  outputDir: config.outputDir,
+  profile: config.profile,
+});
+
+export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: string; prefillConfig?: CrawlConfig }) {
   const [config, setConfig] = useState<CrawlConfig>(DEFAULT_CONFIG);
   const [activeJob, setActiveJob] = useState<CrawlJob | null>(null);
   const logsRef = useRef<string[]>([]);
@@ -55,6 +75,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
   const logEndRef = useRef<HTMLDivElement>(null);
   const consecutiveErrors = useRef(0);
   const logs = logsRef.current;
+  const [templates, setTemplates] = useState<CrawlTemplate[]>([]);
 
   // Initialize activeJob from sessionStorage on mount
   useEffect(() => {
@@ -98,6 +119,49 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
       setConfig((prev) => ({ ...prev, url: prefillUrl }));
     }
   }, [prefillUrl]);
+
+  // Prefill full config from "Crawl Again"
+  useEffect(() => {
+    if (prefillConfig) {
+      setConfig(prefillConfig);
+    }
+  }, [prefillConfig]);
+
+  const loadTemplates = () => {
+    invoke<CrawlTemplate[]>('list_templates')
+      .then(setTemplates)
+      .catch((err) => console.warn('Failed to load templates:', err));
+  };
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  const handleApplyTemplate = (template: CrawlTemplate) => {
+    setConfig({ ...template.config, url: template.url });
+  };
+
+  const handleSaveTemplate = async (name: string) => {
+    if (!validateUrl(config.url)) {
+      setUrlError('Please enter a valid URL before saving a template');
+      return;
+    }
+    try {
+      await invoke('save_template', { name, url: config.url, config: toBackendConfig(config) });
+      loadTemplates();
+    } catch (err) {
+      appendLog(`Error saving template: ${String(err)}`);
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    try {
+      await invoke('delete_template', { templateId });
+      setTemplates((prev) => prev.filter((t) => t.id !== templateId));
+    } catch (err) {
+      console.warn('Failed to delete template:', err);
+    }
+  };
 
   useEffect(() => {
     if (!activeJob) return;
@@ -145,21 +209,7 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
     try {
       const jobId: string = await invoke('start_crawl', {
         url: config.url,
-        config: {
-          maxDepth: config.maxDepth,
-          pageLimit: config.pageLimit,
-          downloadAssets: config.downloadAssets,
-          headlessStrategy: config.headlessStrategy,
-          contentSelectors: config.contentSelectors.map(s => s.trim()).filter(Boolean),
-          excludePatterns: config.excludePatterns.map(s => s.trim()).filter(Boolean),
-          includePatterns: config.includePatterns.map(s => s.trim()).filter(Boolean),
-          pathPrefix: config.pathPrefix.trim().replace(/[?#].*$/, '').replace(/^(?!\/)/, '/').replace(/^\/$/, ''),
-          respectRobotsTxt: config.respectRobotsTxt,
-          stayWithinDomain: config.stayWithinDomain,
-          ssrfProtection: config.ssrfProtection,
-          outputDir: config.outputDir,
-          profile: config.profile,
-        },
+        config: toBackendConfig(config),
       });
 
       const job: CrawlJob = await invoke('get_job', { jobId });
@@ -235,6 +285,15 @@ export function NewCrawlView({ prefillUrl }: { prefillUrl?: string }) {
             </div>
           {urlError && <p className="text-crimson text-xs mt-1">{urlError}</p>}
         </div>
+
+          {/* Templates */}
+          <TemplateBar
+            templates={templates}
+            disabled={!!activeJob}
+            onApply={handleApplyTemplate}
+            onSave={handleSaveTemplate}
+            onDelete={handleDeleteTemplate}
+          />
 
           {/* Profile */}
           <div>

@@ -12,13 +12,14 @@ import {
   Eye,
   Download,
   FileArrowUp,
+  ArrowClockwise,
 } from '@phosphor-icons/react';
 import { ResultBrowser } from './ResultBrowser';
 import { ExportModal } from '../components/ExportModal';
 import { StatusIcon, StatusBadge } from '../components/StatusBadge';
 import type { CrawlJob } from '../types';
 
-export function HistoryView() {
+export function HistoryView({ onCrawlAgain }: { onCrawlAgain: (job: CrawlJob) => void }) {
   const [jobs, setJobs] = useState<CrawlJob[]>([]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -177,6 +178,15 @@ export function HistoryView() {
                       >
                         <FileArrowUp size={14} />
                         Browse Results
+                      </button>
+                    )}
+                    {(job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') && (
+                      <button
+                        onClick={() => onCrawlAgain(job)}
+                        className="p-1.5 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"
+                        title="Crawl again with the same settings"
+                      >
+                        <ArrowClockwise size={16} />
                       </button>
                     )}
                     <button

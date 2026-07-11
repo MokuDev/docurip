@@ -69,6 +69,18 @@ export interface CrawlConfig {
   profile?: CrawlProfile | null;
 }
 
+/** Shape of CrawlConfig as the backend stores/returns it — no `url`, since the
+ * backend keeps a job's URL as a separate top-level field. */
+export type TemplateConfig = Omit<CrawlConfig, 'url'>;
+
+export interface CrawlTemplate {
+  id: string;
+  name: string;
+  url: string;
+  config: TemplateConfig;
+  createdAt: string;
+}
+
 export interface PageMeta {
   url: string;
   title: string;
@@ -103,7 +115,7 @@ export interface CrawlJob {
   id: string;
   url: string;
   status: JobStatus;
-  config: CrawlConfig;
+  config: TemplateConfig;
   progress: CrawlProgress;
   results: PageMeta[];
   startTime?: string;
@@ -131,6 +143,7 @@ export interface AppSettings {
   notificationsEnabled: boolean;
   theme: ThemePreference;
   shortcutOverrides: Record<string, string>;
+  autoExportFormat: ExportFormat | null;
 }
 
 export interface CrawlEvent {

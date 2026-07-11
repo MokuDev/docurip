@@ -42,15 +42,15 @@ export function SystemStatusBar() {
   return (
     <div className="h-5 w-full bg-deepVoid border-t border-abyssal/50 flex items-center justify-between px-3 text-[10px] font-mono text-secondary select-none">
       <div className="flex items-center gap-2">
-        <span className="text-charcoal uppercase tracking-widest">CPU</span>
+        <span className="text-charcoal font-medium uppercase tracking-widest">CPU</span>
         <span className="text-ghost tabular-nums">{cpu}</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-charcoal uppercase tracking-widest">RAM</span>
+        <span className="text-charcoal font-medium uppercase tracking-widest">RAM</span>
         <span className="text-ghost tabular-nums">{ram}</span>
       </div>
       <div className="flex items-center gap-2 min-w-0">
-        <span className="text-charcoal uppercase tracking-widest flex-shrink-0">Output</span>
+        <span className="text-charcoal font-medium uppercase tracking-widest flex-shrink-0">Output</span>
         <span className="text-ghost truncate max-w-[60ch]" title={path}>
           {path}
         </span>

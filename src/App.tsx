@@ -21,10 +21,12 @@ import { useUpdater } from './hooks/useUpdater';
 import { useKeyboardShortcuts, resolveBinding, formatCombo } from './hooks/useKeyboardShortcuts';
 import { useShortcutOverrides } from './hooks/useShortcutOverrides';
 import { useEscapeStack } from './contexts/EscapeStack';
+import type { CrawlConfig, CrawlJob } from './types';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'crawls' | 'history' | 'settings' | 'active-crawl' | 'import'>('dashboard');
   const [pendingUrl, setPendingUrl] = useState('');
+  const [pendingConfig, setPendingConfig] = useState<CrawlConfig | null>(null);
   const [liveConsoleOpen, setLiveConsoleOpen] = useState(false);
   const { activeJobIds } = useCrawlEvents();
   const { updateAvailable, downloading, error: updateError, installUpdate, dismiss } = useUpdater();
@@ -56,6 +58,12 @@ function App() {
       setLiveConsoleOpen(true);
     }
   }, [activeJobsCount, liveConsoleOpen]);
+
+  const handleCrawlAgain = (job: CrawlJob) => {
+    setPendingUrl('');
+    setPendingConfig({ ...job.config, url: job.url });
+    setActiveTab(activeJobsCount > 0 ? 'active-crawl' : 'crawls');
+  };
 
   return (
     <div className="h-screen bg-deepVoid flex flex-col text-smooth font-sans">
@@ -152,7 +160,7 @@ function App() {
           {/* Footer */}
           <div className="h-auto flex flex-col items-center justify-center py-3 border-t border-abyssal/50 space-y-1">
             <span className="text-charcoal text-[10px] tracking-widest uppercase">
-              v0.6.1
+              v0.6.2
             </span>
             <span className="text-charcoal text-[10px]">
               made with love by{' '}
@@ -168,11 +176,11 @@ function App() {
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col overflow-hidden relative">
-          {activeTab === 'dashboard' && <DashboardView onQuickStart={(url) => { setPendingUrl(url); setActiveTab(activeJobsCount > 0 ? 'active-crawl' : 'crawls'); }} />}
-          {activeTab === 'active-crawl' && <NewCrawlView prefillUrl={pendingUrl} />}
-          {activeTab === 'crawls' && <NewCrawlView prefillUrl={pendingUrl} />}
+          {activeTab === 'dashboard' && <DashboardView onQuickStart={(url) => { setPendingConfig(null); setPendingUrl(url); setActiveTab(activeJobsCount > 0 ? 'active-crawl' : 'crawls'); }} />}
+          {activeTab === 'active-crawl' && <NewCrawlView prefillUrl={pendingUrl} prefillConfig={pendingConfig ?? undefined} />}
+          {activeTab === 'crawls' && <NewCrawlView prefillUrl={pendingUrl} prefillConfig={pendingConfig ?? undefined} />}
           {activeTab === 'import' && <ImportView />}
-          {activeTab === 'history' && <HistoryView />}
+          {activeTab === 'history' && <HistoryView onCrawlAgain={handleCrawlAgain} />}
           {activeTab === 'settings' && <SettingsView />}
         </main>
       </div>

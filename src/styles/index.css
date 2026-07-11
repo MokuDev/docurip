@@ -10,11 +10,18 @@
     --color-ghost: 241 245 249;
     --color-smooth: 203 213 225;
     --color-secondary: 148 163 184;
-    --color-charcoal: 100 116 139;
+    /* Lightened from slate-500 (100 116 139): at that value, `charcoal` —
+       used for nearly every small uppercase label in the app — only cleared
+       ~3.7:1 against card surfaces, below WCAG AA's 4.5:1 for small text.
+       This shade holds ~5.6:1 against `surface` and ~6.2:1 against
+       `deep-void`, while staying visibly more muted than `secondary`
+       (~7:1) so the two-tier text hierarchy is still legible. */
+    --color-charcoal: 130 146 168;
   }
-  /* Shifted one step darker than a literal mirror of the dark palette so
-     `charcoal`, the most-muted text token, still clears WCAG AA (~4.6:1)
-     against the near-white light-mode backgrounds. */
+  /* Darkened one step further than a literal mirror of the dark palette so
+     `charcoal`, the most-muted text token, clears WCAG AA with real margin
+     (~6.4:1 against `surface`, ~6.1:1 against `deep-void`) instead of
+     sitting right at the 4.5:1 threshold. */
   .light {
     --color-deep-void: 248 250 252;
     --color-surface: 255 255 255;
@@ -22,7 +29,7 @@
     --color-ghost: 2 6 23;
     --color-smooth: 30 41 59;
     --color-secondary: 71 85 105;
-    --color-charcoal: 100 116 139;
+    --color-charcoal: 80 96 116;
   }
   html {
     background-color: rgb(var(--color-deep-void));

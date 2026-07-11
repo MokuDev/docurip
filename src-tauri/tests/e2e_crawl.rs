@@ -110,6 +110,7 @@ fn make_settings() -> AppSettings {
         theme: String::from("dark"),
         notifications_enabled: true,
         shortcut_overrides: std::collections::HashMap::new(),
+        auto_export_format: None,
     }
 }
 

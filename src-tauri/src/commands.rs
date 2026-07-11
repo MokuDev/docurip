@@ -6,13 +6,14 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::RwLock;
 
+use crate::crawler::batch::{spawn_batch, BatchJob, BatchStatus};
 use crate::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
 use crate::importer::ImportResult;
 use crate::writer::fs::FsWriter;
 use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
 use crate::exports::{self, RecentExport};
-use crate::settings::config::{AppSettings, CrawlConfig};
+use crate::settings::config::{AppSettings, BatchFailureMode, CrawlConfig};
 use crate::settings::templates::CrawlTemplate;
 use crate::state::{AppState, JobHandle};
 use crate::system::SystemStats;
@@ -70,15 +71,19 @@ fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub async fn start_crawl(
+/// Build a `CrawlJob` and spawn its orchestrator, wiring the job into
+/// `AppState`. Returns the new job id.
+///
+/// Shared by the `start_crawl` command and the batch runner so both
+/// paths produce identical bookkeeping. Callers are responsible for
+/// input validation (`validate_crawl_input`).
+pub(crate) async fn spawn_crawl(
     url: String,
-    config: CrawlConfig,
-    state: State<'_, Arc<AppState>>,
+    mut config: CrawlConfig,
+    state: Arc<AppState>,
     app: AppHandle,
+    batch_id: Option<String>,
 ) -> Result<String, String> {
-    validate_crawl_input(&url, &config)?;
-    let mut config = config;
     config.path_prefix = normalize_path_prefix(&config.path_prefix);
     let job_id = uuid::Uuid::new_v4().to_string();
 
@@ -99,6 +104,7 @@ pub async fn start_crawl(
         error: None,
         start_time: None,
         end_time: None,
+        batch_id,
     };
 
     let job_arc = Arc::new(RwLock::new(job));
@@ -130,10 +136,21 @@ pub async fn start_crawl(
 
     state.persist_job(&*job_arc.read().await).await.map_err(|e| e.to_string())?;
 
-    let settings = get_settings(app).await.map_err(|e| e)?;
-    Orchestrator::spawn(url, config, settings, handle, Some(state.inner().clone()));
+    let settings = get_settings(app).await?;
+    Orchestrator::spawn(url, config, settings, handle, Some(state.clone()));
 
     Ok(job_id)
+}
+
+#[tauri::command]
+pub async fn start_crawl(
+    url: String,
+    config: CrawlConfig,
+    state: State<'_, Arc<AppState>>,
+    app: AppHandle,
+) -> Result<String, String> {
+    validate_crawl_input(&url, &config)?;
+    spawn_crawl(url, config, state.inner().clone(), app, None).await
 }
 
 #[tauri::command]
@@ -891,4 +908,120 @@ pub async fn set_window_size(
         applied_width: clamped_w,
         applied_height: clamped_h,
     })
+}
+
+// ---- Batch crawl commands ----
+
+#[tauri::command]
+pub async fn start_batch(
+    urls: Vec<String>,
+    config: CrawlConfig,
+    name: Option<String>,
+    on_failure: Option<BatchFailureMode>,
+    state: State<'_, Arc<AppState>>,
+    app: AppHandle,
+) -> Result<String, String> {
+    if urls.is_empty() {
+        return Err("At least one URL is required".into());
+    }
+    validate_crawl_input(urls.first().unwrap(), &config)?;
+    // Validate every URL up-front so the user gets fast feedback rather
+    // than a batch that fails midway.
+    for url in &urls {
+        let parsed = Url::parse(url).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
+        if parsed.scheme() != "http" && parsed.scheme() != "https" {
+            return Err(format!("URL scheme must be http or https: {}", url));
+        }
+    }
+
+    let on_failure = match on_failure {
+        Some(m) => m,
+        None => get_settings(app.clone()).await?.batch_on_failure,
+    };
+
+    let batch = BatchJob {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: name.and_then(|n| {
+            let t = n.trim().to_string();
+            if t.is_empty() { None } else { Some(t) }
+        }),
+        urls,
+        config,
+        on_failure,
+        child_job_ids: Vec::new(),
+        status: BatchStatus::Queued,
+        current_index: 0,
+        created_at: chrono::Utc::now().to_rfc3339(),
+        error: None,
+        start_time: None,
+        end_time: None,
+    };
+
+    spawn_batch(batch, state.inner().clone(), app)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn stop_batch(batch_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    let active = state.active_batches.read().await;
+    if let Some(handle) = active.get(&batch_id) {
+        handle.should_stop.store(true, Ordering::Relaxed);
+        Ok(())
+    } else {
+        Err("Batch not found or already completed".into())
+    }
+}
+
+#[tauri::command]
+pub async fn get_batch(
+    batch_id: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<BatchJob, String> {
+    // Prefer the live version so in-progress state is fresh.
+    {
+        let active = state.active_batches.read().await;
+        if let Some(handle) = active.get(&batch_id) {
+            return Ok(handle.batch.read().await.clone());
+        }
+    }
+    state
+        .batches
+        .get(&batch_id)
+        .await
+        .ok_or_else(|| "Batch not found".into())
+}
+
+#[tauri::command]
+pub async fn list_batches(state: State<'_, Arc<AppState>>) -> Result<Vec<BatchJob>, String> {
+    let mut out: Vec<BatchJob> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    {
+        let active = state.active_batches.read().await;
+        for (id, handle) in active.iter() {
+            seen.insert(id.clone());
+            out.push(handle.batch.read().await.clone());
+        }
+    }
+    let persisted = state.batches.read().await;
+    for (id, b) in persisted.iter() {
+        if !seen.contains(id) {
+            out.push(b.clone());
+        }
+    }
+    // Newest first.
+    out.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn delete_batch(batch_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    {
+        let active = state.active_batches.read().await;
+        if let Some(handle) = active.get(&batch_id) {
+            handle.should_stop.store(true, Ordering::Relaxed);
+        }
+    }
+    state.batches.remove(&batch_id).await.map_err(|e| e.to_string())?;
+    Ok(())
 }

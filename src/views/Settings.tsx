@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   shortcutOverrides: {},
   autoExportFormat: null,
   sitemapAutoDiscover: true,
+  batchOnFailure: 'continue',
 };
 
 const WINDOW_PRESETS = [
@@ -494,6 +495,26 @@ export function SettingsView() {
               </p>
             </div>
           </label>
+        </Section>
+
+        {/* Batch Behavior */}
+        <Section title="Batch Crawls">
+          <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+            When a URL in the batch fails
+          </label>
+          <select
+            value={settings.batchOnFailure}
+            onChange={(e) =>
+              setSettings({ ...settings, batchOnFailure: e.target.value as AppSettings['batchOnFailure'] })
+            }
+            className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all appearance-none"
+          >
+            <option value="continue">Continue with the next URL</option>
+            <option value="stop">Stop the batch</option>
+          </select>
+          <p className="text-charcoal text-xs mt-1.5">
+            Default for new batch crawls. Individual batches can override this at launch.
+          </p>
         </Section>
         </>
         )}

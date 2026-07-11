@@ -1,6 +1,7 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::broadcast;
+use crate::crawler::batch::BatchStatus;
 use crate::crawler::job::{CrawlProgress, JobStatus, PageMeta};
 
 #[derive(Debug, Clone, Serialize)]
@@ -22,6 +23,14 @@ pub enum CrawlEvent {
     PageComplete { job_id: String, page: PageMeta },
     JobStatusChanged { job_id: String, status: JobStatus },
     Error { job_id: String, message: String, kind: ErrorKind },
+    BatchProgress {
+        batch_id: String,
+        current_index: usize,
+        total: usize,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        current_job_id: Option<String>,
+    },
+    BatchStatusChanged { batch_id: String, status: BatchStatus },
 }
 
 #[derive(Clone)]

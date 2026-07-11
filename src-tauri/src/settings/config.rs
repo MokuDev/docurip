@@ -38,6 +38,21 @@ pub struct AppSettings {
     /// well-known sitemap locations to surface a "sitemap found" banner.
     #[serde(default = "default_true")]
     pub sitemap_auto_discover: bool,
+    /// What a batch crawl does when one of its child jobs fails: keep
+    /// crawling the remaining URLs, or abort the batch.
+    #[serde(default)]
+    pub batch_on_failure: BatchFailureMode,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum BatchFailureMode {
+    Continue,
+    Stop,
+}
+
+impl Default for BatchFailureMode {
+    fn default() -> Self { BatchFailureMode::Continue }
 }
 
 impl Default for AppSettings {
@@ -65,6 +80,7 @@ impl Default for AppSettings {
             shortcut_overrides: HashMap::new(),
             auto_export_format: None,
             sitemap_auto_discover: true,
+            batch_on_failure: BatchFailureMode::Continue,
         }
     }
 }

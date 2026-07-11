@@ -56,4 +56,8 @@ pub struct CrawlJob {
     pub error: Option<String>,
     pub start_time: Option<String>,
     pub end_time: Option<String>,
+    /// Set when this job is a child of a batch. Present for History
+    /// grouping and does not affect crawl behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_id: Option<String>,
 }

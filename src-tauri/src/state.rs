@@ -10,6 +10,7 @@ use tokio::fs;
 use tokio::sync::{Notify, RwLock, RwLockReadGuard};
 use uuid::Uuid;
 
+use crate::crawler::batch::BatchJob;
 use crate::crawler::job::CrawlJob;
 use crate::events::bus::EventBus;
 use crate::settings::templates::CrawlTemplate;
@@ -19,6 +20,15 @@ pub struct JobHandle {
     pub should_stop: Arc<AtomicBool>,
     pub should_pause: Arc<AtomicBool>,
     pub resume_notify: Arc<Notify>,
+    pub event_bus: EventBus,
+}
+
+/// Live-batch bookkeeping. Held in `AppState.active_batches` while a
+/// batch runs so `stop_batch` / status polling can reach into the
+/// running task.
+pub struct BatchHandle {
+    pub batch: Arc<RwLock<BatchJob>>,
+    pub should_stop: Arc<AtomicBool>,
     pub event_bus: EventBus,
 }
 
@@ -35,6 +45,8 @@ impl HasId for CrawlJob {
 impl HasId for CrawlTemplate {
     fn id(&self) -> &str { &self.id }
 }
+
+// `BatchJob` implements `HasId` in its defining module.
 
 /// One-JSON-file-per-entry, in-memory-cached, `RwLock`-protected store.
 ///
@@ -119,18 +131,26 @@ where
 
 pub struct AppState {
     pub active_jobs: RwLock<HashMap<String, JobHandle>>,
+    pub active_batches: RwLock<HashMap<String, BatchHandle>>,
     pub jobs: JsonStore<CrawlJob>,
     pub templates: JsonStore<CrawlTemplate>,
+    pub batches: JsonStore<BatchJob>,
     pub session_id: String,
     pub start_time: Instant,
 }
 
 impl AppState {
-    pub fn init(persist_dir: PathBuf, templates_dir: PathBuf) -> anyhow::Result<Self> {
+    pub fn init(
+        persist_dir: PathBuf,
+        templates_dir: PathBuf,
+        batches_dir: PathBuf,
+    ) -> anyhow::Result<Self> {
         Ok(Self {
             active_jobs: RwLock::new(HashMap::new()),
+            active_batches: RwLock::new(HashMap::new()),
             jobs: JsonStore::init(persist_dir)?,
             templates: JsonStore::init(templates_dir)?,
+            batches: JsonStore::init(batches_dir)?,
             session_id: Uuid::new_v4().to_string(),
             start_time: Instant::now(),
         })
@@ -198,6 +218,7 @@ mod tests {
             error: None,
             start_time: None,
             end_time: None,
+            batch_id: None,
         }
     }
 
@@ -292,6 +313,7 @@ mod tests {
         let state = AppState::init(
             temp_dir.path().join("jobs"),
             temp_dir.path().join("templates"),
+            temp_dir.path().join("batches"),
         )
         .unwrap();
         let job = create_test_job("job-1");
@@ -310,6 +332,7 @@ mod tests {
         let state = AppState::init(
             temp_dir.path().join("jobs"),
             temp_dir.path().join("templates"),
+            temp_dir.path().join("batches"),
         )
         .unwrap();
         let template = create_test_template("tpl-1");
@@ -332,7 +355,12 @@ mod tests {
                 JsonStore::init(templates_dir.clone()).unwrap();
             store.insert(create_test_template("tpl-1")).await.unwrap();
         }
-        let state = AppState::init(temp_dir.path().join("jobs"), templates_dir).unwrap();
+        let state = AppState::init(
+            temp_dir.path().join("jobs"),
+            templates_dir,
+            temp_dir.path().join("batches"),
+        )
+        .unwrap();
         let templates = state.templates.read().await;
         assert_eq!(templates.len(), 1);
         assert!(templates.contains_key("tpl-1"));

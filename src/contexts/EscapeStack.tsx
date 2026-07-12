@@ -14,24 +14,34 @@ const EscapeStackContext = createContext<EscapeStackContextValue>({
 
 let nextId = 0;
 
+interface Entry {
+  id: string;
+  handler: () => void;
+}
+
 export function EscapeStackProvider({ children }: { children: React.ReactNode }) {
-  const stack = useRef<Map<string, () => void>>(new Map());
+  const stack = useRef<Entry[]>([]);
 
   const push = useCallback((handler: () => void): string => {
     const id = `esc-${++nextId}`;
-    stack.current.set(id, handler);
+    stack.current.push({ id, handler });
     return id;
   }, []);
 
   const remove = useCallback((id: string) => {
-    stack.current.delete(id);
+    const arr = stack.current;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (arr[i].id === id) {
+        arr.splice(i, 1);
+        return;
+      }
+    }
   }, []);
 
   const fireTop = useCallback((): boolean => {
-    const entries = Array.from(stack.current.entries());
-    if (entries.length === 0) return false;
-    const [, handler] = entries[entries.length - 1];
-    handler();
+    const arr = stack.current;
+    if (arr.length === 0) return false;
+    arr[arr.length - 1].handler();
     return true;
   }, []);
 

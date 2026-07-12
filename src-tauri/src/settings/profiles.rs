@@ -89,14 +89,6 @@ impl CrawlProfile {
         }
     }
 
-    pub fn default_include_patterns(&self) -> Vec<String> {
-        vec![]
-    }
-
-    pub fn default_path_prefix(&self) -> String {
-        String::new()
-    }
-
     pub fn default_respect_robots_txt(&self) -> bool {
         match self {
             CrawlProfile::ApiDocs => true,

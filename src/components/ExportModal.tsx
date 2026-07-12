@@ -23,7 +23,7 @@ export function ExportModal({ jobId, onClose }: ExportModalProps) {
   useEffect(() => {
     const id = escapeStack.push(onClose);
     return () => escapeStack.remove(id);
-  }, [onClose]);
+  }, [onClose, escapeStack]);
 
   useEffect(() => {
     invoke<boolean>('check_headless_support').then(setHeadlessSupported).catch(() => {});

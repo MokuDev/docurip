@@ -56,16 +56,16 @@ fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
     if config.headless_strategy.is_empty() {
         return Err("headless_strategy must not be empty".to_string());
     }
-    for pattern in &config.exclude_patterns {
+    validate_pattern_list(&config.exclude_patterns, "exclude")?;
+    validate_pattern_list(&config.include_patterns, "include")?;
+    Ok(())
+}
+
+fn validate_pattern_list(patterns: &[String], label: &str) -> Result<(), String> {
+    for pattern in patterns {
         if !pattern.is_empty() {
             regex::Regex::new(pattern)
-                .map_err(|e| format!("Invalid exclude pattern '{}': {}", pattern, e))?;
-        }
-    }
-    for pattern in &config.include_patterns {
-        if !pattern.is_empty() {
-            regex::Regex::new(pattern)
-                .map_err(|e| format!("Invalid include pattern '{}': {}", pattern, e))?;
+                .map_err(|e| format!("Invalid {} pattern '{}': {}", label, pattern, e))?;
         }
     }
     Ok(())

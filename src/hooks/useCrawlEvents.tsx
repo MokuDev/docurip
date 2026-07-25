@@ -53,26 +53,27 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
             nextActive.delete(jobId);
             if (!terminalJobsHandled.current.has(jobId)) {
               terminalJobsHandled.current.add(jobId);
-              invoke<AppSettings>('get_settings').then((settings) => {
+              Promise.all([
+                invoke<AppSettings>('get_settings'),
+                invoke<CrawlJob>('get_job', { jobId }),
+              ]).then(([settings, job]) => {
                 const wantsNotification = settings.notificationsEnabled;
                 const wantsAutoExport = event.status === 'completed' && !!settings.autoExportFormat;
                 if (!wantsNotification && !wantsAutoExport) return;
-                invoke<CrawlJob>('get_job', { jobId }).then((job) => {
-                  if (wantsNotification) {
-                    if (event.status === 'completed') {
-                      notifyCrawlComplete(job.url, job.results.length);
-                    } else if (event.status === 'failed') {
-                      notifyCrawlFailed(job.url, job.error);
-                    }
+                if (wantsNotification) {
+                  if (event.status === 'completed') {
+                    notifyCrawlComplete(job.url, job.results.length);
+                  } else if (event.status === 'failed') {
+                    notifyCrawlFailed(job.url, job.error);
                   }
-                  if (wantsAutoExport) {
-                    const format = settings.autoExportFormat;
-                    invoke('export_job_v2', { jobId, format, destination: null })
-                      .then(() => pushToast('success', `Auto-exported ${job.url} as ${format}`))
-                      .catch((err) => pushToast('error', `Auto-export failed: ${err}`));
-                  }
-                }).catch((err) => { console.warn('Failed to fetch job for terminal event handling:', err); });
-              }).catch((err) => { console.warn('Failed to fetch settings for terminal event handling:', err); });
+                }
+                if (wantsAutoExport) {
+                  const format = settings.autoExportFormat;
+                  invoke('export_job_v2', { jobId, format, destination: null })
+                    .then(() => pushToast('success', `Auto-exported ${job.url} as ${format}`))
+                    .catch((err) => pushToast('error', `Auto-export failed: ${err}`));
+                }
+              }).catch((err) => { console.warn('Failed to load settings/job for terminal event handling:', err); });
             }
           }
         }

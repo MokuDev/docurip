@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.4 (2026-07-12)
+
+### Changed
+- **Optimizations M1 (quick cleanups)**: removed unused `CrawlProfile::default_include_patterns` / `default_path_prefix` placeholders (dead since v0.6.2's user-defined templates superseded them); extracted `validate_pattern_list` helper in `commands.rs` so exclude/include validation shares one loop; replaced `EscapeStack`'s `Map` + `Array.from(entries)` with a plain array of `{id, handler}` so `fireTop` reads the top without per-press allocation; added `escapeStack` to the `ExportModal` push/remove effect deps for correctness (context value is stable today).
+
 ## v0.6.3 (2026-07-12)
 
 ### Added

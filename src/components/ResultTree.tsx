@@ -168,8 +168,20 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
     return <p className="text-charcoal text-xs px-3 py-4 text-center">No results found</p>;
   }
 
+  const activeDescendantId =
+    focusedIndex >= 0 && focusedIndex < visibleNodes.length
+      ? `result-tree-item-${visibleNodes[focusedIndex].node.path}`
+      : undefined;
+
   return (
-    <div tabIndex={0} onKeyDown={handleKeyDown} className="outline-none h-full">
+    <div
+      tabIndex={0}
+      role="tree"
+      aria-label="Crawl results"
+      aria-activedescendant={activeDescendantId}
+      onKeyDown={handleKeyDown}
+      className="outline-none h-full"
+    >
       <List
         listRef={listRef}
         rowCount={visibleNodes.length}
@@ -185,6 +197,11 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
           return (
             <div style={style}>
               <button
+                id={`result-tree-item-${node.path}`}
+                role="treeitem"
+                aria-level={depth + 1}
+                aria-selected={isSelected}
+                aria-expanded={hasChildren ? isExpanded : undefined}
                 onClick={() => {
                   setFocusedIndex(index);
                   if (node.page) onSelect(node.page);

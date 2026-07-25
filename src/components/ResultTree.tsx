@@ -1,4 +1,4 @@
-import { FileText, CaretRight, CaretDown, Star } from '@phosphor-icons/react';
+import { FileText, CaretRight, CaretDown, Star, NotePencil } from '@phosphor-icons/react';
 import { useState, useMemo, useEffect } from 'react';
 import { List, useListRef } from 'react-window';
 import type { PageMeta } from '../types';
@@ -63,12 +63,13 @@ interface ResultTreeProps {
   filterQuery?: string;
   bookmarks?: Set<string>;
   onToggleBookmark?: (url: string) => void;
+  annotatedUrls?: Set<string>;
 }
 
 const ROW_HEIGHT = 32;
 const ROW_PROPS = {};
 
-export function ResultTree({ pages, selectedUrl, onSelect, filterQuery, bookmarks, onToggleBookmark }: ResultTreeProps) {
+export function ResultTree({ pages, selectedUrl, onSelect, filterQuery, bookmarks, onToggleBookmark, annotatedUrls }: ResultTreeProps) {
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const listRef = useListRef(null);
@@ -224,9 +225,19 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery, bookmark
                   <FileText size={14} className="text-charcoal" />
                 )}
                 <span className="truncate">{node.name}</span>
-                {node.page && (
-                  <span className="ml-auto text-[10px] text-charcoal font-mono">{node.page.status}</span>
-                )}
+                <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                  {node.page && annotatedUrls?.has(node.page.url) && (
+                    <NotePencil
+                      size={12}
+                      weight="fill"
+                      className="text-accentGreen/70"
+                      aria-label="Has notes"
+                    />
+                  )}
+                  {node.page && (
+                    <span className="text-[10px] text-charcoal font-mono">{node.page.status}</span>
+                  )}
+                </span>
                 {node.page && onToggleBookmark && (
                   <span
                     role="button"

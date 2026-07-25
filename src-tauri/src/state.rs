@@ -232,6 +232,7 @@ mod tests {
             end_time: None,
             batch_id: None,
             bookmarks: Vec::new(),
+            annotations: std::collections::HashMap::new(),
         }
     }
 

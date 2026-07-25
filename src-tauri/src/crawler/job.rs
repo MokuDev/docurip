@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use crate::settings::config::CrawlConfig;
 
@@ -64,4 +66,8 @@ pub struct CrawlJob {
     /// Persisted with the job so bookmarks survive restarts.
     #[serde(default)]
     pub bookmarks: Vec<String>,
+    /// User-authored notes keyed by page URL. Empty strings are pruned
+    /// on write. Persisted with the job.
+    #[serde(default)]
+    pub annotations: HashMap<String, String>,
 }

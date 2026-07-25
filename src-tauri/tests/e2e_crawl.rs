@@ -195,6 +195,7 @@ async fn end_to_end_crawl_writes_files_and_rewrites_assets() {
         end_time: None,
         batch_id: None,
         bookmarks: Vec::new(),
+        annotations: std::collections::HashMap::new(),
     };
 
     let handle = CrawlHandle {

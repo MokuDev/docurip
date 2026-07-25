@@ -125,6 +125,8 @@ export interface CrawlJob {
   batchId?: string;
   /** URLs the user has bookmarked in the Result Browser. */
   bookmarks?: string[];
+  /** User notes keyed by page URL. */
+  annotations?: Record<string, string>;
 }
 
 export type ThemePreference = 'dark' | 'light' | 'system';

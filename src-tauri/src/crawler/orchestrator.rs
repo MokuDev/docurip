@@ -135,37 +135,8 @@ impl Orchestrator {
         }
         let writer = FsWriter::new(&main_dir);
         let resolved_config = CrawlConfig { output_dir: base_output.clone(), ..config };
-        let exclude_set = if resolved_config.exclude_patterns.is_empty() {
-            None
-        } else {
-            let patterns: Vec<&str> = resolved_config.exclude_patterns
-                .iter()
-                .filter(|p| !p.is_empty())
-                .map(|p| p.as_str())
-                .collect();
-            if patterns.is_empty() {
-                None
-            } else {
-                Some(RegexSet::new(&patterns)
-                    .map_err(|e| anyhow::anyhow!("Invalid exclude pattern: {}", e))?)
-            }
-        };
-
-        let include_set = if resolved_config.include_patterns.is_empty() {
-            None
-        } else {
-            let patterns: Vec<&str> = resolved_config.include_patterns
-                .iter()
-                .filter(|p| !p.is_empty())
-                .map(|p| p.as_str())
-                .collect();
-            if patterns.is_empty() {
-                None
-            } else {
-                Some(RegexSet::new(&patterns)
-                    .map_err(|e| anyhow::anyhow!("Invalid include pattern: {}", e))?)
-            }
-        };
+        let exclude_set = build_regex_set(&resolved_config.exclude_patterns, "exclude")?;
+        let include_set = build_regex_set(&resolved_config.include_patterns, "include")?;
         let path_prefix = resolved_config.path_prefix.clone();
 
     Ok(Self {
@@ -689,6 +660,10 @@ impl Orchestrator {
             const MAX_QUEUE_SIZE: usize = 50_000;
             for link in links {
                 if !visited.contains(&link) && is_valid_url(&link) {
+                    let parsed_link = match Url::parse(&link) {
+                        Ok(p) => p,
+                        Err(_) => continue,
+                    };
                     if self.config.ssrf_protection && ssrf::is_private_target(&link) {
                         let job_id = self.handle.job.read().await.id.clone();
                         let _ = self.handle.event_bus.emit(CrawlEvent::Log {
@@ -701,32 +676,16 @@ impl Orchestrator {
                     if self.config.respect_robots_txt && !self.robots.is_allowed(&link) {
                         continue;
                     }
-                    if self.config.stay_within_domain {
-                        if let Ok(parsed) = Url::parse(&link) {
-                            if parsed.host_str() != base_host {
-                                continue;
-                            }
-                        } else {
-                            continue;
-                        }
+                    if self.config.stay_within_domain && parsed_link.host_str() != base_host {
+                        continue;
                     }
                     if let Some(ref set) = self.exclude_set {
                         if set.is_match(&link) {
                             continue;
                         }
                     }
-                    let has_include_constraint = self.include_set.is_some() || !self.path_prefix.is_empty();
-                    if has_include_constraint {
-                        let matches_include = self.include_set.as_ref()
-                            .map_or(false, |set| set.is_match(&link));
-                        let matches_prefix = if !self.path_prefix.is_empty() {
-                            Url::parse(&link).map_or(false, |u| u.path().starts_with(&self.path_prefix))
-                        } else {
-                            false
-                        };
-                        if !matches_include && !matches_prefix {
-                            continue;
-                        }
+                    if !passes_include_rules(self.include_set.as_ref(), &self.path_prefix, &parsed_link) {
+                        continue;
                     }
                     if queue.len() >= MAX_QUEUE_SIZE {
                         let job_id = self.handle.job.read().await.id.clone();
@@ -743,6 +702,37 @@ impl Orchestrator {
             }
         }
     }
+}
+
+/// Builds a `RegexSet` from a list of pattern strings, skipping empty
+/// entries. Returns `None` when no non-empty patterns remain.
+fn build_regex_set(patterns: &[String], label: &str) -> anyhow::Result<Option<RegexSet>> {
+    let non_empty: Vec<&str> = patterns.iter().filter(|p| !p.is_empty()).map(|p| p.as_str()).collect();
+    if non_empty.is_empty() {
+        return Ok(None);
+    }
+    RegexSet::new(&non_empty)
+        .map(Some)
+        .map_err(|e| anyhow::anyhow!("Invalid {} pattern: {}", label, e))
+}
+
+/// Returns true if the given URL passes the include filter: either there
+/// is no include constraint at all, or the URL matches the include-pattern
+/// `RegexSet` or the path-prefix rule. Kept as a free function so it can
+/// be exercised in unit tests without constructing an `Orchestrator`.
+fn passes_include_rules(
+    include_set: Option<&RegexSet>,
+    path_prefix: &str,
+    parsed: &Url,
+) -> bool {
+    let has_constraint = include_set.is_some() || !path_prefix.is_empty();
+    if !has_constraint {
+        return true;
+    }
+    let matches_include = include_set
+        .map_or(false, |set| set.is_match(parsed.as_str()));
+    let matches_prefix = !path_prefix.is_empty() && parsed.path().starts_with(path_prefix);
+    matches_include || matches_prefix
 }
 
 /// Returns true if the given error indicates a disk-related write failure
@@ -855,36 +845,75 @@ mod tests {
         assert!(!is_disk_error(&network));
     }
 
-    #[test]
-    fn include_set_none_admits_all() {
-        let include_set: Option<RegexSet> = None;
-        let path_prefix = String::new();
-        let has_constraint = include_set.is_some() || !path_prefix.is_empty();
-        assert!(!has_constraint, "No constraints should admit all URLs");
+    fn url(s: &str) -> Url {
+        Url::parse(s).unwrap()
     }
 
     #[test]
-    fn include_set_filters_non_matching() {
-        let set = RegexSet::new(&[r"/docs/api/.*"]).unwrap();
-        assert!(set.is_match("https://example.com/docs/api/v1"));
-        assert!(!set.is_match("https://example.com/blog/post"));
+    fn passes_include_rules_admits_all_when_unconstrained() {
+        assert!(passes_include_rules(None, "", &url("https://example.com/anything")));
+        assert!(passes_include_rules(None, "", &url("https://example.com/other/path")));
     }
 
     #[test]
-    fn path_prefix_filters_correctly() {
-        let prefix = "/docs/api/";
-        let url_match = Url::parse("https://example.com/docs/api/v1").unwrap();
-        let url_miss = Url::parse("https://example.com/blog/post").unwrap();
-        assert!(url_match.path().starts_with(prefix));
-        assert!(!url_miss.path().starts_with(prefix));
+    fn passes_include_rules_respects_regex_set() {
+        let set = RegexSet::new([r"/docs/api/.*"]).unwrap();
+        assert!(passes_include_rules(Some(&set), "", &url("https://example.com/docs/api/v1")));
+        assert!(!passes_include_rules(Some(&set), "", &url("https://example.com/blog/post")));
+    }
+
+    #[test]
+    fn passes_include_rules_respects_path_prefix() {
+        assert!(passes_include_rules(None, "/docs/api/", &url("https://example.com/docs/api/v1")));
+        assert!(!passes_include_rules(None, "/docs/api/", &url("https://example.com/blog/post")));
+    }
+
+    #[test]
+    fn passes_include_rules_or_combines_include_and_prefix() {
+        let set = RegexSet::new([r".*/guides/.*"]).unwrap();
+        assert!(
+            passes_include_rules(Some(&set), "/docs/", &url("https://example.com/guides/intro")),
+            "Include-set match alone should pass"
+        );
+        assert!(
+            passes_include_rules(Some(&set), "/docs/", &url("https://example.com/docs/reference")),
+            "Prefix match alone should pass"
+        );
+        assert!(
+            !passes_include_rules(Some(&set), "/docs/", &url("https://example.com/blog/post")),
+            "Neither match should fail"
+        );
+    }
+
+    #[test]
+    fn build_regex_set_skips_empty_entries() {
+        let set = build_regex_set(
+            &[String::new(), "/docs/.*".into(), String::new()],
+            "include",
+        )
+        .unwrap()
+        .expect("expected Some(RegexSet)");
+        assert!(set.is_match("https://example.com/docs/x"));
+    }
+
+    #[test]
+    fn build_regex_set_returns_none_when_all_empty() {
+        let set = build_regex_set(&[String::new(), String::new()], "include").unwrap();
+        assert!(set.is_none());
+    }
+
+    #[test]
+    fn build_regex_set_reports_invalid_pattern_with_label() {
+        let err = build_regex_set(&["[".into()], "exclude").unwrap_err();
+        assert!(err.to_string().contains("Invalid exclude pattern"));
     }
 
     #[test]
     fn exclude_overrides_include() {
-        let include = RegexSet::new(&[r".*docs.*"]).unwrap();
-        let exclude = RegexSet::new(&[r".*/docs/internal/.*"]).unwrap();
-        let url = "https://example.com/docs/internal/secret";
-        assert!(include.is_match(url), "Include should match");
-        assert!(exclude.is_match(url), "Exclude should also match, and takes priority");
+        let include = RegexSet::new([r".*docs.*"]).unwrap();
+        let exclude = RegexSet::new([r".*/docs/internal/.*"]).unwrap();
+        let target = "https://example.com/docs/internal/secret";
+        assert!(include.is_match(target), "Include should match");
+        assert!(exclude.is_match(target), "Exclude should also match, and takes priority");
     }
 }

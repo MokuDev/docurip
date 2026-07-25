@@ -60,6 +60,8 @@ pub fn run() {
             commands::list_jobs,
             commands::get_dashboard_stats,
             commands::delete_job,
+            commands::toggle_bookmark,
+            commands::set_annotation,
             commands::list_templates,
             commands::save_template,
             commands::delete_template,

@@ -105,6 +105,8 @@ pub(crate) async fn spawn_crawl(
         start_time: None,
         end_time: None,
         batch_id,
+        bookmarks: Vec::new(),
+        annotations: std::collections::HashMap::new(),
     };
 
     let job_arc = Arc::new(RwLock::new(job));
@@ -418,6 +420,94 @@ fn compute_velocity(job: Option<&CrawlJob>) -> f32 {
 #[tauri::command]
 pub async fn get_dashboard_stats(state: State<'_, Arc<AppState>>) -> Result<DashboardStats, String> {
     Ok(compute_dashboard_stats(state.inner().as_ref()).await)
+}
+
+/// Flip the bookmark state for `url` inside `job_id`. Persists the job
+/// and returns whether the URL is bookmarked after the toggle.
+#[tauri::command]
+pub async fn toggle_bookmark(
+    job_id: String,
+    url: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool, String> {
+    let (job_snapshot, is_bookmarked_after) = {
+        let active = state.active_jobs.read().await;
+        if let Some(handle) = active.get(&job_id) {
+            let mut job = handle.job.write().await;
+            let now_bookmarked = flip_bookmark(&mut job.bookmarks, &url);
+            (job.clone(), now_bookmarked)
+        } else {
+            drop(active);
+            let mut job = state
+                .jobs
+                .get(&job_id)
+                .await
+                .ok_or_else(|| "Job not found".to_string())?;
+            let now_bookmarked = flip_bookmark(&mut job.bookmarks, &url);
+            (job, now_bookmarked)
+        }
+    };
+    state
+        .persist_job(&job_snapshot)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(is_bookmarked_after)
+}
+
+fn flip_bookmark(bookmarks: &mut Vec<String>, url: &str) -> bool {
+    if let Some(pos) = bookmarks.iter().position(|u| u == url) {
+        bookmarks.remove(pos);
+        false
+    } else {
+        bookmarks.push(url.to_string());
+        true
+    }
+}
+
+/// Store `text` (trimmed) as the annotation for `url` inside `job_id`.
+/// An empty trimmed string removes the annotation. Persists the job.
+#[tauri::command]
+pub async fn set_annotation(
+    job_id: String,
+    url: String,
+    text: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    let job_snapshot = {
+        let active = state.active_jobs.read().await;
+        if let Some(handle) = active.get(&job_id) {
+            let mut job = handle.job.write().await;
+            apply_annotation(&mut job.annotations, &url, &text);
+            job.clone()
+        } else {
+            drop(active);
+            let mut job = state
+                .jobs
+                .get(&job_id)
+                .await
+                .ok_or_else(|| "Job not found".to_string())?;
+            apply_annotation(&mut job.annotations, &url, &text);
+            job
+        }
+    };
+    state
+        .persist_job(&job_snapshot)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn apply_annotation(
+    annotations: &mut std::collections::HashMap<String, String>,
+    url: &str,
+    text: &str,
+) {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        annotations.remove(url);
+    } else {
+        annotations.insert(url.to_string(), trimmed.to_string());
+    }
 }
 
 #[tauri::command]
@@ -1044,4 +1134,57 @@ pub async fn delete_batch(batch_id: String, state: State<'_, Arc<AppState>>) -> 
     }
     state.batches.remove(&batch_id).await.map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_annotation, flip_bookmark};
+    use std::collections::HashMap;
+
+    #[test]
+    fn apply_annotation_sets_new_note() {
+        let mut annotations: HashMap<String, String> = HashMap::new();
+        apply_annotation(&mut annotations, "https://example.com/a", "  hello  ");
+        assert_eq!(annotations.get("https://example.com/a"), Some(&"hello".to_string()));
+    }
+
+    #[test]
+    fn apply_annotation_overwrites_existing_note() {
+        let mut annotations: HashMap<String, String> = HashMap::new();
+        annotations.insert("https://example.com/a".into(), "old".into());
+        apply_annotation(&mut annotations, "https://example.com/a", "new");
+        assert_eq!(annotations.get("https://example.com/a"), Some(&"new".to_string()));
+    }
+
+    #[test]
+    fn apply_annotation_removes_on_empty_text() {
+        let mut annotations: HashMap<String, String> = HashMap::new();
+        annotations.insert("https://example.com/a".into(), "note".into());
+        apply_annotation(&mut annotations, "https://example.com/a", "   ");
+        assert!(annotations.is_empty());
+    }
+
+    #[test]
+    fn flip_bookmark_adds_new_url() {
+        let mut bookmarks: Vec<String> = Vec::new();
+        assert!(flip_bookmark(&mut bookmarks, "https://example.com/a"));
+        assert_eq!(bookmarks, vec!["https://example.com/a".to_string()]);
+    }
+
+    #[test]
+    fn flip_bookmark_removes_existing_url() {
+        let mut bookmarks = vec!["https://example.com/a".to_string()];
+        assert!(!flip_bookmark(&mut bookmarks, "https://example.com/a"));
+        assert!(bookmarks.is_empty());
+    }
+
+    #[test]
+    fn flip_bookmark_preserves_unrelated_entries() {
+        let mut bookmarks = vec![
+            "https://example.com/a".to_string(),
+            "https://example.com/b".to_string(),
+        ];
+        assert!(!flip_bookmark(&mut bookmarks, "https://example.com/a"));
+        assert_eq!(bookmarks, vec!["https://example.com/b".to_string()]);
+    }
 }

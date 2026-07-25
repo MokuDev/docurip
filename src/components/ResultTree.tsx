@@ -1,4 +1,4 @@
-import { FileText, CaretRight, CaretDown } from '@phosphor-icons/react';
+import { FileText, CaretRight, CaretDown, Star, NotePencil } from '@phosphor-icons/react';
 import { useState, useMemo, useEffect } from 'react';
 import { List, useListRef } from 'react-window';
 import type { PageMeta } from '../types';
@@ -61,12 +61,15 @@ interface ResultTreeProps {
   selectedUrl: string;
   onSelect: (page: PageMeta) => void;
   filterQuery?: string;
+  bookmarks?: Set<string>;
+  onToggleBookmark?: (url: string) => void;
+  annotatedUrls?: Set<string>;
 }
 
 const ROW_HEIGHT = 32;
 const ROW_PROPS = {};
 
-export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: ResultTreeProps) {
+export function ResultTree({ pages, selectedUrl, onSelect, filterQuery, bookmarks, onToggleBookmark, annotatedUrls }: ResultTreeProps) {
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const listRef = useListRef(null);
@@ -168,8 +171,20 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
     return <p className="text-charcoal text-xs px-3 py-4 text-center">No results found</p>;
   }
 
+  const activeDescendantId =
+    focusedIndex >= 0 && focusedIndex < visibleNodes.length
+      ? `result-tree-item-${visibleNodes[focusedIndex].node.path}`
+      : undefined;
+
   return (
-    <div tabIndex={0} onKeyDown={handleKeyDown} className="outline-none h-full">
+    <div
+      tabIndex={0}
+      role="tree"
+      aria-label="Crawl results"
+      aria-activedescendant={activeDescendantId}
+      onKeyDown={handleKeyDown}
+      className="outline-none h-full"
+    >
       <List
         listRef={listRef}
         rowCount={visibleNodes.length}
@@ -185,6 +200,11 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
           return (
             <div style={style}>
               <button
+                id={`result-tree-item-${node.path}`}
+                role="treeitem"
+                aria-level={depth + 1}
+                aria-selected={isSelected}
+                aria-expanded={hasChildren ? isExpanded : undefined}
                 onClick={() => {
                   setFocusedIndex(index);
                   if (node.page) onSelect(node.page);
@@ -205,8 +225,44 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
                   <FileText size={14} className="text-charcoal" />
                 )}
                 <span className="truncate">{node.name}</span>
-                {node.page && (
-                  <span className="ml-auto text-[10px] text-charcoal font-mono">{node.page.status}</span>
+                <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+                  {node.page && annotatedUrls?.has(node.page.url) && (
+                    <NotePencil
+                      size={12}
+                      weight="fill"
+                      className="text-accentGreen/70"
+                      aria-label="Has notes"
+                    />
+                  )}
+                  {node.page && (
+                    <span className="text-[10px] text-charcoal font-mono">{node.page.status}</span>
+                  )}
+                </span>
+                {node.page && onToggleBookmark && (
+                  <span
+                    role="button"
+                    tabIndex={-1}
+                    aria-label={bookmarks?.has(node.page.url) ? 'Remove bookmark' : 'Add bookmark'}
+                    aria-pressed={bookmarks?.has(node.page.url) ?? false}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleBookmark(node.page!.url);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onToggleBookmark(node.page!.url);
+                      }
+                    }}
+                    className={`p-0.5 rounded transition-colors ${
+                      bookmarks?.has(node.page.url)
+                        ? 'text-yellow-400 hover:text-yellow-300'
+                        : 'text-charcoal/40 hover:text-yellow-400/70'
+                    }`}
+                  >
+                    <Star size={13} weight={bookmarks?.has(node.page.url) ? 'fill' : 'regular'} />
+                  </span>
                 )}
               </button>
             </div>

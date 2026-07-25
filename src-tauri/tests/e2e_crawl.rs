@@ -30,7 +30,7 @@ use tokio::time::sleep;
 use docurip::crawler::job::{CrawlJob, CrawlProgress, JobStatus};
 use docurip::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use docurip::events::bus::EventBus;
-use docurip::settings::config::{AppSettings, CrawlConfig};
+use docurip::settings::config::{AppSettings, BatchFailureMode, CrawlConfig};
 
 const PNG_BYTES: [u8; 67] = [
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
@@ -111,6 +111,8 @@ fn make_settings() -> AppSettings {
         notifications_enabled: true,
         shortcut_overrides: std::collections::HashMap::new(),
         auto_export_format: None,
+        sitemap_auto_discover: false,
+        batch_on_failure: BatchFailureMode::Continue,
     }
 }
 
@@ -191,6 +193,9 @@ async fn end_to_end_crawl_writes_files_and_rewrites_assets() {
         error: None,
         start_time: None,
         end_time: None,
+        batch_id: None,
+        bookmarks: Vec::new(),
+        annotations: std::collections::HashMap::new(),
     };
 
     let handle = CrawlHandle {

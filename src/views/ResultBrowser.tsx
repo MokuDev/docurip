@@ -7,6 +7,7 @@ import {
   FileArrowUp,
   FolderOpen,
   FileText,
+  Star,
 } from '@phosphor-icons/react';
 import type { CrawlJob, PageMeta, SearchMatch } from '../types';
 import { ResultTree } from '../components/ResultTree';
@@ -15,6 +16,7 @@ import { EmptyState } from '../components/EmptyState';
 import { useToasts } from '../hooks/useToasts';
 
 const MarkdownPreview = lazy(() => import('../components/MarkdownPreview').then(m => ({ default: m.MarkdownPreview })));
+import { AnnotationPanel } from '../components/AnnotationPanel';
 
 interface ResultBrowserProps {
   job: CrawlJob;
@@ -31,8 +33,43 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportPath, setExportPath] = useState('');
+  const [bookmarks, setBookmarks] = useState<Set<string>>(() => new Set(job.bookmarks ?? []));
+  const [bookmarksOnly, setBookmarksOnly] = useState(false);
+  const [annotations, setAnnotations] = useState<Record<string, string>>(() => ({ ...(job.annotations ?? {}) }));
 
-  const pages = job.results;
+  const annotatedUrls = useMemo(() => new Set(Object.keys(annotations)), [annotations]);
+
+  const persistAnnotation = useCallback(async (url: string, text: string) => {
+    await invoke('set_annotation', { jobId: job.id, url, text });
+  }, [job.id]);
+
+  const handleAnnotationSaved = useCallback((url: string, trimmed: string) => {
+    setAnnotations((prev) => {
+      const next = { ...prev };
+      if (trimmed) next[url] = trimmed;
+      else delete next[url];
+      return next;
+    });
+  }, []);
+
+  const pages = useMemo(
+    () => (bookmarksOnly ? job.results.filter((p) => bookmarks.has(p.url)) : job.results),
+    [job.results, bookmarks, bookmarksOnly],
+  );
+
+  const handleToggleBookmark = useCallback(async (url: string) => {
+    try {
+      const nowBookmarked = await invoke<boolean>('toggle_bookmark', { jobId: job.id, url });
+      setBookmarks((prev) => {
+        const next = new Set(prev);
+        if (nowBookmarked) next.add(url);
+        else next.delete(url);
+        return next;
+      });
+    } catch (err) {
+      pushToast('error', `Failed to toggle bookmark: ${err}`);
+    }
+  }, [job.id, pushToast]);
 
   useEffect(() => {
     if (searchQuery.length >= 3) {
@@ -164,15 +201,31 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
         </div>
 
         {/* Toolbar */}
-        <div className="px-4 py-2 border-b border-abyssal/50">
-          <ResultSearch
-            value={searchQuery}
-            onChange={setSearchQuery}
-            resultCount={isSearching ? 0 : filteredPages.length}
-          />
-          {isSearching && (
-            <span className="text-charcoal text-xs mt-1 block">Searching...</span>
-          )}
+        <div className="px-4 py-2 border-b border-abyssal/50 flex items-center gap-3">
+          <div className="flex-1">
+            <ResultSearch
+              value={searchQuery}
+              onChange={setSearchQuery}
+              resultCount={isSearching ? 0 : filteredPages.length}
+            />
+            {isSearching && (
+              <span className="text-charcoal text-xs mt-1 block">Searching...</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setBookmarksOnly((v) => !v)}
+            aria-pressed={bookmarksOnly}
+            title={bookmarksOnly ? 'Show all pages' : 'Show only bookmarked pages'}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-all ${
+              bookmarksOnly
+                ? 'bg-yellow-400/15 text-yellow-300 border border-yellow-400/40'
+                : 'text-secondary hover:text-ghost hover:bg-surface/60 border border-transparent'
+            }`}
+          >
+            <Star size={13} weight={bookmarksOnly ? 'fill' : 'regular'} />
+            <span>{bookmarks.size}</span>
+          </button>
         </div>
 
         {/* Content */}
@@ -185,6 +238,9 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
                 selectedUrl={selectedPage?.url || ''}
                 onSelect={handleSelect}
                 filterQuery={searchMatches.length > 0 ? undefined : searchQuery}
+                bookmarks={bookmarks}
+                onToggleBookmark={handleToggleBookmark}
+                annotatedUrls={annotatedUrls}
               />
             ) : (
               <EmptyState
@@ -200,30 +256,41 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
             )}
           </div>
 
-          {/* Preview */}
-          <div className="flex-1 bg-deepVoid">
-            {selectedPage ? (
-              contentLoading ? (
-                <div className="flex items-center justify-center h-full text-charcoal text-sm">
-                  Loading…
-                </div>
-              ) : (
-                <Suspense fallback={
+          {/* Preview + notes */}
+          <div className="flex-1 bg-deepVoid flex flex-col min-w-0">
+            <div className="flex-1 min-h-0">
+              {selectedPage ? (
+                contentLoading ? (
                   <div className="flex items-center justify-center h-full text-charcoal text-sm">
-                    Loading preview…
+                    Loading…
                   </div>
-                }>
-                  <MarkdownPreview
-                    content={pageContent}
-                    searchQuery={searchQuery}
-                  />
-                </Suspense>
-              )
-            ) : (
-              <EmptyState
-                icon={<FileText size={48} />}
-                title="Select a page"
-                description="Click a page in the tree to preview its content."
+                ) : (
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center h-full text-charcoal text-sm">
+                      Loading preview…
+                    </div>
+                  }>
+                    <MarkdownPreview
+                      content={pageContent}
+                      searchQuery={searchQuery}
+                    />
+                  </Suspense>
+                )
+              ) : (
+                <EmptyState
+                  icon={<FileText size={48} />}
+                  title="Select a page"
+                  description="Click a page in the tree to preview its content."
+                />
+              )}
+            </div>
+            {selectedPage && (
+              <AnnotationPanel
+                jobId={job.id}
+                pageUrl={selectedPage.url}
+                value={annotations[selectedPage.url] ?? ''}
+                onSaved={(trimmed) => handleAnnotationSaved(selectedPage.url, trimmed)}
+                save={persistAnnotation}
               />
             )}
           </div>

@@ -47,6 +47,7 @@ function App() {
       history: () => setActiveTab('history'),
       settings: () => setActiveTab('settings'),
       import: () => setActiveTab('import'),
+      schedules: () => setActiveTab('schedules'),
     },
     onEscape: () => {
       if (!escapeStack.fireTop() && liveConsoleOpen) {
@@ -155,6 +156,7 @@ function App() {
               label="Scheduled"
               active={activeTab === 'schedules'}
               onClick={() => setActiveTab('schedules')}
+              shortcut={shortcutHint('schedules')}
             />
             <NavItem
               icon={<ClockCounterClockwise weight="fill" size={18} />}

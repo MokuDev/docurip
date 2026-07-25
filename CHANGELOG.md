@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6.5 (2026-07-25)
+
+### Added
+- **Crawl diff / change detection**: compare two crawls of the same site and see every page classified as added, removed, modified, unchanged, or unknown. `PageMeta` now carries a stable per-page content fingerprint (FNV-1a over the converted Markdown, serde-defaulted so older on-disk jobs load unchanged), computed by the orchestrator on each write. New backend `diff` module holds the pure, unit-tested comparison logic plus an on-demand line diff (via the `similar` crate); pages missing a hash on either side are reported honestly as "unknown" rather than guessed. New `diff_jobs` / `diff_page` commands back a `DiffView` overlay reached from a "Compare" action in History (shown only when an earlier completed crawl of the same URL exists): pick a baseline, filter by change kind, and click a changed page for its line-level diff.
+- **Scheduled / recurring crawls**: crawl a site automatically on a daily, weekly, or monthly cadence at a fixed UTC time (with weekday for weekly and day-of-month, clamped to 1–28, for monthly). A new `scheduler` module persists schedules through the generic `JsonStore<Schedule>` and runs an in-process ticker that wakes once a minute; its first tick fires immediately on launch, so a schedule missed while the app was closed runs at startup (**startup catch-up**). This in-process approach was chosen over an OS-level scheduler to fit the offline-first, single-user scope. New `list_schedules` / `save_schedule` / `delete_schedule` / `toggle_schedule` commands (with server-side `nextRun` computation and `validate_crawl_input` reused at save time and before each run) back a new **Scheduled** view for creating, editing, pausing, and deleting schedules; next/last run are shown in local time.
+
+### Changed
+- `validate_crawl_input` is now `pub(crate)` so the scheduler can revalidate a stored schedule's URL/config before spawning.
+
 ## v0.6.4 (2026-07-25)
 
 ### Added

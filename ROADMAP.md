@@ -61,7 +61,7 @@ Broken into incremental sub-releases, each building on the previous:
 - **Search highlighting in preview**: highlight matched terms in the MarkdownPreview pane when searching.
 - **Annotations**: attach user notes to crawled pages, persisted alongside the job data.
 
-#### v0.6.5 – Scheduling & Diff
+#### v0.6.5 – Scheduling & Diff ✅
 - **Scheduled / recurring crawls**: cron-style repeat (daily/weekly/monthly) with timer persistence and startup check. Builds on templates, batch queue, and notifications.
 - **Crawl diff / change detection**: when re-crawling a previously crawled site, detect and display new, deleted, and modified pages.
 
@@ -140,5 +140,5 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 - Which OCR engine and language-pack strategy should be used? (Tesseract vs. Rust-native; decide during v0.6.6 planning if OCR is pursued.)
 - Should macOS/Linux be first-class v1.0 targets or deferred to a post-1.0 release?
 - How should job templates be persisted? (JSON files in app data dir vs. tauri-plugin-store; decide during v0.6.2.)
-- What scheduling backend for recurring crawls? (In-process timer with on-startup catch-up vs. OS-level scheduler; decide during v0.6.5.)
-- How granular should crawl diffs be? (Page-level new/deleted/changed vs. line-level content diff; decide during v0.6.5.)
+- ~~What scheduling backend for recurring crawls?~~ Resolved in v0.6.5: in-process minute-ticker with on-startup catch-up (no OS-level scheduler), fitting the offline-first, single-user scope.
+- ~~How granular should crawl diffs be?~~ Resolved in v0.6.5: page-level new/deleted/modified as the core (via per-page content hash), with an on-demand line-level diff for a selected changed page.

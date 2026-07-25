@@ -27,6 +27,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { TemplateBar } from '../components/TemplateBar';
 import { SitemapPickerModal } from '../components/SitemapPickerModal';
 import { BatchUrlList, sanitizeBatchUrls } from '../components/BatchUrlList';
+import { FilterField } from '../components/FilterField';
 
 const MAX_LOGS = 500;
 
@@ -752,59 +753,31 @@ export function NewCrawlView({ prefillUrl, prefillConfig }: { prefillUrl?: strin
             </select>
           </div>
 
-          {/* Content Selectors */}
-          <div>
-            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
-              Content selectors (one per line)
-            </label>
-            <textarea
-              value={config.contentSelectors.join('\n')}
-              onChange={(e) =>
-                setConfig({ ...config, contentSelectors: e.target.value.split('\n') })
-              }
-              disabled={isBusy}
-              rows={3}
-              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all resize-none"
-              placeholder="main&#10;article&#10;.content"
-            />
-          </div>
+          <FilterField
+            label="Content selectors (one per line)"
+            values={config.contentSelectors}
+            onChange={(v) => setConfig({ ...config, contentSelectors: v })}
+            disabled={isBusy}
+            rows={3}
+            placeholder={'main\narticle\n.content'}
+          />
 
-          {/* Exclude Patterns */}
-          <div>
-            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
-              Exclude patterns (one per line)
-            </label>
-            <textarea
-              value={config.excludePatterns.join('\n')}
-              onChange={(e) =>
-                setConfig({ ...config, excludePatterns: e.target.value.split('\n') })
-              }
-              disabled={isBusy}
-              rows={2}
-              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all resize-none"
-              placeholder="/admin/*&#10;*.pdf"
-            />
-          </div>
+          <FilterField
+            label="Exclude patterns (one per line)"
+            values={config.excludePatterns}
+            onChange={(v) => setConfig({ ...config, excludePatterns: v })}
+            disabled={isBusy}
+            placeholder={'/admin/*\n*.pdf'}
+          />
 
-          {/* Include Patterns */}
-          <div>
-            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
-              Include patterns (one per line)
-            </label>
-            <textarea
-              value={config.includePatterns.join('\n')}
-              onChange={(e) =>
-                setConfig({ ...config, includePatterns: e.target.value.split('\n') })
-              }
-              disabled={isBusy}
-              rows={2}
-              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm placeholder-charcoal/40 focus:outline-none focus:border-accentGreen/50 focus:ring-1 focus:ring-accentGreen/20 transition-all resize-none"
-              placeholder="/docs/api/.*&#10;/reference/.*"
-            />
-            <p className="text-[11px] text-charcoal mt-1">
-              Only crawl URLs matching at least one pattern. Leave empty to crawl all.
-            </p>
-          </div>
+          <FilterField
+            label="Include patterns (one per line)"
+            values={config.includePatterns}
+            onChange={(v) => setConfig({ ...config, includePatterns: v })}
+            disabled={isBusy}
+            placeholder={'/docs/api/.*\n/reference/.*'}
+            help="Only crawl URLs matching at least one pattern. Leave empty to crawl all."
+          />
 
           {/* Path Prefix */}
           <div>

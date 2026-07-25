@@ -10,6 +10,12 @@ pub struct PageMeta {
     pub title: String,
     pub status: u16,
     pub links_count: usize,
+    /// Stable content fingerprint of the page's converted Markdown,
+    /// used by the crawl-diff feature to detect modified pages between
+    /// two crawls of the same site. `None` on jobs crawled before this
+    /// field existed; serde-defaulted so those on-disk jobs still load.
+    #[serde(default)]
+    pub content_hash: Option<String>,
 }
 
 /// Full page data used only during crawl processing; not stored in CrawlJob.

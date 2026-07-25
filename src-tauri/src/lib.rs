@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod crawler;
+pub mod diff;
 pub mod export;
 pub mod exports;
 pub mod fetcher;
@@ -73,6 +74,8 @@ pub fn run() {
             commands::export_job_v2,
             commands::check_headless_support,
             commands::read_page_content,
+            commands::diff_jobs,
+            commands::diff_page,
             commands::search_job_results,
             commands::export_job_zip,
             commands::list_exports,

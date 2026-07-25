@@ -86,6 +86,34 @@ export interface PageMeta {
   title: string;
   status: number;
   linksCount: number;
+  /** Content fingerprint used by crawl-diff. Absent on pages crawled
+   * before hashing existed. */
+  contentHash?: string | null;
+}
+
+export type ChangeKind = 'added' | 'removed' | 'modified' | 'unchanged' | 'unknown';
+
+export interface PageDiff {
+  url: string;
+  title: string;
+  kind: ChangeKind;
+}
+
+/** Result of `diff_jobs` — every page classified, plus per-bucket counts. */
+export interface DiffResult {
+  entries: PageDiff[];
+  added: number;
+  removed: number;
+  modified: number;
+  unchanged: number;
+  unknown: number;
+}
+
+export type LineTag = 'equal' | 'insert' | 'delete';
+
+export interface DiffLine {
+  tag: LineTag;
+  content: string;
 }
 
 /** Full page data returned only by read_page_content — not stored in CrawlJob. */

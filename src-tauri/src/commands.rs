@@ -778,6 +778,65 @@ pub async fn read_page_content(
         .map_err(|e| format!("Could not read page content: {}", e))
 }
 
+/// Look up a job by id from the live set first, then the persisted
+/// store. Non-command sibling of [`get_job`] that borrows `AppState`,
+/// so a single command can resolve two jobs without moving `State`.
+async fn fetch_job(state: &AppState, job_id: &str) -> Result<CrawlJob, String> {
+    {
+        let jobs = state.active_jobs.read().await;
+        if let Some(handle) = jobs.get(job_id) {
+            return Ok(handle.job.read().await.clone());
+        }
+    }
+    state
+        .jobs
+        .get(job_id)
+        .await
+        .ok_or_else(|| "Job not found".into())
+}
+
+/// Page-level change detection between two crawls of the same site.
+/// Classifies every page as added/removed/modified/unchanged/unknown by
+/// comparing the per-page content hashes stored on each job's results.
+#[tauri::command]
+pub async fn diff_jobs(
+    old_job_id: String,
+    new_job_id: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<crate::diff::DiffResult, String> {
+    let old = fetch_job(&state, &old_job_id).await?;
+    let new = fetch_job(&state, &new_job_id).await?;
+    Ok(crate::diff::diff_page_metas(&old.results, &new.results))
+}
+
+/// Line-level text diff of one page between two crawls. Reads both
+/// `.md` files from disk (an absent file — e.g. an added or removed
+/// page — is treated as empty, yielding an all-insert or all-delete
+/// diff) and runs a line diff over them.
+#[tauri::command]
+pub async fn diff_page(
+    old_job_id: String,
+    new_job_id: String,
+    url: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<crate::diff::DiffLine>, String> {
+    let old = fetch_job(&state, &old_job_id).await?;
+    let new = fetch_job(&state, &new_job_id).await?;
+
+    let page_md = |job: &CrawlJob| {
+        let main_dir = PathBuf::from(&job.config.output_dir).join("main");
+        FsWriter::new(&main_dir).url_to_page_path(&url)
+    };
+    let old_content = tokio::fs::read_to_string(page_md(&old))
+        .await
+        .unwrap_or_default();
+    let new_content = tokio::fs::read_to_string(page_md(&new))
+        .await
+        .unwrap_or_default();
+
+    Ok(crate::diff::diff_lines(&old_content, &new_content))
+}
+
 #[tauri::command]
 pub async fn search_job_results(
     job_id: String,

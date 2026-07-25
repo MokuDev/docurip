@@ -13,6 +13,7 @@ use crate::writer::fs::FsWriter;
 use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
 use crate::exports::{self, RecentExport};
+use crate::scheduler::{self, Schedule};
 use crate::settings::config::{AppSettings, BatchFailureMode, CrawlConfig};
 use crate::settings::templates::CrawlTemplate;
 use crate::state::{AppState, JobHandle};
@@ -35,7 +36,7 @@ fn normalize_path_prefix(raw: &str) -> String {
     }
 }
 
-fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
+pub(crate) fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
     let parsed = Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
         return Err("URL scheme must be http or https".to_string());
@@ -563,6 +564,82 @@ pub async fn save_template(
 pub async fn delete_template(template_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
     state.remove_persisted_template(&template_id).await.map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn list_schedules(state: State<'_, Arc<AppState>>) -> Result<Vec<Schedule>, String> {
+    let map = state.schedules.read().await;
+    let mut list: Vec<Schedule> = map.values().cloned().collect();
+    list.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(list)
+}
+
+/// Create or update a schedule. An empty `id` means "new": a fresh id
+/// and `createdAt` are assigned. `nextRun` is always (re)computed
+/// server-side from the current time so the frontend can't set a stale
+/// or arbitrary fire time.
+#[tauri::command]
+pub async fn save_schedule(
+    mut schedule: Schedule,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Schedule, String> {
+    if schedule.name.trim().is_empty() {
+        return Err("Schedule name must not be empty".into());
+    }
+    validate_crawl_input(&schedule.url, &schedule.config)?;
+    schedule.name = schedule.name.trim().to_string();
+    schedule.hour = schedule.hour.min(23);
+    schedule.minute = schedule.minute.min(59);
+    if schedule.id.trim().is_empty() {
+        schedule.id = uuid::Uuid::new_v4().to_string();
+        schedule.created_at = chrono::Utc::now().to_rfc3339();
+    }
+    schedule.next_run = scheduler::compute_next_run(chrono::Utc::now(), &schedule).to_rfc3339();
+    state
+        .schedules
+        .insert(schedule.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(schedule)
+}
+
+#[tauri::command]
+pub async fn delete_schedule(
+    schedule_id: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    state
+        .schedules
+        .remove(&schedule_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Enable or disable a schedule. Re-enabling recomputes `nextRun` from
+/// now so a schedule that was off for a while doesn't fire immediately
+/// on a stale past timestamp.
+#[tauri::command]
+pub async fn toggle_schedule(
+    schedule_id: String,
+    enabled: bool,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Schedule, String> {
+    let mut s = state
+        .schedules
+        .get(&schedule_id)
+        .await
+        .ok_or_else(|| "Schedule not found".to_string())?;
+    s.enabled = enabled;
+    if enabled {
+        s.next_run = scheduler::compute_next_run(chrono::Utc::now(), &s).to_rfc3339();
+    }
+    state
+        .schedules
+        .insert(s.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(s)
 }
 
 #[tauri::command]

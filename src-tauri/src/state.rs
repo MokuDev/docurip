@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::crawler::batch::BatchJob;
 use crate::crawler::job::CrawlJob;
 use crate::events::bus::EventBus;
+use crate::scheduler::Schedule;
 use crate::settings::templates::CrawlTemplate;
 
 pub struct JobHandle {
@@ -46,7 +47,7 @@ impl HasId for CrawlTemplate {
     fn id(&self) -> &str { &self.id }
 }
 
-// `BatchJob` implements `HasId` in its defining module.
+// `BatchJob` and `Schedule` implement `HasId` in their defining modules.
 
 /// One-JSON-file-per-entry, in-memory-cached, `RwLock`-protected store.
 ///
@@ -147,6 +148,7 @@ pub struct AppState {
     pub jobs: JsonStore<CrawlJob>,
     pub templates: JsonStore<CrawlTemplate>,
     pub batches: JsonStore<BatchJob>,
+    pub schedules: JsonStore<Schedule>,
     pub session_id: String,
     pub start_time: Instant,
 }
@@ -156,6 +158,7 @@ impl AppState {
         persist_dir: PathBuf,
         templates_dir: PathBuf,
         batches_dir: PathBuf,
+        schedules_dir: PathBuf,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             active_jobs: RwLock::new(HashMap::new()),
@@ -163,6 +166,7 @@ impl AppState {
             jobs: JsonStore::init(persist_dir)?,
             templates: JsonStore::init(templates_dir)?,
             batches: JsonStore::init(batches_dir)?,
+            schedules: JsonStore::init(schedules_dir)?,
             session_id: Uuid::new_v4().to_string(),
             start_time: Instant::now(),
         })
@@ -353,6 +357,7 @@ mod tests {
             temp_dir.path().join("jobs"),
             temp_dir.path().join("templates"),
             temp_dir.path().join("batches"),
+            temp_dir.path().join("schedules"),
         )
         .unwrap();
         let job = create_test_job("job-1");
@@ -372,6 +377,7 @@ mod tests {
             temp_dir.path().join("jobs"),
             temp_dir.path().join("templates"),
             temp_dir.path().join("batches"),
+            temp_dir.path().join("schedules"),
         )
         .unwrap();
         let template = create_test_template("tpl-1");
@@ -398,6 +404,7 @@ mod tests {
             temp_dir.path().join("jobs"),
             templates_dir,
             temp_dir.path().join("batches"),
+            temp_dir.path().join("schedules"),
         )
         .unwrap();
         let templates = state.templates.read().await;

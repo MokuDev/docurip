@@ -157,6 +157,28 @@ export interface CrawlJob {
   annotations?: Record<string, string>;
 }
 
+export type Cadence = 'daily' | 'weekly' | 'monthly';
+
+export interface Schedule {
+  id: string;
+  name: string;
+  url: string;
+  config: TemplateConfig;
+  cadence: Cadence;
+  /** Fire time, UTC. */
+  hour: number;
+  minute: number;
+  /** Weekly cadence: 0 = Sunday … 6 = Saturday. */
+  weekday?: number | null;
+  /** Monthly cadence: day of month, 1–28. */
+  dayOfMonth?: number | null;
+  enabled: boolean;
+  createdAt: string;
+  lastRun?: string | null;
+  nextRun: string;
+  lastJobId?: string | null;
+}
+
 export type ThemePreference = 'dark' | 'light' | 'system';
 
 export interface AppSettings {

@@ -20,14 +20,14 @@ End state: a stable, single-user desktop productivity tool for crawling document
 
 ## Phases
 
-### v0.4 – Foundations - Done! [X]
+### v0.4 – Foundations  ✅
 
 - Stabilize the existing crawler, event system, and export pipeline.
 - Expand Rust and frontend test coverage for critical paths.
 - Introduce safeguards for larger crawls: memory bounds, queue backpressure, and smarter persistence.
 - Improve developer experience: logging, build times, typed error classification, and debugging helpers.
 
-### v0.5 – Import & Export
+### v0.5 – Import & Export  ✅
 
 - Add **PDF → Markdown** import (text extraction; image-based PDFs handled later via OCR). - Done! [X]
 - Add **ePub → Markdown** import by unpacking the archive and converting HTML content. - Done! [X]
@@ -56,7 +56,7 @@ Broken into incremental sub-releases, each building on the previous:
 - **Multi-URL queue (batch crawl)**: New Crawl gains a Single/Batch mode toggle. Batch mode takes one URL per line with live validation, an optional name, and per-batch on-failure override (Continue vs. Stop, default from Settings). Backend `BatchJob` + `BatchRunner` run child crawls sequentially, each tagged with a `batchId`; batches persist and appear as collapsible groups in History.
 - **Sitemap import & auto-discovery**: on entering a URL, Docurip probes `robots.txt` and well-known sitemap locations. A picker fetches, parses (urlset + sitemapindex + gzip + CDATA), filters (free text + path prefix), and imports selected URLs — a single pick fills the URL field, multiple picks pre-fill the batch list. Guarded by 10 k URL cap (truncates), 50 sub-sitemaps, depth 2, 50 MB body cap, 30 s timeout, SSRF protection.
 
-#### v0.6.4 – Result Browser Upgrade
+#### v0.6.4 – Result Browser Upgrade ✅
 - **Bookmarks**: mark/favorite individual pages in the result browser for quick access.
 - **Search highlighting in preview**: highlight matched terms in the MarkdownPreview pane when searching.
 - **Annotations**: attach user notes to crawled pages, persisted alongside the job data.

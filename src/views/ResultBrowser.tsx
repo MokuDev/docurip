@@ -7,6 +7,7 @@ import {
   FileArrowUp,
   FolderOpen,
   FileText,
+  Star,
 } from '@phosphor-icons/react';
 import type { CrawlJob, PageMeta, SearchMatch } from '../types';
 import { ResultTree } from '../components/ResultTree';
@@ -31,8 +32,27 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportPath, setExportPath] = useState('');
+  const [bookmarks, setBookmarks] = useState<Set<string>>(() => new Set(job.bookmarks ?? []));
+  const [bookmarksOnly, setBookmarksOnly] = useState(false);
 
-  const pages = job.results;
+  const pages = useMemo(
+    () => (bookmarksOnly ? job.results.filter((p) => bookmarks.has(p.url)) : job.results),
+    [job.results, bookmarks, bookmarksOnly],
+  );
+
+  const handleToggleBookmark = useCallback(async (url: string) => {
+    try {
+      const nowBookmarked = await invoke<boolean>('toggle_bookmark', { jobId: job.id, url });
+      setBookmarks((prev) => {
+        const next = new Set(prev);
+        if (nowBookmarked) next.add(url);
+        else next.delete(url);
+        return next;
+      });
+    } catch (err) {
+      pushToast('error', `Failed to toggle bookmark: ${err}`);
+    }
+  }, [job.id, pushToast]);
 
   useEffect(() => {
     if (searchQuery.length >= 3) {
@@ -164,15 +184,31 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
         </div>
 
         {/* Toolbar */}
-        <div className="px-4 py-2 border-b border-abyssal/50">
-          <ResultSearch
-            value={searchQuery}
-            onChange={setSearchQuery}
-            resultCount={isSearching ? 0 : filteredPages.length}
-          />
-          {isSearching && (
-            <span className="text-charcoal text-xs mt-1 block">Searching...</span>
-          )}
+        <div className="px-4 py-2 border-b border-abyssal/50 flex items-center gap-3">
+          <div className="flex-1">
+            <ResultSearch
+              value={searchQuery}
+              onChange={setSearchQuery}
+              resultCount={isSearching ? 0 : filteredPages.length}
+            />
+            {isSearching && (
+              <span className="text-charcoal text-xs mt-1 block">Searching...</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setBookmarksOnly((v) => !v)}
+            aria-pressed={bookmarksOnly}
+            title={bookmarksOnly ? 'Show all pages' : 'Show only bookmarked pages'}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-all ${
+              bookmarksOnly
+                ? 'bg-yellow-400/15 text-yellow-300 border border-yellow-400/40'
+                : 'text-secondary hover:text-ghost hover:bg-surface/60 border border-transparent'
+            }`}
+          >
+            <Star size={13} weight={bookmarksOnly ? 'fill' : 'regular'} />
+            <span>{bookmarks.size}</span>
+          </button>
         </div>
 
         {/* Content */}
@@ -185,6 +221,8 @@ export function ResultBrowser({ job, onClose }: ResultBrowserProps) {
                 selectedUrl={selectedPage?.url || ''}
                 onSelect={handleSelect}
                 filterQuery={searchMatches.length > 0 ? undefined : searchQuery}
+                bookmarks={bookmarks}
+                onToggleBookmark={handleToggleBookmark}
               />
             ) : (
               <EmptyState

@@ -60,4 +60,8 @@ pub struct CrawlJob {
     /// grouping and does not affect crawl behavior.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batch_id: Option<String>,
+    /// URLs the user has bookmarked in the Result Browser for quick access.
+    /// Persisted with the job so bookmarks survive restarts.
+    #[serde(default)]
+    pub bookmarks: Vec<String>,
 }

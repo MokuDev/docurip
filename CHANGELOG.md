@@ -2,8 +2,16 @@
 
 ## v0.6.4 (2026-07-12)
 
+### Added
+- **Bookmarks in Result Browser**: click the star on any page row to bookmark it; bookmarks persist with the job JSON and survive restarts. A star button in the browser toolbar toggles a "bookmarks only" view of the tree and shows the current bookmark count. New `toggle_bookmark` Tauri command backs the frontend; the `CrawlJob` struct grows a `bookmarks: Vec<String>` field (serde-defaulted so old on-disk jobs load unchanged).
+
 ### Changed
 - **Optimizations M1 (quick cleanups)**: removed unused `CrawlProfile::default_include_patterns` / `default_path_prefix` placeholders (dead since v0.6.2's user-defined templates superseded them); extracted `validate_pattern_list` helper in `commands.rs` so exclude/include validation shares one loop; replaced `EscapeStack`'s `Map` + `Array.from(entries)` with a plain array of `{id, handler}` so `fireTop` reads the top without per-press allocation; added `escapeStack` to the `ExportModal` push/remove effect deps for correctness (context value is stable today).
+- **Optimizations M2 (orchestrator filter internals)**: collapsed the duplicated exclude/include `RegexSet` builders in `Orchestrator::new` into a single `build_regex_set` helper; extracted the include-set + path-prefix decision into a free `passes_include_rules` function so the crawl loop reads linearly and the filter is unit-testable without spinning up an `Orchestrator`; each candidate link is now `Url::parse`d once and the parsed `Url` is threaded through the stay-within-domain and include-rules checks instead of being reparsed. Include-filter unit tests were rewritten to exercise the extracted helpers directly.
+- **Optimizations M4 (shared components, ARIA, IPC)**: extracted the Notifications toggle into a reusable `ToggleRow` component (with `role="switch"` + `aria-checked`); extracted the three near-identical pattern textareas in New Crawl into a `FilterField` component; added tree ARIA semantics to `ResultTree` (`role="tree"` + `aria-activedescendant` on the wrapper, `role="treeitem"` + `aria-level` + `aria-selected` + `aria-expanded` on each row); terminal-job handling in `useCrawlEvents` now fetches settings and job in parallel via `Promise.all` instead of sequentially, halving wall-clock latency before notifications and auto-export fire.
+
+### Fixed
+- **`tests/e2e_crawl.rs` compilation**: the integration test was missing `sitemap_auto_discover`, `batch_on_failure`, `batch_id`, and `bookmarks` initializers after later structural changes to `AppSettings` / `CrawlJob`. Test now compiles again (still `--ignored` on Windows as documented).
 
 ## v0.6.3 (2026-07-12)
 

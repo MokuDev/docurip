@@ -105,6 +105,7 @@ pub(crate) async fn spawn_crawl(
         start_time: None,
         end_time: None,
         batch_id,
+        bookmarks: Vec::new(),
     };
 
     let job_arc = Arc::new(RwLock::new(job));
@@ -418,6 +419,48 @@ fn compute_velocity(job: Option<&CrawlJob>) -> f32 {
 #[tauri::command]
 pub async fn get_dashboard_stats(state: State<'_, Arc<AppState>>) -> Result<DashboardStats, String> {
     Ok(compute_dashboard_stats(state.inner().as_ref()).await)
+}
+
+/// Flip the bookmark state for `url` inside `job_id`. Persists the job
+/// and returns whether the URL is bookmarked after the toggle.
+#[tauri::command]
+pub async fn toggle_bookmark(
+    job_id: String,
+    url: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool, String> {
+    let (job_snapshot, is_bookmarked_after) = {
+        let active = state.active_jobs.read().await;
+        if let Some(handle) = active.get(&job_id) {
+            let mut job = handle.job.write().await;
+            let now_bookmarked = flip_bookmark(&mut job.bookmarks, &url);
+            (job.clone(), now_bookmarked)
+        } else {
+            drop(active);
+            let mut job = state
+                .jobs
+                .get(&job_id)
+                .await
+                .ok_or_else(|| "Job not found".to_string())?;
+            let now_bookmarked = flip_bookmark(&mut job.bookmarks, &url);
+            (job, now_bookmarked)
+        }
+    };
+    state
+        .persist_job(&job_snapshot)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(is_bookmarked_after)
+}
+
+fn flip_bookmark(bookmarks: &mut Vec<String>, url: &str) -> bool {
+    if let Some(pos) = bookmarks.iter().position(|u| u == url) {
+        bookmarks.remove(pos);
+        false
+    } else {
+        bookmarks.push(url.to_string());
+        true
+    }
 }
 
 #[tauri::command]
@@ -1044,4 +1087,33 @@ pub async fn delete_batch(batch_id: String, state: State<'_, Arc<AppState>>) -> 
     }
     state.batches.remove(&batch_id).await.map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::flip_bookmark;
+
+    #[test]
+    fn flip_bookmark_adds_new_url() {
+        let mut bookmarks: Vec<String> = Vec::new();
+        assert!(flip_bookmark(&mut bookmarks, "https://example.com/a"));
+        assert_eq!(bookmarks, vec!["https://example.com/a".to_string()]);
+    }
+
+    #[test]
+    fn flip_bookmark_removes_existing_url() {
+        let mut bookmarks = vec!["https://example.com/a".to_string()];
+        assert!(!flip_bookmark(&mut bookmarks, "https://example.com/a"));
+        assert!(bookmarks.is_empty());
+    }
+
+    #[test]
+    fn flip_bookmark_preserves_unrelated_entries() {
+        let mut bookmarks = vec![
+            "https://example.com/a".to_string(),
+            "https://example.com/b".to_string(),
+        ];
+        assert!(!flip_bookmark(&mut bookmarks, "https://example.com/a"));
+        assert_eq!(bookmarks, vec!["https://example.com/b".to_string()]);
+    }
 }

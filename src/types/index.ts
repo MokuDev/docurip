@@ -123,6 +123,8 @@ export interface CrawlJob {
   error?: string;
   /** Set when this job is a child of a batch crawl. */
   batchId?: string;
+  /** URLs the user has bookmarked in the Result Browser. */
+  bookmarks?: string[];
 }
 
 export type ThemePreference = 'dark' | 'light' | 'system';

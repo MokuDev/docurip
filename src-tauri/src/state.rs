@@ -231,6 +231,7 @@ mod tests {
             start_time: None,
             end_time: None,
             batch_id: None,
+            bookmarks: Vec::new(),
         }
     }
 

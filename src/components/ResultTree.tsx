@@ -1,4 +1,4 @@
-import { FileText, CaretRight, CaretDown } from '@phosphor-icons/react';
+import { FileText, CaretRight, CaretDown, Star } from '@phosphor-icons/react';
 import { useState, useMemo, useEffect } from 'react';
 import { List, useListRef } from 'react-window';
 import type { PageMeta } from '../types';
@@ -61,12 +61,14 @@ interface ResultTreeProps {
   selectedUrl: string;
   onSelect: (page: PageMeta) => void;
   filterQuery?: string;
+  bookmarks?: Set<string>;
+  onToggleBookmark?: (url: string) => void;
 }
 
 const ROW_HEIGHT = 32;
 const ROW_PROPS = {};
 
-export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: ResultTreeProps) {
+export function ResultTree({ pages, selectedUrl, onSelect, filterQuery, bookmarks, onToggleBookmark }: ResultTreeProps) {
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const listRef = useListRef(null);
@@ -224,6 +226,32 @@ export function ResultTree({ pages, selectedUrl, onSelect, filterQuery }: Result
                 <span className="truncate">{node.name}</span>
                 {node.page && (
                   <span className="ml-auto text-[10px] text-charcoal font-mono">{node.page.status}</span>
+                )}
+                {node.page && onToggleBookmark && (
+                  <span
+                    role="button"
+                    tabIndex={-1}
+                    aria-label={bookmarks?.has(node.page.url) ? 'Remove bookmark' : 'Add bookmark'}
+                    aria-pressed={bookmarks?.has(node.page.url) ?? false}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleBookmark(node.page!.url);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onToggleBookmark(node.page!.url);
+                      }
+                    }}
+                    className={`p-0.5 rounded transition-colors ${
+                      bookmarks?.has(node.page.url)
+                        ? 'text-yellow-400 hover:text-yellow-300'
+                        : 'text-charcoal/40 hover:text-yellow-400/70'
+                    }`}
+                  >
+                    <Star size={13} weight={bookmarks?.has(node.page.url) ? 'fill' : 'regular'} />
+                  </span>
                 )}
               </button>
             </div>

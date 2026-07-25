@@ -43,6 +43,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoExportFormat: null,
   sitemapAutoDiscover: true,
   batchOnFailure: 'continue',
+  liveConsoleMaxEvents: 1000,
 };
 
 const WINDOW_PRESETS = [
@@ -299,6 +300,32 @@ export function SettingsView() {
             IconOn={Bell}
             IconOff={BellSlash}
           />
+        </Section>
+
+        {/* Live Console */}
+        <Section title="Live Console">
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wider text-charcoal mb-1.5">
+              Retained Log Lines
+            </label>
+            <input
+              type="number"
+              min={100}
+              max={10000}
+              step={100}
+              value={settings.liveConsoleMaxEvents}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  liveConsoleMaxEvents: Math.min(10000, Math.max(100, parseInt(e.target.value, 10) || 100)),
+                })
+              }
+              className="w-full bg-surface/50 border border-abyssal rounded-md px-3 py-2.5 text-ghost text-sm focus:outline-none focus:border-accentGreen/50 transition-all"
+            />
+            <p className="text-charcoal text-xs mt-1.5">
+              How many events the Live Console keeps before dropping the oldest (100–10,000). Higher values keep more history but render more slowly. Takes effect next time the console is opened.
+            </p>
+          </div>
         </Section>
         </>
         )}

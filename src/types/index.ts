@@ -202,6 +202,8 @@ export interface AppSettings {
   autoExportFormat: ExportFormat | null;
   sitemapAutoDiscover: boolean;
   batchOnFailure: BatchFailureMode;
+  /** How many log lines the Live Console retains before dropping the oldest. */
+  liveConsoleMaxEvents: number;
 }
 
 export type BatchFailureMode = 'continue' | 'stop';
@@ -239,6 +241,10 @@ export interface SitemapResult {
 
 export interface CrawlEvent {
   type: 'progress' | 'log' | 'pageComplete' | 'jobStatusChanged' | 'error' | 'batchProgress' | 'batchStatusChanged';
+  /** Monotonic sequence id assigned by useCrawlEvents as each event arrives.
+   * Stable across the buffer's sliding window, so consumers can track what
+   * they've already processed without relying on fragile array indices. */
+  seq?: number;
   jobId?: string;
   message?: string;
   level?: string;

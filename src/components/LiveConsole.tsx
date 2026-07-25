@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useCrawlEvents } from '../hooks/useCrawlEvents';
+import type { AppSettings } from '../types';
 import {
   Minus,
   Terminal,
@@ -24,21 +26,38 @@ interface LogEntry {
 export function LiveConsole() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [minimized, setMinimized] = useState(false);
+  const [maxEvents, setMaxEvents] = useState(1000);
   const logEndRef = useRef<HTMLDivElement>(null);
   const logIdCounter = useRef(0);
   const { events } = useCrawlEvents();
 
-  const lastProcessedIdx = useRef(-1);
+  // Read the retained-history cap from settings when the console mounts
+  // (i.e. each time it's opened), so a changed setting takes effect
+  // without an app restart.
+  useEffect(() => {
+    invoke<AppSettings>('get_settings')
+      .then((s) => {
+        if (s.liveConsoleMaxEvents && s.liveConsoleMaxEvents > 0) {
+          setMaxEvents(s.liveConsoleMaxEvents);
+        }
+      })
+      .catch(() => { /* not in a Tauri context (tests/dev) — keep default */ });
+  }, []);
+
+  // Track the last event we've rendered by its stable seq, not by array
+  // index: the shared buffer slides once it fills, so absolute indices
+  // would stop matching and freeze the console (the old bug).
+  const lastSeqRef = useRef(-1);
 
   useEffect(() => {
     if (events.length === 0) return;
-    const startIdx = lastProcessedIdx.current + 1;
-    if (startIdx >= events.length) return;
-    lastProcessedIdx.current = events.length - 1;
+    const fresh = events.filter((ev) => (ev.seq ?? -1) > lastSeqRef.current);
+    if (fresh.length === 0) return;
+    // Events are buffered in arrival order, so the last fresh one carries
+    // the highest seq.
+    lastSeqRef.current = fresh[fresh.length - 1].seq ?? lastSeqRef.current;
 
-    const newEntries: LogEntry[] = [];
-    for (let i = startIdx; i < events.length; i++) {
-      const ev = events[i];
+    const newEntries: LogEntry[] = fresh.map((ev) => {
       const level: LogEntry['level'] =
         ev.type === 'error'
           ? 'error'
@@ -63,18 +82,18 @@ export function LiveConsole() {
                       ? `Batch progress: ${ev.currentIndex ?? 0}/${ev.total ?? 0}${ev.currentJobId ? ` (child ${ev.currentJobId.slice(0, 8)})` : ''}`
                       : 'Unknown event';
 
-      newEntries.push({
+      return {
         id: logIdCounter.current++,
         timestamp: new Date().toLocaleTimeString(),
         level,
         message,
         jobId: ev.jobId ?? ev.batchId,
         kind: ev.type === 'error' ? ev.kind : undefined,
-      });
-    }
+      };
+    });
 
-    setLogs((prev) => [...prev, ...newEntries].slice(-500));
-  }, [events]);
+    setLogs((prev) => [...prev, ...newEntries].slice(-maxEvents));
+  }, [events, maxEvents]);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -5,6 +5,16 @@ import type { AppSettings, CrawlEvent, CrawlJob } from '../types';
 import { notifyCrawlComplete, notifyCrawlFailed } from './useNotifications';
 import { useToasts } from './useToasts';
 
+/**
+ * Size of the shared in-memory event buffer. This is a transient safety
+ * buffer, not the Live Console's visible history: consumers drain it by
+ * each event's stable `seq`, so the buffer only needs to outlast a single
+ * React render batch. The console keeps its own, separately-capped log
+ * list (see `liveConsoleMaxEvents` in settings), which can grow well past
+ * this number over time.
+ */
+export const MAX_BUFFERED_EVENTS = 2000;
+
 interface CrawlEventsState {
   events: CrawlEvent[];
   activeJobIds: Set<string>;
@@ -20,6 +30,7 @@ const CrawlEventsContext = createContext<CrawlEventsState>({
 export function CrawlEventsProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<CrawlEventsState>({ events: [], activeJobIds: new Set(), activeBatchIds: new Set() });
   const terminalJobsHandled = useRef(new Set<string>());
+  const seqCounter = useRef(0);
   const { pushToast } = useToasts();
 
   useEffect(() => {
@@ -33,9 +44,13 @@ export function CrawlEventsProvider({ children }: { children: React.ReactNode })
     let unlisten: (() => void) | undefined;
 
     listen<CrawlEvent>('crawl-event', (raw) => {
-      const event = raw.payload;
+      // Stamp a stable, monotonic seq so consumers (the Live Console)
+      // can tell which events they've already shown even after the
+      // buffer starts sliding — absolute array indices break at that
+      // point, which used to freeze the console at the cap.
+      const event = { ...raw.payload, seq: seqCounter.current++ };
       setState((prev) => {
-        const nextEvents = [...prev.events, event].slice(-500);
+        const nextEvents = [...prev.events, event].slice(-MAX_BUFFERED_EVENTS);
         const nextActive = new Set(prev.activeJobIds);
         const nextActiveBatches = new Set(prev.activeBatchIds);
         if (event.type === 'batchStatusChanged' && event.batchId) {

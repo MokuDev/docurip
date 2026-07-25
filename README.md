@@ -312,7 +312,8 @@ Crawl the site, then **Export → Merged PDF**. One searchable PDF containing al
 - [x] **v0.4** — Foundations: stability, test coverage, memory bounds, backpressure
 - [x] **v0.5** — Import & Export: PDF/EPUB → Markdown, JSON/HTML export, crawl profiles, text cleaning, virtualized tree
 - [x] **v0.6.0–v0.6.2** — UX & Automation: dark/light/system theme, include/exclude URL filters, configurable keyboard shortcuts, desktop notifications, job templates, one-click re-crawl, auto-export
-- [ ] **v0.6.3+** — Batch crawling, sitemap import as a URL source, result-browser upgrades (bookmarks, annotations), scheduled/recurring crawls, crawl diffing, optional OCR
+- [x] **v0.6.3** — Batch crawling, sitemap import & auto-discovery
+- [ ] **v0.6.4+** — Result-browser upgrades (bookmarks, annotations), scheduled/recurring crawls, crawl diffing, optional OCR
 - [ ] **v0.7** — Distribution: robust installer, auto-updater, macOS/Linux build preparation
 - [ ] **v1.0** — CLI mode, 5k-page crawls, stable release
 

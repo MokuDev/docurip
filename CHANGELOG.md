@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.6.4 (2026-07-12)
+## v0.6.4 (2026-07-25)
 
 ### Added
 - **Bookmarks in Result Browser**: click the star on any page row to bookmark it; bookmarks persist with the job JSON and survive restarts. A star button in the browser toolbar toggles a "bookmarks only" view of the tree and shows the current bookmark count. New `toggle_bookmark` Tauri command backs the frontend; the `CrawlJob` struct grows a `bookmarks: Vec<String>` field (serde-defaulted so old on-disk jobs load unchanged).

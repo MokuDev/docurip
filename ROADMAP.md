@@ -111,7 +111,7 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 
 | Area | Description | Where |
 |------|-------------|-------|
-| **Dashboard stats I/O** | `compute_dashboard_stats` / `dir_size_capped` uses synchronous `std::fs` per job on every 3s poll. Move to `tokio::fs` / `spawn_blocking`, or cache sizes and update incrementally on crawl completion. | `commands.rs:203, 222` |
+| ~~**Dashboard stats I/O**~~ | ~~`compute_dashboard_stats` / `dir_size_capped` uses synchronous `std::fs` per job on every 3s poll. Move to `tokio::fs` / `spawn_blocking`, or cache sizes and update incrementally on crawl completion.~~ Resolved in v0.6.5: the recursive size walk now runs in a single `spawn_blocking` off the async worker (per-job summation unchanged). | `commands.rs` |
 | **Notification IPC round-trips** | Terminal crawl events trigger two sequential `invoke` calls (`get_settings` → `get_job`). Could cache `notificationsEnabled` in memory or include job summary in the event payload so the frontend doesn't need to call back. | `useCrawlEvents.tsx:33` |
 | **ResultTree re-renders on focus** | `focusedIndex` state change re-renders the entire virtualized list. Could isolate focus state in a child component or use react-window's item-specific APIs so only the old/new focused row re-render. | `ResultTree.tsx:124` |
 | **EscapeStack fireTop() allocation** | `Array.from(stack.entries())` materializes the full Map on every Escape press. In practice n ≤ 3 (max stacked modals), so not urgent, but could track a top pointer for O(1) dispatch. | `EscapeStack.tsx:31` |

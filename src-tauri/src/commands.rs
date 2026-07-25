@@ -330,16 +330,16 @@ async fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
 
     let pages_saved: u32 = jobs.iter().map(|j| j.results.len() as u32).sum();
 
-    let mut total_size_bytes: u64 = 0;
     let mut latest_completed: Option<&CrawlJob> = None;
     let mut latest_running: Option<&CrawlJob> = None;
 
-    for job in &jobs {
-        // Include output size for ALL jobs (active + completed)
-        if let Some(out) = output_dir_for_job(job) {
-            total_size_bytes = total_size_bytes.saturating_add(dir_size_capped(&out));
-        }
+    // Gather each job's output dir (cheap stat) up front, then run the
+    // recursive size walk off the async runtime: `dir_size_capped` can
+    // touch up to 1000 files / 5 s per job, and this runs on every 3 s
+    // dashboard poll — doing it inline would stall a tokio worker.
+    let size_dirs: Vec<PathBuf> = jobs.iter().filter_map(output_dir_for_job).collect();
 
+    for job in &jobs {
         // Track latest completed job for velocity fallback
         if job.status == JobStatus::Completed {
             let is_newer = match &latest_completed {
@@ -368,6 +368,16 @@ async fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
             }
         }
     }
+
+    // Sum the per-job output sizes on the blocking pool (preserves the
+    // existing per-job summation, just off the async worker).
+    let total_size_bytes = tokio::task::spawn_blocking(move || {
+        size_dirs
+            .iter()
+            .fold(0u64, |acc, dir| acc.saturating_add(dir_size_capped(dir)))
+    })
+    .await
+    .unwrap_or(0);
 
     // Prefer active job for velocity, fall back to latest completed
     let crawl_velocity = compute_velocity(latest_running.or(latest_completed));
@@ -1322,5 +1332,27 @@ mod tests {
         ];
         assert!(!flip_bookmark(&mut bookmarks, "https://example.com/a"));
         assert_eq!(bookmarks, vec!["https://example.com/b".to_string()]);
+    }
+
+    #[test]
+    fn dir_size_capped_sums_files_recursively() {
+        use std::io::Write;
+        let dir = tempfile::TempDir::new().unwrap();
+        // Top-level file (5 bytes) + nested file (3 bytes) = 8.
+        let mut f = std::fs::File::create(dir.path().join("a.txt")).unwrap();
+        f.write_all(b"hello").unwrap();
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        let mut g = std::fs::File::create(sub.join("b.txt")).unwrap();
+        g.write_all(b"abc").unwrap();
+
+        assert_eq!(super::dir_size_capped(dir.path()), 8);
+    }
+
+    #[test]
+    fn dir_size_capped_missing_dir_is_zero() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let missing = dir.path().join("does-not-exist");
+        assert_eq!(super::dir_size_capped(&missing), 0);
     }
 }

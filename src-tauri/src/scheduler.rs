@@ -19,7 +19,8 @@ use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use crate::settings::config::CrawlConfig;
+use crate::crawler::batch::{spawn_batch, BatchJob, BatchStatus};
+use crate::settings::config::{BatchFailureMode, CrawlConfig};
 use crate::state::{AppState, HasId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,8 +37,20 @@ pub enum Cadence {
 pub struct Schedule {
     pub id: String,
     pub name: String,
-    pub url: String,
+    /// URLs to crawl. Exactly one spawns a plain crawl; two or more
+    /// spawn a batch, so the batch queue is reachable from a schedule.
+    pub urls: Vec<String>,
     pub config: CrawlConfig,
+    /// Batch on-failure override, only meaningful with two or more URLs.
+    /// `None` falls back to the app-settings default at run time — same
+    /// rule the `start_batch` command applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_failure: Option<BatchFailureMode>,
+    /// Id of the template this schedule's config was seeded from, kept
+    /// for provenance in the UI. The config itself is a snapshot: later
+    /// edits to the template do not retroactively change the schedule.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
     pub cadence: Cadence,
     /// Fire time, UTC. `hour` 0–23, `minute` 0–59 (clamped on use).
     pub hour: u32,
@@ -57,9 +70,12 @@ pub struct Schedule {
     /// Next fire time as an RFC 3339 UTC string. Recomputed after every
     /// run and whenever the schedule is saved.
     pub next_run: String,
-    /// Id of the most recent job this schedule spawned.
+    /// Id of the most recent job this schedule spawned (single-URL runs).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_job_id: Option<String>,
+    /// Id of the most recent batch this schedule spawned (multi-URL runs).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_batch_id: Option<String>,
 }
 
 impl HasId for Schedule {
@@ -144,30 +160,91 @@ async fn run_due(state: &Arc<AppState>, app: &AppHandle) {
 
     let due: Vec<Schedule> = {
         let map = state.schedules.read().await;
-        map.values()
-            .filter(|s| s.enabled && is_past(&s.next_run, now))
-            .cloned()
-            .collect()
+        map.values().filter(|s| is_due(s, now)).cloned().collect()
     };
 
     for mut schedule in due {
-        if crate::commands::validate_crawl_input(&schedule.url, &schedule.config).is_ok() {
-            match crate::commands::spawn_crawl(
-                schedule.url.clone(),
-                schedule.config.clone(),
-                state.clone(),
-                app.clone(),
-                None,
-            )
-            .await
-            {
-                Ok(job_id) => schedule.last_job_id = Some(job_id),
-                Err(_) => { /* spawn failed; still reschedule below */ }
-            }
-        }
-        schedule.last_run = Some(now.to_rfc3339());
-        schedule.next_run = compute_next_run(now, &schedule).to_rfc3339();
+        run_once(&mut schedule, state, app).await;
+        advance(&mut schedule, now);
         let _ = state.schedules.insert(schedule).await;
+    }
+}
+
+/// A schedule fires when it is enabled and its `next_run` has passed.
+/// Pure, so the catch-up semantics are testable without an `AppHandle`.
+fn is_due(schedule: &Schedule, now: DateTime<Utc>) -> bool {
+    schedule.enabled && is_past(&schedule.next_run, now)
+}
+
+/// Stamp `last_run` and move `next_run` to the following occurrence.
+/// Always called after a run attempt, successful or not.
+fn advance(schedule: &mut Schedule, now: DateTime<Utc>) {
+    schedule.last_run = Some(now.to_rfc3339());
+    schedule.next_run = compute_next_run(now, schedule).to_rfc3339();
+}
+
+/// Spawn one schedule's work: a single URL goes through `spawn_crawl`,
+/// two or more through the batch runner, so a schedule can drive the
+/// batch queue. Records the spawned id on the schedule; every failure
+/// path is deliberately silent because the caller reschedules either way.
+async fn run_once(schedule: &mut Schedule, state: &Arc<AppState>, app: &AppHandle) {
+    let urls: Vec<String> = schedule
+        .urls
+        .iter()
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty())
+        .collect();
+
+    // Revalidate against the current rules before spawning — a stored
+    // schedule may predate a settings change (SSRF, robots, …).
+    if urls.is_empty()
+        || urls
+            .iter()
+            .any(|u| crate::commands::validate_crawl_input(u, &schedule.config).is_err())
+    {
+        return;
+    }
+
+    if urls.len() == 1 {
+        if let Ok(job_id) = crate::commands::spawn_crawl(
+            urls[0].clone(),
+            schedule.config.clone(),
+            state.clone(),
+            app.clone(),
+            None,
+        )
+        .await
+        {
+            schedule.last_job_id = Some(job_id);
+        }
+        return;
+    }
+
+    let on_failure = match schedule.on_failure {
+        Some(mode) => mode,
+        None => crate::commands::get_settings(app.clone())
+            .await
+            .map(|s| s.batch_on_failure)
+            .unwrap_or_default(),
+    };
+
+    let batch = BatchJob {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: Some(schedule.name.clone()),
+        urls,
+        config: schedule.config.clone(),
+        on_failure,
+        child_job_ids: Vec::new(),
+        status: BatchStatus::Queued,
+        current_index: 0,
+        created_at: Utc::now().to_rfc3339(),
+        error: None,
+        start_time: None,
+        end_time: None,
+    };
+
+    if let Ok(batch_id) = spawn_batch(batch, state.clone(), app.clone()).await {
+        schedule.last_batch_id = Some(batch_id);
     }
 }
 
@@ -188,7 +265,7 @@ mod tests {
         Schedule {
             id: "s1".into(),
             name: "test".into(),
-            url: "https://example.com".into(),
+            urls: vec!["https://example.com".into()],
             config: CrawlConfig {
                 output_dir: String::new(),
                 max_depth: 2,
@@ -204,6 +281,8 @@ mod tests {
                 ssrf_protection: true,
                 profile: None,
             },
+            on_failure: None,
+            template_id: None,
             cadence,
             hour,
             minute,
@@ -214,6 +293,7 @@ mod tests {
             last_run: None,
             next_run: String::new(),
             last_job_id: None,
+            last_batch_id: None,
         }
     }
 
@@ -278,6 +358,41 @@ mod tests {
         assert!(is_past("2026-07-25T11:00:00+00:00", now));
         assert!(!is_past("2026-07-25T13:00:00+00:00", now));
         assert!(!is_past("garbage", now));
+    }
+
+    #[test]
+    fn elapsed_schedule_is_due_and_disabled_one_is_not() {
+        let now = utc(2026, 7, 25, 12, 0);
+        let mut s = schedule(Cadence::Daily, 9, 0);
+
+        // Fired while the app was closed → due at the next tick, which
+        // is the startup catch-up tick.
+        s.next_run = utc(2026, 7, 24, 9, 0).to_rfc3339();
+        assert!(is_due(&s, now));
+
+        // Same schedule, paused: never fires.
+        s.enabled = false;
+        assert!(!is_due(&s, now));
+
+        // Enabled but not yet reached.
+        s.enabled = true;
+        s.next_run = utc(2026, 7, 25, 18, 0).to_rfc3339();
+        assert!(!is_due(&s, now));
+    }
+
+    #[test]
+    fn advance_stamps_last_run_and_moves_next_run_ahead() {
+        let now = utc(2026, 7, 25, 12, 0);
+        let mut s = schedule(Cadence::Daily, 9, 0);
+        s.next_run = utc(2026, 7, 24, 9, 0).to_rfc3339();
+
+        advance(&mut s, now);
+
+        assert_eq!(s.last_run.as_deref(), Some(now.to_rfc3339()).as_deref());
+        // Advanced past a missed run rather than replaying it: the next
+        // fire is the upcoming 09:00, not yesterday's.
+        assert_eq!(s.next_run, utc(2026, 7, 26, 9, 0).to_rfc3339());
+        assert!(!is_due(&s, now));
     }
 
     #[test]

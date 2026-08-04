@@ -596,7 +596,27 @@ pub async fn save_schedule(
     if schedule.name.trim().is_empty() {
         return Err("Schedule name must not be empty".into());
     }
-    validate_crawl_input(&schedule.url, &schedule.config)?;
+    // Normalize first so blank lines from the frontend's one-URL-per-line
+    // textarea don't count against the cap or fail validation.
+    schedule.urls = schedule
+        .urls
+        .iter()
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty())
+        .collect();
+    if schedule.urls.is_empty() {
+        return Err("At least one URL is required".into());
+    }
+    if schedule.urls.len() > MAX_BATCH_URLS {
+        return Err(format!(
+            "Schedule of {} URLs exceeds the cap of {}",
+            schedule.urls.len(),
+            MAX_BATCH_URLS
+        ));
+    }
+    for url in &schedule.urls {
+        validate_crawl_input(url, &schedule.config)?;
+    }
     schedule.name = schedule.name.trim().to_string();
     schedule.hour = schedule.hour.min(23);
     schedule.minute = schedule.minute.min(59);

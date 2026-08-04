@@ -162,8 +162,14 @@ export type Cadence = 'daily' | 'weekly' | 'monthly';
 export interface Schedule {
   id: string;
   name: string;
-  url: string;
+  /** One URL runs a plain crawl; two or more run as a batch. */
+  urls: string[];
   config: TemplateConfig;
+  /** Batch on-failure override; only used with two or more URLs.
+   * Null falls back to the app-settings default at run time. */
+  onFailure?: BatchFailureMode | null;
+  /** Template the config was seeded from, kept for provenance. */
+  templateId?: string | null;
   cadence: Cadence;
   /** Fire time, UTC. */
   hour: number;
@@ -177,6 +183,7 @@ export interface Schedule {
   lastRun?: string | null;
   nextRun: string;
   lastJobId?: string | null;
+  lastBatchId?: string | null;
 }
 
 export type ThemePreference = 'dark' | 'light' | 'system';

@@ -10,7 +10,15 @@ import {
   Power,
 } from '@phosphor-icons/react';
 import { ToggleRow } from '../components/ToggleRow';
-import type { AppSettings, Cadence, Schedule, TemplateConfig } from '../types';
+import { BatchUrlList, sanitizeBatchUrls } from '../components/BatchUrlList';
+import type {
+  AppSettings,
+  BatchFailureMode,
+  Cadence,
+  CrawlTemplate,
+  Schedule,
+  TemplateConfig,
+} from '../types';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -57,7 +65,14 @@ function cadenceSummary(s: Schedule): string {
 interface DraftState {
   id: string;
   name: string;
-  url: string;
+  urls: string[];
+  /** Template the config came from, or null for the settings defaults. */
+  templateId: string | null;
+  /** Config snapshot taken when a template was picked. Null keeps the
+   * schedule's existing config (edit) or the settings defaults (new). */
+  config: TemplateConfig | null;
+  /** Only sent when the schedule has two or more URLs. */
+  onFailure: BatchFailureMode | null;
   cadence: Cadence;
   time: string; // "HH:MM" UTC
   weekday: number;
@@ -68,7 +83,10 @@ interface DraftState {
 const emptyDraft: DraftState = {
   id: '',
   name: '',
-  url: '',
+  urls: [''],
+  templateId: null,
+  config: null,
+  onFailure: null,
   cadence: 'daily',
   time: '09:00',
   weekday: 1,
@@ -78,6 +96,7 @@ const emptyDraft: DraftState = {
 
 export function SchedulesView() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [templates, setTemplates] = useState<CrawlTemplate[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<DraftState | null>(null);
@@ -86,12 +105,14 @@ export function SchedulesView() {
 
   const load = useCallback(async () => {
     try {
-      const [list, s] = await Promise.all([
+      const [list, s, tpl] = await Promise.all([
         invoke<Schedule[]>('list_schedules'),
         invoke<AppSettings>('get_settings'),
+        invoke<CrawlTemplate[]>('list_templates'),
       ]);
       setSchedules(list || []);
       setSettings(s);
+      setTemplates(tpl || []);
     } catch (e) {
       console.error('Failed to load schedules', e);
     } finally {
@@ -113,12 +134,35 @@ export function SchedulesView() {
     setEditing({
       id: s.id,
       name: s.name,
-      url: s.url,
+      urls: s.urls.length ? s.urls : [''],
+      templateId: s.templateId ?? null,
+      config: s.config,
+      onFailure: s.onFailure ?? null,
       cadence: s.cadence,
       time: `${pad(s.hour)}:${pad(s.minute)}`,
       weekday: s.weekday ?? 1,
       dayOfMonth: s.dayOfMonth ?? 1,
       enabled: s.enabled,
+    });
+  };
+
+  /** Seed the draft from a saved template: its config becomes the
+   * schedule's config, and its URL / name fill in the blanks without
+   * overwriting anything the user already typed. */
+  const applyTemplate = (templateId: string) => {
+    if (!editing) return;
+    const tpl = templates.find((t) => t.id === templateId);
+    if (!tpl) {
+      setEditing({ ...editing, templateId: null, config: null });
+      return;
+    }
+    const hasUrls = editing.urls.some((u) => u.trim());
+    setEditing({
+      ...editing,
+      templateId: tpl.id,
+      config: tpl.config,
+      name: editing.name.trim() ? editing.name : tpl.name,
+      urls: hasUrls ? editing.urls : [tpl.url],
     });
   };
 
@@ -128,20 +172,29 @@ export function SchedulesView() {
       setError('Name is required.');
       return;
     }
-    try {
-      new URL(editing.url);
-    } catch {
-      setError('Enter a valid URL (including http:// or https://).');
+    const lines = editing.urls.map((u) => u.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      setError('At least one URL is required.');
+      return;
+    }
+    // `sanitizeBatchUrls` drops invalid entries and duplicates; comparing
+    // against the deduplicated line count isolates *invalid* ones.
+    const urls = sanitizeBatchUrls(lines);
+    if (urls.length !== new Set(lines).size) {
+      setError('Enter valid URLs (including http:// or https://).');
       return;
     }
     const [hourStr, minStr] = editing.time.split(':');
-    // Preserve the existing config when editing; use defaults for new ones.
+    // A picked template supplies the config; otherwise keep the existing
+    // one when editing and fall back to the settings defaults for new ones.
     const existing = schedules.find((s) => s.id === editing.id);
     const schedule: Schedule = {
       id: editing.id,
       name: editing.name.trim(),
-      url: editing.url.trim(),
-      config: existing?.config ?? configFromSettings(settings),
+      urls,
+      config: editing.config ?? existing?.config ?? configFromSettings(settings),
+      onFailure: urls.length > 1 ? editing.onFailure : null,
+      templateId: editing.templateId,
       cadence: editing.cadence,
       hour: Number(hourStr) || 0,
       minute: Number(minStr) || 0,
@@ -152,6 +205,7 @@ export function SchedulesView() {
       lastRun: existing?.lastRun ?? null,
       nextRun: existing?.nextRun ?? '',
       lastJobId: existing?.lastJobId ?? null,
+      lastBatchId: existing?.lastBatchId ?? null,
     };
     setSaving(true);
     setError(null);
@@ -174,6 +228,10 @@ export function SchedulesView() {
       console.error('Failed to delete schedule', e);
     }
   };
+
+  /** Name of the template a schedule was seeded from, if it still exists. */
+  const templateName = (id?: string | null): string | null =>
+    (id && templates.find((t) => t.id === id)?.name) || null;
 
   const toggle = async (s: Schedule) => {
     try {
@@ -230,14 +288,27 @@ export function SchedulesView() {
                       >
                         {s.enabled ? 'Active' : 'Paused'}
                       </span>
+                      {s.urls.length > 1 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider bg-abyssal/50 text-charcoal">
+                          Batch · {s.urls.length}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-xs text-charcoal break-all mb-2">{s.url}</p>
+                    <p className="text-xs text-charcoal break-all mb-2">
+                      {s.urls[0]}
+                      {s.urls.length > 1 && (
+                        <span className="opacity-60"> +{s.urls.length - 1} more</span>
+                      )}
+                    </p>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-charcoal">
                       <span className="flex items-center gap-1">
                         <Clock size={12} /> {cadenceSummary(s)}
                       </span>
                       <span>Next: {s.enabled ? fmt(s.nextRun) : '—'}</span>
                       <span>Last: {fmt(s.lastRun)}</span>
+                      {templateName(s.templateId) && (
+                        <span className="opacity-70">Template: {templateName(s.templateId)}</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -273,7 +344,7 @@ export function SchedulesView() {
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setEditing(null)} />
-          <div className="relative bg-deepVoid border border-abyssal rounded-xl w-[440px] max-w-[92vw] p-5 shadow-2xl">
+          <div className="relative bg-deepVoid border border-abyssal rounded-xl w-[440px] max-w-[92vw] max-h-[88vh] overflow-y-auto p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-ghost font-semibold text-sm">
                 {editing.id ? 'Edit Schedule' : 'New Schedule'}
@@ -295,14 +366,52 @@ export function SchedulesView() {
                   className={INPUT_CLS}
                 />
               </Field>
-              <Field label="URL">
-                <input
-                  value={editing.url}
-                  onChange={(e) => setEditing({ ...editing, url: e.target.value })}
-                  placeholder="https://docs.example.com"
-                  className={INPUT_CLS}
-                />
-              </Field>
+              {templates.length > 0 && (
+                <Field label="Crawl settings">
+                  <select
+                    value={editing.templateId ?? ''}
+                    onChange={(e) => applyTemplate(e.target.value)}
+                    className={`${INPUT_CLS} cursor-pointer`}
+                  >
+                    <option value="">Default settings</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-charcoal/70">
+                    Picking a template copies its crawl settings into this schedule.
+                    Later edits to the template don't change it.
+                  </p>
+                </Field>
+              )}
+
+              <BatchUrlList
+                value={editing.urls}
+                onChange={(urls) => setEditing({ ...editing, urls })}
+              />
+
+              {editing.urls.filter((u) => u.trim()).length > 1 && (
+                <Field label="On failure">
+                  <select
+                    value={editing.onFailure ?? ''}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        onFailure: (e.target.value || null) as BatchFailureMode | null,
+                      })
+                    }
+                    className={`${INPUT_CLS} cursor-pointer`}
+                  >
+                    <option value="">
+                      Use default ({settings?.batchOnFailure === 'stop' ? 'stop' : 'continue'})
+                    </option>
+                    <option value="continue">Continue with next URL</option>
+                    <option value="stop">Stop the batch</option>
+                  </select>
+                </Field>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Cadence">

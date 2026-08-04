@@ -86,6 +86,34 @@ export interface PageMeta {
   title: string;
   status: number;
   linksCount: number;
+  /** Content fingerprint used by crawl-diff. Absent on pages crawled
+   * before hashing existed. */
+  contentHash?: string | null;
+}
+
+export type ChangeKind = 'added' | 'removed' | 'modified' | 'unchanged' | 'unknown';
+
+export interface PageDiff {
+  url: string;
+  title: string;
+  kind: ChangeKind;
+}
+
+/** Result of `diff_jobs` — every page classified, plus per-bucket counts. */
+export interface DiffResult {
+  entries: PageDiff[];
+  added: number;
+  removed: number;
+  modified: number;
+  unchanged: number;
+  unknown: number;
+}
+
+export type LineTag = 'equal' | 'insert' | 'delete';
+
+export interface DiffLine {
+  tag: LineTag;
+  content: string;
 }
 
 /** Full page data returned only by read_page_content — not stored in CrawlJob. */
@@ -129,6 +157,35 @@ export interface CrawlJob {
   annotations?: Record<string, string>;
 }
 
+export type Cadence = 'daily' | 'weekly' | 'monthly';
+
+export interface Schedule {
+  id: string;
+  name: string;
+  /** One URL runs a plain crawl; two or more run as a batch. */
+  urls: string[];
+  config: TemplateConfig;
+  /** Batch on-failure override; only used with two or more URLs.
+   * Null falls back to the app-settings default at run time. */
+  onFailure?: BatchFailureMode | null;
+  /** Template the config was seeded from, kept for provenance. */
+  templateId?: string | null;
+  cadence: Cadence;
+  /** Fire time, UTC. */
+  hour: number;
+  minute: number;
+  /** Weekly cadence: 0 = Sunday … 6 = Saturday. */
+  weekday?: number | null;
+  /** Monthly cadence: day of month, 1–28. */
+  dayOfMonth?: number | null;
+  enabled: boolean;
+  createdAt: string;
+  lastRun?: string | null;
+  nextRun: string;
+  lastJobId?: string | null;
+  lastBatchId?: string | null;
+}
+
 export type ThemePreference = 'dark' | 'light' | 'system';
 
 export interface AppSettings {
@@ -152,6 +209,8 @@ export interface AppSettings {
   autoExportFormat: ExportFormat | null;
   sitemapAutoDiscover: boolean;
   batchOnFailure: BatchFailureMode;
+  /** How many log lines the Live Console retains before dropping the oldest. */
+  liveConsoleMaxEvents: number;
 }
 
 export type BatchFailureMode = 'continue' | 'stop';
@@ -189,6 +248,10 @@ export interface SitemapResult {
 
 export interface CrawlEvent {
   type: 'progress' | 'log' | 'pageComplete' | 'jobStatusChanged' | 'error' | 'batchProgress' | 'batchStatusChanged';
+  /** Monotonic sequence id assigned by useCrawlEvents as each event arrives.
+   * Stable across the buffer's sliding window, so consumers can track what
+   * they've already processed without relying on fragile array indices. */
+  seq?: number;
   jobId?: string;
   message?: string;
   level?: string;

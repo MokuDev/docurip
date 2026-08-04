@@ -113,6 +113,7 @@ fn make_settings() -> AppSettings {
         auto_export_format: None,
         sitemap_auto_discover: false,
         batch_on_failure: BatchFailureMode::Continue,
+        live_console_max_events: 1000,
     }
 }
 

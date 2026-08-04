@@ -61,7 +61,7 @@ Broken into incremental sub-releases, each building on the previous:
 - **Search highlighting in preview**: highlight matched terms in the MarkdownPreview pane when searching.
 - **Annotations**: attach user notes to crawled pages, persisted alongside the job data.
 
-#### v0.6.5 – Scheduling & Diff
+#### v0.6.5 – Scheduling & Diff ✅
 - **Scheduled / recurring crawls**: cron-style repeat (daily/weekly/monthly) with timer persistence and startup check. Builds on templates, batch queue, and notifications.
 - **Crawl diff / change detection**: when re-crawling a previously crawled site, detect and display new, deleted, and modified pages.
 
@@ -111,7 +111,7 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 
 | Area | Description | Where |
 |------|-------------|-------|
-| **Dashboard stats I/O** | `compute_dashboard_stats` / `dir_size_capped` uses synchronous `std::fs` per job on every 3s poll. Move to `tokio::fs` / `spawn_blocking`, or cache sizes and update incrementally on crawl completion. | `commands.rs:203, 222` |
+| ~~**Dashboard stats I/O**~~ | ~~`compute_dashboard_stats` / `dir_size_capped` uses synchronous `std::fs` per job on every 3s poll. Move to `tokio::fs` / `spawn_blocking`, or cache sizes and update incrementally on crawl completion.~~ Resolved in v0.6.5: the recursive size walk now runs in a single `spawn_blocking` off the async worker (per-job summation unchanged). | `commands.rs` |
 | **Notification IPC round-trips** | Terminal crawl events trigger two sequential `invoke` calls (`get_settings` → `get_job`). Could cache `notificationsEnabled` in memory or include job summary in the event payload so the frontend doesn't need to call back. | `useCrawlEvents.tsx:33` |
 | **ResultTree re-renders on focus** | `focusedIndex` state change re-renders the entire virtualized list. Could isolate focus state in a child component or use react-window's item-specific APIs so only the old/new focused row re-render. | `ResultTree.tsx:124` |
 | **EscapeStack fireTop() allocation** | `Array.from(stack.entries())` materializes the full Map on every Escape press. In practice n ≤ 3 (max stacked modals), so not urgent, but could track a top pointer for O(1) dispatch. | `EscapeStack.tsx:31` |
@@ -140,5 +140,5 @@ Low-priority items identified during v0.6.1 review. None are bugs — all are pe
 - Which OCR engine and language-pack strategy should be used? (Tesseract vs. Rust-native; decide during v0.6.6 planning if OCR is pursued.)
 - Should macOS/Linux be first-class v1.0 targets or deferred to a post-1.0 release?
 - How should job templates be persisted? (JSON files in app data dir vs. tauri-plugin-store; decide during v0.6.2.)
-- What scheduling backend for recurring crawls? (In-process timer with on-startup catch-up vs. OS-level scheduler; decide during v0.6.5.)
-- How granular should crawl diffs be? (Page-level new/deleted/changed vs. line-level content diff; decide during v0.6.5.)
+- ~~What scheduling backend for recurring crawls?~~ Resolved in v0.6.5: in-process minute-ticker with on-startup catch-up (no OS-level scheduler), fitting the offline-first, single-user scope.
+- ~~How granular should crawl diffs be?~~ Resolved in v0.6.5: page-level new/deleted/modified as the core (via per-page content hash), with an on-demand line-level diff for a selected changed page.

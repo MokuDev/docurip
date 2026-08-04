@@ -16,9 +16,11 @@ import {
   ListNumbers,
   CaretRight,
   CaretDown,
+  GitDiff,
 } from '@phosphor-icons/react';
 import { ResultBrowser } from './ResultBrowser';
 import { ExportModal } from '../components/ExportModal';
+import { DiffView } from '../components/DiffView';
 import { StatusIcon, StatusBadge } from '../components/StatusBadge';
 import type { BatchJob, CrawlJob } from '../types';
 
@@ -30,6 +32,7 @@ export function HistoryView({ onCrawlAgain }: { onCrawlAgain: (job: CrawlJob) =>
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<CrawlJob | null>(null);
   const [browserJob, setBrowserJob] = useState<CrawlJob | null>(null);
+  const [diffJob, setDiffJob] = useState<CrawlJob | null>(null);
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
 
@@ -88,6 +91,17 @@ export function HistoryView({ onCrawlAgain }: { onCrawlAgain: (job: CrawlJob) =>
   const handleExport = (job: CrawlJob) => {
     setExportJobId(job.id);
   };
+
+  // A crawl can be compared when at least one other completed crawl of
+  // the same URL exists to serve as a baseline.
+  const comparableUrls = useMemo(() => {
+    const countByUrl = new Map<string, number>();
+    for (const j of jobs) {
+      if (j.status !== 'completed') continue;
+      countByUrl.set(j.url, (countByUrl.get(j.url) ?? 0) + 1);
+    }
+    return new Set([...countByUrl.entries()].filter(([, n]) => n >= 2).map(([u]) => u));
+  }, [jobs]);
 
   const handleOpenFolder = async (outputDir: string) => {
     try {
@@ -248,6 +262,8 @@ export function HistoryView({ onCrawlAgain }: { onCrawlAgain: (job: CrawlJob) =>
                   onDeleteChild={handleDelete}
                   onCrawlAgainChild={onCrawlAgain}
                   onOpenFolderChild={handleOpenFolder}
+                  onCompareChild={setDiffJob}
+                  comparableUrls={comparableUrls}
                 />
               ) : (
                 <JobCard
@@ -259,6 +275,8 @@ export function HistoryView({ onCrawlAgain }: { onCrawlAgain: (job: CrawlJob) =>
                   onDelete={handleDelete}
                   onCrawlAgain={onCrawlAgain}
                   onOpenFolder={handleOpenFolder}
+                  onCompare={setDiffJob}
+                  canCompare={comparableUrls.has(entry.job.url)}
                 />
               ),
             )}
@@ -371,6 +389,17 @@ export function HistoryView({ onCrawlAgain }: { onCrawlAgain: (job: CrawlJob) =>
         )}
       </AnimatePresence>
 
+      {/* Diff / Compare Overlay */}
+      <AnimatePresence>
+        {diffJob && (
+          <DiffView
+            job={diffJob}
+            allJobs={jobs}
+            onClose={() => setDiffJob(null)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Export Modal */}
       {exportJobId && (
         <ExportModal
@@ -390,6 +419,9 @@ interface JobCardProps {
   onDelete: (jobId: string) => void;
   onCrawlAgain: (job: CrawlJob) => void;
   onOpenFolder: (outputDir: string) => void;
+  onCompare: (job: CrawlJob) => void;
+  /** True when an earlier completed crawl of the same URL exists to diff against. */
+  canCompare: boolean;
   /** When true, the card is rendered inside a batch group with a subtle
    * indentation instead of a top-level border. */
   nested?: boolean;
@@ -403,6 +435,8 @@ function JobCard({
   onDelete,
   onCrawlAgain,
   onOpenFolder,
+  onCompare,
+  canCompare,
   nested,
 }: JobCardProps) {
   return (
@@ -448,6 +482,15 @@ function JobCard({
               title="Crawl again with the same settings"
             >
               <ArrowClockwise size={16} />
+            </button>
+          )}
+          {job.status === 'completed' && canCompare && (
+            <button
+              onClick={() => onCompare(job)}
+              className="p-1.5 text-charcoal hover:text-ghost hover:bg-abyssal rounded transition-colors"
+              title="Compare with an earlier crawl of this URL"
+            >
+              <GitDiff size={16} />
             </button>
           )}
           <button
@@ -517,6 +560,8 @@ interface BatchCardProps {
   onDeleteChild: (jobId: string) => void;
   onCrawlAgainChild: (job: CrawlJob) => void;
   onOpenFolderChild: (outputDir: string) => void;
+  onCompareChild: (job: CrawlJob) => void;
+  comparableUrls: Set<string>;
 }
 
 function BatchCard({
@@ -531,6 +576,8 @@ function BatchCard({
   onDeleteChild,
   onCrawlAgainChild,
   onOpenFolderChild,
+  onCompareChild,
+  comparableUrls,
 }: BatchCardProps) {
   const total = batch.urls.length;
   const done = Math.min(batch.currentIndex, total);
@@ -609,6 +656,8 @@ function BatchCard({
               onDelete={onDeleteChild}
               onCrawlAgain={onCrawlAgainChild}
               onOpenFolder={onOpenFolderChild}
+              onCompare={onCompareChild}
+              canCompare={comparableUrls.has(child.url)}
             />
           ))}
         </div>

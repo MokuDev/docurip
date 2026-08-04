@@ -42,6 +42,10 @@ pub struct AppSettings {
     /// crawling the remaining URLs, or abort the batch.
     #[serde(default)]
     pub batch_on_failure: BatchFailureMode,
+    /// How many log lines the Live Console retains before dropping the
+    /// oldest. Serde-defaulted so older on-disk settings load unchanged.
+    #[serde(default = "default_live_console_max_events")]
+    pub live_console_max_events: u32,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -65,7 +69,7 @@ impl Default for AppSettings {
             concurrency: 3,
             request_delay: 750,
             timeout: 30000,
-            user_agent: String::from("Docurip/0.6.4 (Documentation Crawler)"),
+            user_agent: String::from("Docurip/0.6.5 (Documentation Crawler)"),
             default_max_depth: 2,
             default_page_limit: 1000,
             default_download_assets: false,
@@ -81,12 +85,17 @@ impl Default for AppSettings {
             auto_export_format: None,
             sitemap_auto_discover: true,
             batch_on_failure: BatchFailureMode::Continue,
+            live_console_max_events: default_live_console_max_events(),
         }
     }
 }
 
 fn default_theme() -> String {
     String::from("system")
+}
+
+fn default_live_console_max_events() -> u32 {
+    1000
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

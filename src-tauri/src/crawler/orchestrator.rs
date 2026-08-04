@@ -627,6 +627,7 @@ impl Orchestrator {
             title: title.clone(),
             status: status_code,
             links_count: links.len(),
+            content_hash: Some(crate::diff::content_fingerprint(&markdown)),
         };
 
         {

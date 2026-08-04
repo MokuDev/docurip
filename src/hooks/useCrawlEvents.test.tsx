@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
-import { CrawlEventsProvider, useCrawlEvents } from './useCrawlEvents';
+import { CrawlEventsProvider, useCrawlEvents, MAX_BUFFERED_EVENTS } from './useCrawlEvents';
 import { ToastProvider } from './useToasts';
 import type { AppSettings, CrawlEvent, CrawlJob } from '../types';
 
@@ -29,7 +29,7 @@ const baseSettings: AppSettings = {
   defaultHeadlessStrategy: 'never', defaultRespectRobotsTxt: true, defaultStayWithinDomain: true,
   defaultSsrfProtection: true, windowWidth: 1280, windowHeight: 900,
   notificationsEnabled: false, theme: 'dark', shortcutOverrides: {}, autoExportFormat: null,
-  sitemapAutoDiscover: true, batchOnFailure: 'continue',
+  sitemapAutoDiscover: true, batchOnFailure: 'continue', liveConsoleMaxEvents: 1000,
 };
 
 const baseJob: CrawlJob = {
@@ -122,16 +122,16 @@ describe('useCrawlEvents', () => {
     expect(result.current.activeJobIds.has('job-1')).toBe(false);
   });
 
-  it('should cap events at 500', async () => {
+  it('should cap the shared buffer at MAX_BUFFERED_EVENTS', async () => {
     const { result } = renderHook(() => useCrawlEvents(), { wrapper });
-    
+
     await new Promise((resolve) => setTimeout(resolve, 50));
-    
+
     const handler = (window as any).__tauriEventHandlers?.['crawl-event'];
-    
-    // Emit 501 events
+
+    // Emit more than the cap.
     if (handler) {
-      for (let i = 0; i < 501; i++) {
+      for (let i = 0; i < MAX_BUFFERED_EVENTS + 5; i++) {
         handler({
           payload: {
             type: 'log',
@@ -144,7 +144,10 @@ describe('useCrawlEvents', () => {
     }
 
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(result.current.events.length).toBeLessThanOrEqual(500);
+    expect(result.current.events.length).toBeLessThanOrEqual(MAX_BUFFERED_EVENTS);
+    // Each buffered event carries a monotonic seq.
+    const seqs = result.current.events.map((e) => e.seq ?? -1);
+    expect(seqs.every((s, i) => i === 0 || s > seqs[i - 1])).toBe(true);
   });
 
   it('should only track jobs via jobStatusChanged, not other events', async () => {

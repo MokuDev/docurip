@@ -13,6 +13,7 @@ use crate::writer::fs::FsWriter;
 use crate::crawler::orchestrator::{CrawlHandle, Orchestrator};
 use crate::events::bus::EventBus;
 use crate::exports::{self, RecentExport};
+use crate::scheduler::{self, Schedule};
 use crate::settings::config::{AppSettings, BatchFailureMode, CrawlConfig};
 use crate::settings::templates::CrawlTemplate;
 use crate::state::{AppState, JobHandle};
@@ -35,7 +36,7 @@ fn normalize_path_prefix(raw: &str) -> String {
     }
 }
 
-fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
+pub(crate) fn validate_crawl_input(url: &str, config: &CrawlConfig) -> Result<(), String> {
     let parsed = Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
         return Err("URL scheme must be http or https".to_string());
@@ -329,16 +330,16 @@ async fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
 
     let pages_saved: u32 = jobs.iter().map(|j| j.results.len() as u32).sum();
 
-    let mut total_size_bytes: u64 = 0;
     let mut latest_completed: Option<&CrawlJob> = None;
     let mut latest_running: Option<&CrawlJob> = None;
 
-    for job in &jobs {
-        // Include output size for ALL jobs (active + completed)
-        if let Some(out) = output_dir_for_job(job) {
-            total_size_bytes = total_size_bytes.saturating_add(dir_size_capped(&out));
-        }
+    // Gather each job's output dir (cheap stat) up front, then run the
+    // recursive size walk off the async runtime: `dir_size_capped` can
+    // touch up to 1000 files / 5 s per job, and this runs on every 3 s
+    // dashboard poll — doing it inline would stall a tokio worker.
+    let size_dirs: Vec<PathBuf> = jobs.iter().filter_map(output_dir_for_job).collect();
 
+    for job in &jobs {
         // Track latest completed job for velocity fallback
         if job.status == JobStatus::Completed {
             let is_newer = match &latest_completed {
@@ -367,6 +368,16 @@ async fn compute_dashboard_stats(state: &AppState) -> DashboardStats {
             }
         }
     }
+
+    // Sum the per-job output sizes on the blocking pool (preserves the
+    // existing per-job summation, just off the async worker).
+    let total_size_bytes = tokio::task::spawn_blocking(move || {
+        size_dirs
+            .iter()
+            .fold(0u64, |acc, dir| acc.saturating_add(dir_size_capped(dir)))
+    })
+    .await
+    .unwrap_or(0);
 
     // Prefer active job for velocity, fall back to latest completed
     let crawl_velocity = compute_velocity(latest_running.or(latest_completed));
@@ -563,6 +574,102 @@ pub async fn save_template(
 pub async fn delete_template(template_id: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
     state.remove_persisted_template(&template_id).await.map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn list_schedules(state: State<'_, Arc<AppState>>) -> Result<Vec<Schedule>, String> {
+    let map = state.schedules.read().await;
+    let mut list: Vec<Schedule> = map.values().cloned().collect();
+    list.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(list)
+}
+
+/// Create or update a schedule. An empty `id` means "new": a fresh id
+/// and `createdAt` are assigned. `nextRun` is always (re)computed
+/// server-side from the current time so the frontend can't set a stale
+/// or arbitrary fire time.
+#[tauri::command]
+pub async fn save_schedule(
+    mut schedule: Schedule,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Schedule, String> {
+    if schedule.name.trim().is_empty() {
+        return Err("Schedule name must not be empty".into());
+    }
+    // Normalize first so blank lines from the frontend's one-URL-per-line
+    // textarea don't count against the cap or fail validation.
+    schedule.urls = schedule
+        .urls
+        .iter()
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty())
+        .collect();
+    if schedule.urls.is_empty() {
+        return Err("At least one URL is required".into());
+    }
+    if schedule.urls.len() > MAX_BATCH_URLS {
+        return Err(format!(
+            "Schedule of {} URLs exceeds the cap of {}",
+            schedule.urls.len(),
+            MAX_BATCH_URLS
+        ));
+    }
+    for url in &schedule.urls {
+        validate_crawl_input(url, &schedule.config)?;
+    }
+    schedule.name = schedule.name.trim().to_string();
+    schedule.hour = schedule.hour.min(23);
+    schedule.minute = schedule.minute.min(59);
+    if schedule.id.trim().is_empty() {
+        schedule.id = uuid::Uuid::new_v4().to_string();
+        schedule.created_at = chrono::Utc::now().to_rfc3339();
+    }
+    schedule.next_run = scheduler::compute_next_run(chrono::Utc::now(), &schedule).to_rfc3339();
+    state
+        .schedules
+        .insert(schedule.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(schedule)
+}
+
+#[tauri::command]
+pub async fn delete_schedule(
+    schedule_id: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    state
+        .schedules
+        .remove(&schedule_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Enable or disable a schedule. Re-enabling recomputes `nextRun` from
+/// now so a schedule that was off for a while doesn't fire immediately
+/// on a stale past timestamp.
+#[tauri::command]
+pub async fn toggle_schedule(
+    schedule_id: String,
+    enabled: bool,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Schedule, String> {
+    let mut s = state
+        .schedules
+        .get(&schedule_id)
+        .await
+        .ok_or_else(|| "Schedule not found".to_string())?;
+    s.enabled = enabled;
+    if enabled {
+        s.next_run = scheduler::compute_next_run(chrono::Utc::now(), &s).to_rfc3339();
+    }
+    state
+        .schedules
+        .insert(s.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(s)
 }
 
 #[tauri::command]
@@ -776,6 +883,65 @@ pub async fn read_page_content(
     tokio::fs::read_to_string(&path)
         .await
         .map_err(|e| format!("Could not read page content: {}", e))
+}
+
+/// Look up a job by id from the live set first, then the persisted
+/// store. Non-command sibling of [`get_job`] that borrows `AppState`,
+/// so a single command can resolve two jobs without moving `State`.
+async fn fetch_job(state: &AppState, job_id: &str) -> Result<CrawlJob, String> {
+    {
+        let jobs = state.active_jobs.read().await;
+        if let Some(handle) = jobs.get(job_id) {
+            return Ok(handle.job.read().await.clone());
+        }
+    }
+    state
+        .jobs
+        .get(job_id)
+        .await
+        .ok_or_else(|| "Job not found".into())
+}
+
+/// Page-level change detection between two crawls of the same site.
+/// Classifies every page as added/removed/modified/unchanged/unknown by
+/// comparing the per-page content hashes stored on each job's results.
+#[tauri::command]
+pub async fn diff_jobs(
+    old_job_id: String,
+    new_job_id: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<crate::diff::DiffResult, String> {
+    let old = fetch_job(&state, &old_job_id).await?;
+    let new = fetch_job(&state, &new_job_id).await?;
+    Ok(crate::diff::diff_page_metas(&old.results, &new.results))
+}
+
+/// Line-level text diff of one page between two crawls. Reads both
+/// `.md` files from disk (an absent file — e.g. an added or removed
+/// page — is treated as empty, yielding an all-insert or all-delete
+/// diff) and runs a line diff over them.
+#[tauri::command]
+pub async fn diff_page(
+    old_job_id: String,
+    new_job_id: String,
+    url: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<crate::diff::DiffLine>, String> {
+    let old = fetch_job(&state, &old_job_id).await?;
+    let new = fetch_job(&state, &new_job_id).await?;
+
+    let page_md = |job: &CrawlJob| {
+        let main_dir = PathBuf::from(&job.config.output_dir).join("main");
+        FsWriter::new(&main_dir).url_to_page_path(&url)
+    };
+    let old_content = tokio::fs::read_to_string(page_md(&old))
+        .await
+        .unwrap_or_default();
+    let new_content = tokio::fs::read_to_string(page_md(&new))
+        .await
+        .unwrap_or_default();
+
+    Ok(crate::diff::diff_lines(&old_content, &new_content))
 }
 
 #[tauri::command]
@@ -1186,5 +1352,27 @@ mod tests {
         ];
         assert!(!flip_bookmark(&mut bookmarks, "https://example.com/a"));
         assert_eq!(bookmarks, vec!["https://example.com/b".to_string()]);
+    }
+
+    #[test]
+    fn dir_size_capped_sums_files_recursively() {
+        use std::io::Write;
+        let dir = tempfile::TempDir::new().unwrap();
+        // Top-level file (5 bytes) + nested file (3 bytes) = 8.
+        let mut f = std::fs::File::create(dir.path().join("a.txt")).unwrap();
+        f.write_all(b"hello").unwrap();
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        let mut g = std::fs::File::create(sub.join("b.txt")).unwrap();
+        g.write_all(b"abc").unwrap();
+
+        assert_eq!(super::dir_size_capped(dir.path()), 8);
+    }
+
+    #[test]
+    fn dir_size_capped_missing_dir_is_zero() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let missing = dir.path().join("does-not-exist");
+        assert_eq!(super::dir_size_capped(&missing), 0);
     }
 }

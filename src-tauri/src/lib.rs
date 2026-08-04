@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod crawler;
+pub mod diff;
 pub mod export;
 pub mod exports;
 pub mod fetcher;
@@ -12,6 +13,7 @@ pub mod settings;
 pub mod state;
 pub mod system;
 pub mod importer;
+pub mod scheduler;
 pub mod sitemap;
 
 use std::sync::Arc;
@@ -31,8 +33,19 @@ pub fn run() {
             let persist_dir = app.path().app_data_dir()?.join("jobs");
             let templates_dir = app.path().app_data_dir()?.join("templates");
             let batches_dir = app.path().app_data_dir()?.join("batches");
-            let app_state = Arc::new(state::AppState::init(persist_dir, templates_dir, batches_dir)?);
-            app.manage(app_state);
+            let schedules_dir = app.path().app_data_dir()?.join("schedules");
+            let app_state = Arc::new(state::AppState::init(
+                persist_dir,
+                templates_dir,
+                batches_dir,
+                schedules_dir,
+            )?);
+            app.manage(app_state.clone());
+
+            // Start the recurring-crawl ticker. Its first tick fires
+            // immediately, running any schedule missed while the app was
+            // closed (startup catch-up).
+            scheduler::start_scheduler(app_state.clone(), app.handle().clone());
 
             use tauri_plugin_store::StoreExt;
             if let Ok(store) = app.store("settings.json") {
@@ -65,6 +78,10 @@ pub fn run() {
             commands::list_templates,
             commands::save_template,
             commands::delete_template,
+            commands::list_schedules,
+            commands::save_schedule,
+            commands::delete_schedule,
+            commands::toggle_schedule,
             commands::get_settings,
             commands::update_settings,
             commands::set_theme,
@@ -73,6 +90,8 @@ pub fn run() {
             commands::export_job_v2,
             commands::check_headless_support,
             commands::read_page_content,
+            commands::diff_jobs,
+            commands::diff_page,
             commands::search_job_results,
             commands::export_job_zip,
             commands::list_exports,

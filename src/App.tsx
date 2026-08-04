@@ -4,7 +4,8 @@ import {
   ClockCounterClockwise,
   Gear,
   GlobeHemisphereWest,
-  FileArrowUp
+  FileArrowUp,
+  CalendarCheck,
 } from '@phosphor-icons/react';
 import { open } from '@tauri-apps/plugin-shell';
 import { DashboardView } from './views/Dashboard';
@@ -12,6 +13,7 @@ import { NewCrawlView } from './views/NewCrawl';
 import { HistoryView } from './views/History';
 import { SettingsView } from './views/Settings';
 import { ImportView } from './views/ImportView';
+import { SchedulesView } from './views/Schedules';
 import { LiveConsole } from './components/LiveConsole';
 import { TopStatusBar } from './components/TopStatusBar';
 import { SystemStatusBar } from './components/SystemStatusBar';
@@ -24,7 +26,7 @@ import { useEscapeStack } from './contexts/EscapeStack';
 import type { CrawlConfig, CrawlJob } from './types';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'crawls' | 'history' | 'settings' | 'active-crawl' | 'import'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'crawls' | 'history' | 'settings' | 'active-crawl' | 'import' | 'schedules'>('dashboard');
   const [pendingUrl, setPendingUrl] = useState('');
   const [pendingConfig, setPendingConfig] = useState<CrawlConfig | null>(null);
   const [liveConsoleOpen, setLiveConsoleOpen] = useState(false);
@@ -45,6 +47,7 @@ function App() {
       history: () => setActiveTab('history'),
       settings: () => setActiveTab('settings'),
       import: () => setActiveTab('import'),
+      schedules: () => setActiveTab('schedules'),
     },
     onEscape: () => {
       if (!escapeStack.fireTop() && liveConsoleOpen) {
@@ -149,6 +152,13 @@ function App() {
               shortcut={shortcutHint('import')}
             />
             <NavItem
+              icon={<CalendarCheck weight="fill" size={18} />}
+              label="Scheduled"
+              active={activeTab === 'schedules'}
+              onClick={() => setActiveTab('schedules')}
+              shortcut={shortcutHint('schedules')}
+            />
+            <NavItem
               icon={<ClockCounterClockwise weight="fill" size={18} />}
               label="History"
               active={activeTab === 'history'}
@@ -167,7 +177,7 @@ function App() {
           {/* Footer */}
           <div className="h-auto flex flex-col items-center justify-center py-3 border-t border-abyssal/50 space-y-1">
             <span className="text-charcoal text-[10px] tracking-widest uppercase">
-              v0.6.4
+              v0.6.5
             </span>
             <span className="text-charcoal text-[10px]">
               made with love by{' '}
@@ -187,6 +197,7 @@ function App() {
           {activeTab === 'active-crawl' && <NewCrawlView prefillUrl={pendingUrl} prefillConfig={pendingConfig ?? undefined} />}
           {activeTab === 'crawls' && <NewCrawlView prefillUrl={pendingUrl} prefillConfig={pendingConfig ?? undefined} />}
           {activeTab === 'import' && <ImportView />}
+          {activeTab === 'schedules' && <SchedulesView />}
           {activeTab === 'history' && <HistoryView onCrawlAgain={handleCrawlAgain} />}
           {activeTab === 'settings' && <SettingsView />}
         </main>

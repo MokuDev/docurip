@@ -14,6 +14,7 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: 'history', label: 'History', category: 'Navigation', defaultKeys: 'mod+h' },
   { id: 'settings', label: 'Settings', category: 'Navigation', defaultKeys: 'mod+,' },
   { id: 'import', label: 'Import', category: 'Navigation', defaultKeys: 'mod+i' },
+  { id: 'schedules', label: 'Scheduled', category: 'Navigation', defaultKeys: 'mod+s' },
 ];
 
 const MODIFIER_KEYS = new Set(['control', 'meta', 'shift', 'alt']);
